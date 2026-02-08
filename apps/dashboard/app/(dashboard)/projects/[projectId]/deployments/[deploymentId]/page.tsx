@@ -72,7 +72,8 @@ function formatDateTime(iso: string): string {
 
 /* ================================================================== */
 export default function DeploymentDetailPage() {
-  const { projectId, deploymentId } = useParams<{ projectId: string; deploymentId: string }>();
+  const params = useParams<{ projectId: string; deploymentId: string }>();
+  const { projectId, deploymentId } = params ?? { projectId: '', deploymentId: '' };
   const [deployment, setDeployment] = useState<DeploymentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

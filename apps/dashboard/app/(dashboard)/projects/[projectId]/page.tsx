@@ -101,7 +101,8 @@ const TABS: { key: Tab; label: string }[] = [
 /* ================================================================== */
 
 export default function ProjectDetailPage() {
-  const { projectId } = useParams<{ projectId: string }>();
+  const params = useParams<{ projectId: string }>();
+  const { projectId } = params ?? { projectId: '' };
   const router = useRouter();
   const { projects, refresh } = useWorkspace();
 
