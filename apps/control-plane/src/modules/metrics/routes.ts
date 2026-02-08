@@ -9,6 +9,7 @@ export const metricRoutes: FastifyPluginAsync = async (app) => {
   const access = new AccessService();
 
   app.get('/metrics/query', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const query = z
       .object({
         projectId: z.string().cuid(),
@@ -28,7 +29,7 @@ export const metricRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      await access.requireOrganizationRole(request.user.userId, project.organizationId, 'viewer');
+      await access.requireOrganizationRole(user.userId, project.organizationId, 'viewer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }

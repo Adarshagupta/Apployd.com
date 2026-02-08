@@ -190,8 +190,9 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/auth/me', { preHandler: [app.authenticate] }, async (request) => {
-    const user = await prisma.user.findUniqueOrThrow({
-      where: { id: request.user.userId },
+    const user = request.user as { userId: string; email: string };
+    const userRecord = await prisma.user.findUniqueOrThrow({
+      where: { id: user.userId },
       select: {
         id: true,
         email: true,
@@ -200,7 +201,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       },
     });
 
-    return { user };
+    return { user: userRecord };
   });
 };
 

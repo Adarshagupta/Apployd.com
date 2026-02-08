@@ -83,6 +83,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
   };
 
   app.get('/deployments/recent', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const query = z
       .object({
         organizationId: z.string().cuid(),
@@ -91,7 +92,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
       .parse(request.query);
 
     try {
-      await access.requireOrganizationRole(request.user.userId, query.organizationId, 'viewer');
+      await access.requireOrganizationRole(user.userId, query.organizationId, 'viewer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -119,6 +120,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/deployments', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const query = z
       .object({
         projectId: z.string().cuid(),
@@ -135,7 +137,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      await access.requireOrganizationRole(request.user.userId, project.organizationId, 'viewer');
+      await access.requireOrganizationRole(user.userId, project.organizationId, 'viewer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -150,6 +152,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/deployments/:deploymentId', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const params = z.object({ deploymentId: z.string().cuid() }).parse(request.params);
 
     const deployment = await prisma.deployment.findUnique({
@@ -177,7 +180,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      await access.requireOrganizationRole(request.user.userId, deployment.project.organizationId, 'viewer');
+      await access.requireOrganizationRole(user.userId, deployment.project.organizationId, 'viewer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -235,6 +238,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/deployments', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const body = createDeploymentSchema.parse(request.body);
 
     const project = await prisma.project.findUnique({
@@ -247,7 +251,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      await access.requireOrganizationRole(request.user.userId, project.organizationId, 'developer');
+      await access.requireOrganizationRole(user.userId, project.organizationId, 'developer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -260,21 +264,21 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
     try {
       const result = await deploymentService.create({
         projectId: body.projectId,
-        actorUserId: request.user.userId,
+        actorUserId: user.userId,
         trigger: 'manual',
         environment: body.environment,
-        domain: body.domain,
-        gitUrl: body.gitUrl,
-        branch: body.branch,
-        commitSha: body.commitSha,
-        rootDirectory: body.rootDirectory,
-        buildCommand: body.buildCommand,
-        startCommand: body.startCommand,
-        port: body.port,
-        env: body.env,
-        idempotencyKey: idempotencyKey ?? undefined,
-        serviceType: body.serviceType,
-        outputDirectory: body.outputDirectory,
+        ...(body.domain && { domain: body.domain }),
+        ...(body.gitUrl && { gitUrl: body.gitUrl }),
+        ...(body.branch && { branch: body.branch }),
+        ...(body.commitSha && { commitSha: body.commitSha }),
+        ...(body.rootDirectory && { rootDirectory: body.rootDirectory }),
+        ...(body.buildCommand && { buildCommand: body.buildCommand }),
+        ...(body.startCommand && { startCommand: body.startCommand }),
+        ...(body.port && { port: body.port }),
+        ...(body.env && { env: body.env }),
+        ...(idempotencyKey && { idempotencyKey }),
+        ...(body.serviceType && { serviceType: body.serviceType }),
+        ...(body.outputDirectory && { outputDirectory: body.outputDirectory }),
       });
       return reply.code(202).send(result);
     } catch (error) {
@@ -286,6 +290,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/deployments/:deploymentId/cancel', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const params = z.object({ deploymentId: z.string().cuid() }).parse(request.params);
 
     const deployment = await prisma.deployment.findUnique({
@@ -308,7 +313,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      await access.requireOrganizationRole(request.user.userId, deployment.project.organizationId, 'developer');
+      await access.requireOrganizationRole(user.userId, deployment.project.organizationId, 'developer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -365,7 +370,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
 
     await audit.record({
       organizationId: deployment.project.organizationId,
-      actorUserId: request.user.userId,
+      actorUserId: user.userId,
       action: 'deployment.canceled',
       entityType: 'deployment',
       entityId: deployment.id,
@@ -378,6 +383,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/deployments/:deploymentId/wake', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const params = z.object({ deploymentId: z.string().cuid() }).parse(request.params);
 
     const deployment = await prisma.deployment.findUnique({
@@ -400,7 +406,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      await access.requireOrganizationRole(request.user.userId, deployment.project.organizationId, 'viewer');
+      await access.requireOrganizationRole(user.userId, deployment.project.organizationId, 'viewer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -429,7 +435,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
 
     await audit.record({
       organizationId: deployment.project.organizationId,
-      actorUserId: request.user.userId,
+      actorUserId: user.userId,
       action: 'deployment.wake_requested',
       entityType: 'deployment',
       entityId: deployment.id,
@@ -443,6 +449,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
 
   // ── Rollback: redeploy from a previous deployment's image (no rebuild) ──
   app.post('/deployments/:deploymentId/rollback', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const params = z.object({ deploymentId: z.string().cuid() }).parse(request.params);
 
     const targetDeployment = await prisma.deployment.findUnique({
@@ -468,7 +475,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      await access.requireOrganizationRole(request.user.userId, targetDeployment.project.organizationId, 'developer');
+      await access.requireOrganizationRole(user.userId, targetDeployment.project.organizationId, 'developer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -484,13 +491,13 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
     try {
       const result = await deploymentService.create({
         projectId: targetDeployment.project.id,
-        actorUserId: request.user.userId,
+        actorUserId: user.userId,
         trigger: 'manual',
         environment: 'production',
         gitUrl: targetDeployment.gitUrl,
-        branch: targetDeployment.branch ?? undefined,
-        commitSha: targetDeployment.commitSha ?? undefined,
-        startCommand: targetDeployment.project.startCommand ?? undefined,
+        ...(targetDeployment.branch && { branch: targetDeployment.branch }),
+        ...(targetDeployment.commitSha && { commitSha: targetDeployment.commitSha }),
+        ...(targetDeployment.project.startCommand && { startCommand: targetDeployment.project.startCommand }),
         port: targetDeployment.project.targetPort,
         imageTag: targetDeployment.imageTag,
       });
@@ -503,7 +510,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
 
       await audit.record({
         organizationId: targetDeployment.project.organizationId,
-        actorUserId: request.user.userId,
+        actorUserId: user.userId,
         action: 'deployment.rollback',
         entityType: 'deployment',
         entityId: result.deploymentId,
@@ -524,6 +531,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
 
   // ── Promote: promote a preview deployment to production ──
   app.post('/deployments/:deploymentId/promote', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const params = z.object({ deploymentId: z.string().cuid() }).parse(request.params);
 
     const previewDeployment = await prisma.deployment.findUnique({
@@ -548,7 +556,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      await access.requireOrganizationRole(request.user.userId, previewDeployment.project.organizationId, 'developer');
+      await access.requireOrganizationRole(user.userId, previewDeployment.project.organizationId, 'developer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -565,20 +573,20 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
       // Create a new production deployment reusing the same image (no rebuild)
       const result = await deploymentService.create({
         projectId: previewDeployment.project.id,
-        actorUserId: request.user.userId,
+        actorUserId: user.userId,
         trigger: 'manual',
         environment: 'production',
         gitUrl: previewDeployment.gitUrl,
-        branch: previewDeployment.branch ?? undefined,
-        commitSha: previewDeployment.commitSha ?? undefined,
-        startCommand: previewDeployment.project.startCommand ?? undefined,
+        ...(previewDeployment.branch && { branch: previewDeployment.branch }),
+        ...(previewDeployment.commitSha && { commitSha: previewDeployment.commitSha }),
+        ...(previewDeployment.project.startCommand && { startCommand: previewDeployment.project.startCommand }),
         port: previewDeployment.project.targetPort,
-        imageTag: previewDeployment.imageTag ?? undefined,
+        ...(previewDeployment.imageTag && { imageTag: previewDeployment.imageTag }),
       });
 
       await audit.record({
         organizationId: previewDeployment.project.organizationId,
-        actorUserId: request.user.userId,
+        actorUserId: user.userId,
         action: 'deployment.promoted',
         entityType: 'deployment',
         entityId: result.deploymentId,

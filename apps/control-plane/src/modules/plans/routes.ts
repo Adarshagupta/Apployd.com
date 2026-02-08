@@ -17,7 +17,8 @@ export const planRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/plans/current', { preHandler: [app.authenticate] }, async (request, reply) => {
-    const userId = request.user.userId;
+    const user = request.user as { userId: string; email: string };
+    const userId = user.userId;
     const query = z
       .object({
         organizationId: z.string().cuid().optional(),

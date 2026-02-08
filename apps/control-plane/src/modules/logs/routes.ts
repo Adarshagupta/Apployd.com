@@ -9,6 +9,7 @@ export const logRoutes: FastifyPluginAsync = async (app) => {
   const access = new AccessService();
 
   app.get('/logs', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const query = z
       .object({
         projectId: z.string().cuid(),
@@ -26,7 +27,7 @@ export const logRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      await access.requireOrganizationRole(request.user.userId, project.organizationId, 'viewer');
+      await access.requireOrganizationRole(user.userId, project.organizationId, 'viewer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }

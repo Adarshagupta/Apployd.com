@@ -2,11 +2,11 @@ import Redis from 'ioredis';
 
 import { env } from '../config/env.js';
 
-const redisGlobal = globalThis as unknown as { redis?: Redis };
+const redisGlobal = globalThis as unknown as { redis?: any };
 
 export const redis =
   redisGlobal.redis ??
-  new Redis(env.REDIS_URL, {
+  (Redis as any)(env.REDIS_URL, {
     maxRetriesPerRequest: 5,
     enableAutoPipelining: true,
     lazyConnect: false,

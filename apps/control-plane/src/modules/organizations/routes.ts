@@ -15,8 +15,9 @@ const createOrgSchema = z.object({
 
 export const organizationRoutes: FastifyPluginAsync = async (app) => {
   app.get('/organizations', { preHandler: [app.authenticate] }, async (request) => {
+    const user = request.user as { userId: string; email: string };
     const memberships = await prisma.organizationMember.findMany({
-      where: { userId: request.user.userId },
+      where: { userId: user.userId },
       include: { organization: true },
       orderBy: { createdAt: 'asc' },
     });
@@ -30,6 +31,7 @@ export const organizationRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/organizations', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const body = createOrgSchema.parse(request.body);
 
     const freePlan = await prisma.plan.findUnique({ where: { code: 'free' } });
@@ -41,10 +43,10 @@ export const organizationRoutes: FastifyPluginAsync = async (app) => {
       data: {
         name: body.name,
         slug: body.slug,
-        ownerId: request.user.userId,
+        ownerId: user.userId,
         memberships: {
           create: {
-            userId: request.user.userId,
+            userId: user.userId,
             role: 'owner',
           },
         },

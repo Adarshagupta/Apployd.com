@@ -12,6 +12,7 @@ export const usageRoutes: FastifyPluginAsync = async (app) => {
   const projectUsage = new ProjectUsageService();
 
   app.get('/usage/summary', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const query = z
       .object({
         organizationId: z.string().cuid(),
@@ -19,7 +20,7 @@ export const usageRoutes: FastifyPluginAsync = async (app) => {
       .parse(request.query);
 
     try {
-      await access.requireOrganizationRole(request.user.userId, query.organizationId, 'viewer');
+      await access.requireOrganizationRole(user.userId, query.organizationId, 'viewer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -67,6 +68,7 @@ export const usageRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/usage/daily', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const query = z
       .object({
         organizationId: z.string().cuid(),
@@ -81,7 +83,7 @@ export const usageRoutes: FastifyPluginAsync = async (app) => {
       .parse(request.query);
 
     try {
-      await access.requireOrganizationRole(request.user.userId, query.organizationId, 'viewer');
+      await access.requireOrganizationRole(user.userId, query.organizationId, 'viewer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -111,6 +113,7 @@ export const usageRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/usage/projects', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const query = z
       .object({
         organizationId: z.string().cuid(),
@@ -119,7 +122,7 @@ export const usageRoutes: FastifyPluginAsync = async (app) => {
       .parse(request.query);
 
     try {
-      await access.requireOrganizationRole(request.user.userId, query.organizationId, 'viewer');
+      await access.requireOrganizationRole(user.userId, query.organizationId, 'viewer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -161,6 +164,7 @@ export const usageRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/usage/projects/:projectId', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const params = z.object({ projectId: z.string().cuid() }).parse(request.params);
     const query = z
       .object({
@@ -184,7 +188,7 @@ export const usageRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      await access.requireOrganizationRole(request.user.userId, project.organizationId, 'viewer');
+      await access.requireOrganizationRole(user.userId, project.organizationId, 'viewer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }

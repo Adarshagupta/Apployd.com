@@ -44,7 +44,7 @@ export const buildApp = () => {
   app.register(authenticatePlugin);
 
   app.addContentTypeParser(/^application\/json(?:;.*)?$/, { parseAs: 'buffer' }, (request, body, done) => {
-    request.rawBody = body;
+    request.rawBody = body as Buffer;
     if (!body.length) {
       done(null, {});
       return;
@@ -69,7 +69,7 @@ export const buildApp = () => {
 
     instrumentHttpRequest({
       method: request.method,
-      route: request.routeOptions.url,
+      route: request.routeOptions.url ?? 'unknown',
       statusCode: reply.statusCode,
       durationSeconds,
     });
@@ -78,9 +78,10 @@ export const buildApp = () => {
 
   app.setErrorHandler((error, _request, reply) => {
     app.log.error({ error }, 'Unhandled error');
-    return reply.status(error.statusCode ?? 500).send({
-      error: error.name,
-      message: error.message,
+    const err = error as any;
+    return reply.status(err.statusCode ?? 500).send({
+      error: err.name ?? 'Error',
+      message: err.message ?? 'An error occurred',
     });
   });
 

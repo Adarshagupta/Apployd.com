@@ -47,10 +47,11 @@ export const domainRoutes: FastifyPluginAsync = async (app) => {
   /* ── LIST domains for project ───────────────────────────────── */
 
   app.get('/projects/:projectId/domains', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const { projectId } = projectIdParam.parse(request.params);
 
     try {
-      await resolveProject(projectId, request.user.userId, 'viewer');
+      await resolveProject(projectId, user.userId, 'viewer');
     } catch (err) {
       return reply.forbidden((err as Error).message);
     }
@@ -66,6 +67,7 @@ export const domainRoutes: FastifyPluginAsync = async (app) => {
   /* ── ADD a custom domain ────────────────────────────────────── */
 
   app.post('/projects/:projectId/domains', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const { projectId } = projectIdParam.parse(request.params);
 
     let body: z.infer<typeof addDomainSchema>;
@@ -77,7 +79,7 @@ export const domainRoutes: FastifyPluginAsync = async (app) => {
 
     let project;
     try {
-      project = await resolveProject(projectId, request.user.userId);
+      project = await resolveProject(projectId, user.userId);
     } catch (err) {
       return reply.forbidden((err as Error).message);
     }
@@ -105,7 +107,7 @@ export const domainRoutes: FastifyPluginAsync = async (app) => {
 
     await audit.record({
       organizationId: project.organizationId,
-      actorUserId: request.user.userId,
+      actorUserId: user.userId,
       action: 'domain.add',
       entityType: 'CustomDomain',
       entityId: domain.id,
@@ -134,10 +136,11 @@ export const domainRoutes: FastifyPluginAsync = async (app) => {
   /* ── VERIFY domain DNS ──────────────────────────────────────── */
 
   app.post('/projects/:projectId/domains/:domainId/verify', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const { projectId, domainId } = domainIdParam.parse(request.params);
 
     try {
-      await resolveProject(projectId, request.user.userId);
+      await resolveProject(projectId, user.userId);
     } catch (err) {
       return reply.forbidden((err as Error).message);
     }
@@ -163,10 +166,11 @@ export const domainRoutes: FastifyPluginAsync = async (app) => {
   /* ── GET single domain ──────────────────────────────────────── */
 
   app.get('/projects/:projectId/domains/:domainId', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const { projectId, domainId } = domainIdParam.parse(request.params);
 
     try {
-      await resolveProject(projectId, request.user.userId, 'viewer');
+      await resolveProject(projectId, user.userId, 'viewer');
     } catch (err) {
       return reply.forbidden((err as Error).message);
     }
@@ -182,11 +186,12 @@ export const domainRoutes: FastifyPluginAsync = async (app) => {
   /* ── DELETE (remove) a custom domain ────────────────────────── */
 
   app.delete('/projects/:projectId/domains/:domainId', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const { projectId, domainId } = domainIdParam.parse(request.params);
 
     let project;
     try {
-      project = await resolveProject(projectId, request.user.userId);
+      project = await resolveProject(projectId, user.userId);
     } catch (err) {
       return reply.forbidden((err as Error).message);
     }
@@ -200,7 +205,7 @@ export const domainRoutes: FastifyPluginAsync = async (app) => {
 
     await audit.record({
       organizationId: project.organizationId,
-      actorUserId: request.user.userId,
+      actorUserId: user.userId,
       action: 'domain.remove',
       entityType: 'CustomDomain',
       entityId: domainId,

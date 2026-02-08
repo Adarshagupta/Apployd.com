@@ -57,10 +57,11 @@ export const serverRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/servers', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const body = createServerSchema.parse(request.body);
 
     try {
-      await requireServerAdmin(request.user.userId);
+      await requireServerAdmin(user.userId);
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -93,11 +94,12 @@ export const serverRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.patch('/servers/:serverId', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const params = z.object({ serverId: z.string().cuid() }).parse(request.params);
     const body = updateServerSchema.parse(request.body);
 
     try {
-      await requireServerAdmin(request.user.userId);
+      await requireServerAdmin(user.userId);
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }

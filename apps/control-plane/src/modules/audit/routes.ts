@@ -9,6 +9,7 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
   const access = new AccessService();
 
   app.get('/audit', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const query = z
       .object({
         organizationId: z.string().cuid(),
@@ -17,7 +18,7 @@ export const auditRoutes: FastifyPluginAsync = async (app) => {
       .parse(request.query);
 
     try {
-      await access.requireOrganizationRole(request.user.userId, query.organizationId, 'admin');
+      await access.requireOrganizationRole(user.userId, query.organizationId, 'admin');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }

@@ -15,12 +15,13 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
   const access = new AccessService();
 
   app.get('/teams/:organizationId/members', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const params = z
       .object({ organizationId: z.string().cuid() })
       .parse(request.params);
 
     try {
-      await access.requireOrganizationRole(request.user.userId, params.organizationId, 'viewer');
+      await access.requireOrganizationRole(user.userId, params.organizationId, 'viewer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -35,10 +36,11 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/teams/invite', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const body = inviteSchema.parse(request.body);
 
     try {
-      await access.requireOrganizationRole(request.user.userId, body.organizationId, 'admin');
+      await access.requireOrganizationRole(user.userId, body.organizationId, 'admin');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }

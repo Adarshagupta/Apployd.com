@@ -49,6 +49,7 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
   const usage = new ProjectUsageService();
 
   app.get('/projects', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const query = z
       .object({
         organizationId: z.string().cuid(),
@@ -58,7 +59,7 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
       .parse(request.query);
 
     try {
-      await access.requireOrganizationRole(request.user.userId, query.organizationId, 'viewer');
+      await access.requireOrganizationRole(user.userId, query.organizationId, 'viewer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -95,10 +96,11 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/projects', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const body = createProjectSchema.parse(request.body);
 
     try {
-      await access.requireOrganizationRole(request.user.userId, body.organizationId, 'developer');
+      await access.requireOrganizationRole(user.userId, body.organizationId, 'developer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -133,7 +135,7 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
             organizationId: body.organizationId,
             name: body.name,
             slug: body.slug,
-            createdById: request.user.userId,
+            createdById: user.userId,
             runtime: body.runtime,
             gitProvider: body.repoUrl ? 'github' : null,
             repoUrl: body.repoUrl,
@@ -181,7 +183,7 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
 
     await audit.record({
       organizationId: body.organizationId,
-      actorUserId: request.user.userId,
+      actorUserId: user.userId,
       action: 'project.created',
       entityType: 'project',
       entityId: project.id,
@@ -195,6 +197,7 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.patch('/projects/:projectId/resources', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const params = z.object({ projectId: z.string().cuid() }).parse(request.params);
     const body = updateResourceSchema.parse(request.body);
 
@@ -208,7 +211,7 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      await access.requireOrganizationRole(request.user.userId, project.organizationId, 'developer');
+      await access.requireOrganizationRole(user.userId, project.organizationId, 'developer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -242,7 +245,7 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
 
     await audit.record({
       organizationId: project.organizationId,
-      actorUserId: request.user.userId,
+      actorUserId: user.userId,
       action: 'project.resources.updated',
       entityType: 'project',
       entityId: project.id,

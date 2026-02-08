@@ -19,10 +19,11 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
   const access = new AccessService();
 
   app.post('/billing/checkout-session', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const body = checkoutSchema.parse(request.body);
 
     try {
-      await access.requireOrganizationRole(request.user.userId, body.organizationId, 'admin');
+      await access.requireOrganizationRole(user.userId, body.organizationId, 'admin');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -82,6 +83,7 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/billing/invoices', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const query = z
       .object({
         organizationId: z.string().cuid(),
@@ -89,7 +91,7 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
       .parse(request.query);
 
     try {
-      await access.requireOrganizationRole(request.user.userId, query.organizationId, 'viewer');
+      await access.requireOrganizationRole(user.userId, query.organizationId, 'viewer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -183,8 +185,8 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
               amountPaidUsd: (invoice.amount_paid / 100).toFixed(2),
               currency: invoice.currency,
               status: mapInvoiceStatus(invoice.status),
-              hostedInvoiceUrl: invoice.hosted_invoice_url,
-              invoicePdfUrl: invoice.invoice_pdf,
+              hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
+              invoicePdfUrl: invoice.invoice_pdf ?? null,
               dueAt: invoice.due_date ? new Date(invoice.due_date * 1000) : null,
               paidAt: invoice.status_transitions?.paid_at
                 ? new Date(invoice.status_transitions.paid_at * 1000)
@@ -197,8 +199,8 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
               amountPaidUsd: (invoice.amount_paid / 100).toFixed(2),
               currency: invoice.currency,
               status: mapInvoiceStatus(invoice.status),
-              hostedInvoiceUrl: invoice.hosted_invoice_url,
-              invoicePdfUrl: invoice.invoice_pdf,
+              hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
+              invoicePdfUrl: invoice.invoice_pdf ?? null,
               dueAt: invoice.due_date ? new Date(invoice.due_date * 1000) : null,
               paidAt: invoice.status_transitions?.paid_at
                 ? new Date(invoice.status_transitions.paid_at * 1000)

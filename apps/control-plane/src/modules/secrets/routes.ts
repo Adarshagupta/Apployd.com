@@ -16,6 +16,7 @@ export const secretRoutes: FastifyPluginAsync = async (app) => {
   const audit = new AuditLogService();
 
   app.get('/projects/:projectId/secrets', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const params = z.object({ projectId: z.string().cuid() }).parse(request.params);
 
     const project = await prisma.project.findUnique({
@@ -28,7 +29,7 @@ export const secretRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      await access.requireOrganizationRole(request.user.userId, project.organizationId, 'developer');
+      await access.requireOrganizationRole(user.userId, project.organizationId, 'developer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -48,6 +49,7 @@ export const secretRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.put('/projects/:projectId/secrets/:key', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const params = z
       .object({
         projectId: z.string().cuid(),
@@ -67,7 +69,7 @@ export const secretRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      await access.requireOrganizationRole(request.user.userId, project.organizationId, 'developer');
+      await access.requireOrganizationRole(user.userId, project.organizationId, 'developer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -102,7 +104,7 @@ export const secretRoutes: FastifyPluginAsync = async (app) => {
 
     await audit.record({
       organizationId: project.organizationId,
-      actorUserId: request.user.userId,
+      actorUserId: user.userId,
       action: 'project.secret.upserted',
       entityType: 'project_secret',
       entityId: secret.id,
@@ -116,6 +118,7 @@ export const secretRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.delete('/projects/:projectId/secrets/:key', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const params = z
       .object({
         projectId: z.string().cuid(),
@@ -133,7 +136,7 @@ export const secretRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      await access.requireOrganizationRole(request.user.userId, project.organizationId, 'developer');
+      await access.requireOrganizationRole(user.userId, project.organizationId, 'developer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -147,7 +150,7 @@ export const secretRoutes: FastifyPluginAsync = async (app) => {
 
     await audit.record({
       organizationId: project.organizationId,
-      actorUserId: request.user.userId,
+      actorUserId: user.userId,
       action: 'project.secret.deleted',
       entityType: 'project_secret',
       entityId: params.key,
@@ -161,6 +164,7 @@ export const secretRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/projects/:projectId/secrets/:key/reveal', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const params = z
       .object({
         projectId: z.string().cuid(),
@@ -178,7 +182,7 @@ export const secretRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      await access.requireOrganizationRole(request.user.userId, project.organizationId, 'admin');
+      await access.requireOrganizationRole(user.userId, project.organizationId, 'admin');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
