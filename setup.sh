@@ -221,9 +221,9 @@ log_info "Running database migrations..."
 cd "$SCRIPT_DIR/infra/docker"
 
 # Generate Prisma client and run migrations
-docker-compose -f "$DOCKER_COMPOSE_FILE" run --rm control-plane sh -c "npx prisma migrate deploy && npx prisma db push --skip-generate" || {
+docker-compose -f "$DOCKER_COMPOSE_FILE" run --rm control-plane sh -c "npx prisma migrate deploy --schema=apps/control-plane/prisma/schema.prisma && npx prisma db push --skip-generate --schema=apps/control-plane/prisma/schema.prisma" || {
     log_warn "Migration failed, trying db push..."
-    docker-compose -f "$DOCKER_COMPOSE_FILE" run --rm control-plane npx prisma db push --force-reset --skip-generate
+    docker-compose -f "$DOCKER_COMPOSE_FILE" run --rm control-plane npx prisma db push --force-reset --skip-generate --schema=apps/control-plane/prisma/schema.prisma
 }
 
 log_info "✓ Database migrations complete"
