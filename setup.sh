@@ -126,7 +126,7 @@ log_info "  Email: $EMAIL"
 log_info "Cleaning up old installation..."
 
 # Stop and remove old containers
-cd "$SCRIPT_DIR"
+cd "$SCRIPT_DIR/infra/docker"
 docker-compose down 2>/dev/null || true
 
 # Remove old nginx configs
@@ -180,7 +180,7 @@ log_info "✓ Environment files created"
 # ==========================================
 log_info "Building Docker images (this may take 10-15 minutes)..."
 
-cd "$SCRIPT_DIR"
+cd "$SCRIPT_DIR/infra/docker"
 
 # Clean up old images to save space
 docker system prune -f --volumes 2>/dev/null || true
@@ -206,6 +206,8 @@ log_info "✓ Redis started"
 # 7. Run database migrations
 # ==========================================
 log_info "Running database migrations..."
+
+cd "$SCRIPT_DIR/infra/docker"
 
 # Generate Prisma client and run migrations
 docker-compose run --rm control-plane sh -c "npx prisma migrate deploy && npx prisma db push --skip-generate" || {
@@ -427,6 +429,8 @@ log_info "Verifying installation..."
 
 sleep 5
 
+cd "$SCRIPT_DIR/infra/docker"
+
 # Check Docker containers
 log_info "Docker containers status:"
 docker-compose ps
@@ -477,13 +481,13 @@ log_info "  • Grafana: http://$(hostname -I | awk '{print $1}'):3001"
 log_info "  • Prometheus: http://$(hostname -I | awk '{print $1}'):9090"
 echo ""
 log_info "Useful commands:"
-log_info "  • View logs: docker-compose logs -f"
-log_info "  • Restart services: docker-compose restart"
-log_info "  • Stop all: docker-compose down"
-log_info "  • Check status: docker-compose ps"
+log_info "  • View logs: cd infra/docker && docker-compose logs -f"
+log_info "  • Restart services: cd infra/docker && docker-compose restart"
+log_info "  • Stop all: cd infra/docker && docker-compose down"
+log_info "  • Check status: cd infra/docker && docker-compose ps"
 echo ""
 log_info "If you encounter issues:"
-log_info "  1. Check logs: docker-compose logs"
+log_info "  1. Check logs: cd infra/docker && docker-compose logs"
 log_info "  2. Check nginx: sudo systemctl status nginx"
 log_info "  3. Check nginx logs: sudo tail -f /var/log/nginx/error.log"
 echo ""
