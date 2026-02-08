@@ -1,4 +1,4 @@
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import { z } from 'zod';
 
 import { env } from '../core/env.js';
@@ -81,7 +81,7 @@ export class DeployQueueConsumer {
 
       const stopTimer = deploymentDurationHistogram.startTimer();
       const lockKey = `apployd:deployments:lock:${payload.deploymentId}`;
-      const lockAcquired = await redis.set(lockKey, '1', 'NX', 'EX', 15 * 60);
+      const lockAcquired = await redis.set(lockKey, '1', 'EX', 15 * 60, 'NX');
 
       if (!lockAcquired) {
         deploymentProcessedCounter.inc({ status: 'duplicate' });

@@ -1,4 +1,4 @@
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import { ContainerStatus, DeploymentStatus, SleepStatus } from '@prisma/client';
 import { z } from 'zod';
 
