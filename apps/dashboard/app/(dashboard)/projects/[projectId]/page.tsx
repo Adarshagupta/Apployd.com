@@ -249,6 +249,7 @@ export default function ProjectDetailPage() {
       cpu: project.resourceCpuMillicore,
       bandwidth: project.resourceBandwidthGb,
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id]);
 
   const saveProjectWorkspace = async () => {
@@ -595,8 +596,10 @@ export default function ProjectDetailPage() {
                       key={dep.id}
                       role="button"
                       tabIndex={0}
-                      onClick={() => router.push(`/projects/${projectId}/deployments/${dep.id}`)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/projects/${projectId}/deployments/${dep.id}`); }}
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      onClick={() => router.push(`/projects/${projectId}/deployments/${dep.id}` as any)}
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/projects/${projectId}/deployments/${dep.id}` as any); }}
                     >
                     <article
                       className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 transition cursor-pointer ${

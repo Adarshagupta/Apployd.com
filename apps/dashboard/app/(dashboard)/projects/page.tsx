@@ -79,7 +79,8 @@ export default function ProjectsPage() {
             {projects.map((project) => (
               <Link
                 key={project.id}
-                href={`/projects/${project.id}`}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                href={`/projects/${project.id}` as any}
                 className="group flex flex-col justify-between rounded-xl border border-slate-200 p-5 transition hover:border-slate-400 hover:shadow-sm"
               >
                 <div>

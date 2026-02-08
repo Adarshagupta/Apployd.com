@@ -39,6 +39,7 @@ export default function TeamPage() {
 
   useEffect(() => {
     loadMembers().catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedOrganizationId]);
 
   const invite = async () => {

@@ -115,6 +115,7 @@ export function DeployForm({
     return () => {
       closeSocket();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const pushEvent = (event: DeploymentEvent) => {

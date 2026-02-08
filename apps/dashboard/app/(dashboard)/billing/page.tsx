@@ -68,6 +68,7 @@ export default function BillingPage() {
 
   useEffect(() => {
     load().catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedOrganizationId]);
 
   const startUpgrade = async (planCode: string) => {

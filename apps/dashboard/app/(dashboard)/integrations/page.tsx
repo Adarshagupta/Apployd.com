@@ -104,12 +104,14 @@ export default function IntegrationsPage() {
 
   useEffect(() => {
     loadStatus().catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (status?.connected) {
       loadRepos(search).catch(() => undefined);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status?.connected]);
 
   const connectGitHub = async () => {

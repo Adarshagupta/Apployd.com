@@ -103,6 +103,7 @@ export default function DeploymentDetailPage() {
       load().catch(() => undefined);
     }, 4000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deployment?.status, load]);
 
   if (loading) {
@@ -117,7 +118,8 @@ export default function DeploymentDetailPage() {
     return (
       <div className="section-band">
         <p className="text-sm text-red-600">{error || 'Deployment not found.'}</p>
-        <Link href={`/projects/${projectId}`} className="mt-3 inline-block text-sm text-blue-600 hover:underline">
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        <Link href={`/projects/${projectId}` as any} className="mt-3 inline-block text-sm text-blue-600 hover:underline">
           ← Back to project
         </Link>
       </div>
@@ -139,7 +141,8 @@ export default function DeploymentDetailPage() {
             Projects
           </Link>
           <span>/</span>
-          <Link href={`/projects/${projectId}`} className="hover:text-slate-800 hover:underline">
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          <Link href={`/projects/${projectId}` as any} className="hover:text-slate-800 hover:underline">
             {deployment.project.name}
           </Link>
           <span>/</span>

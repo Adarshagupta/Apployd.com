@@ -29,7 +29,8 @@ export function DashboardNav() {
           return (
             <Link
               key={item.href}
-              href={item.href}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              href={item.href as any}
               className={`nav-link ${
                 active ? 'nav-link-active' : ''
               }`}

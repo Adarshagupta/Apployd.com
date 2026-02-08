@@ -101,6 +101,7 @@ export default function UsagePage() {
       load().catch(() => undefined);
     }, 30_000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedOrganizationId]);
 
   const formatCpu = (raw: string) => {

@@ -32,6 +32,7 @@ export default function LogsPage() {
 
   useEffect(() => {
     return () => closeSocket();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

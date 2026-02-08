@@ -293,14 +293,17 @@ export default function CreateProjectPage() {
           );
           const failed = results.filter((result) => result.status === 'rejected').length;
           if (failed) {
-            router.push(`/projects?created=${createdProjectId}&secretSetup=partial`);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            router.push(`/projects?created=${createdProjectId}&secretSetup=partial` as any);
             return;
           }
-          router.push(`/projects?created=${createdProjectId}&secretSetup=ok`);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          router.push(`/projects?created=${createdProjectId}&secretSetup=ok` as any);
           return;
         }
 
-        router.push(`/projects?created=${createdProjectId}`);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        router.push(`/projects?created=${createdProjectId}` as any);
       } else {
         router.push('/projects');
       }

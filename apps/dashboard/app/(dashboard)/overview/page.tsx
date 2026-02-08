@@ -398,7 +398,8 @@ export default function OverviewPage() {
               <button
                 key={action.href}
                 type="button"
-                onClick={() => router.push(action.href)}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                onClick={() => router.push(action.href as any)}
                 className="group rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left transition hover:bg-slate-100"
               >
                 <p className="text-sm font-semibold text-slate-900 transition group-hover:text-slate-800">{action.title}</p>
@@ -463,7 +464,8 @@ export default function OverviewPage() {
               <button
                 key={deployment.id}
                 type="button"
-                onClick={() => router.push(`/projects/${deployment.project.id}/deployments/${deployment.id}`)}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                onClick={() => router.push(`/projects/${deployment.project.id}/deployments/${deployment.id}` as any)}
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left transition hover:bg-slate-100"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">

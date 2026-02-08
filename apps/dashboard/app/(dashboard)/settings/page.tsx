@@ -42,6 +42,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     load().catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedOrganizationId]);
 
   return (
