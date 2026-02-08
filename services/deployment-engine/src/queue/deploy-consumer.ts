@@ -50,7 +50,7 @@ export class DeployQueueConsumer {
   private readonly queueKey = 'apployd:deployments:queue';
 
   // BLPOP must use a dedicated connection; otherwise it blocks heartbeat and event publishing.
-  private readonly blockingRedis = (Redis as any)(env.REDIS_URL, {
+  private readonly blockingRedis = new Redis(env.REDIS_URL, {
     maxRetriesPerRequest: null,
     enableAutoPipelining: false,
   });

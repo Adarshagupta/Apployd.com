@@ -18,7 +18,7 @@ export class ContainerActionConsumer {
   private readonly queueKey = 'apployd:container-actions:queue';
 
   // BLPOP must use a dedicated connection; otherwise it can block deployment queue processing.
-  private readonly blockingRedis = new (Redis as any)(env.REDIS_URL, {
+  private readonly blockingRedis = new Redis(env.REDIS_URL, {
     maxRetriesPerRequest: null,
     enableAutoPipelining: false,
   });
