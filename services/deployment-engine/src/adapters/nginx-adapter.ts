@@ -32,22 +32,27 @@ export class NginxAdapter {
   }
 
   private loadTemplate(): string {
-    try {
-      return readFileSync(env.NGINX_TEMPLATE_PATH, 'utf8');
-    } catch {
-      return [
-        'server {',
-        '    listen 80;',
-        '    server_name {{DOMAIN}} {{ALIASES}};',
-        '    location / {',
-        '        proxy_pass http://{{UPSTREAM_HOST}}:{{UPSTREAM_PORT}};',
-        '        proxy_http_version 1.1;',
-        '        proxy_set_header Upgrade $http_upgrade;',
-        '        proxy_set_header Connection "upgrade";',
-        '        proxy_set_header Host $host;',
-        '    }',
-        '}',
-      ].join('\\n');
+    if (env.NGINX_TEMPLATE_PATH) {
+      try {
+        return readFileSync(env.NGINX_TEMPLATE_PATH, 'utf8');
+      } catch {
+        // Fall through to default template
+      }
+    }
+    
+    return [
+      'server {',
+      '    listen 80;',
+      '    server_name {{DOMAIN}} {{ALIASES}};',
+      '    location / {',
+      '        proxy_pass http://{{UPSTREAM_HOST}}:{{UPSTREAM_PORT}};',
+      '        proxy_http_version 1.1;',
+      '        proxy_set_header Upgrade $http_upgrade;',
+      '        proxy_set_header Connection "upgrade";',
+      '        proxy_set_header Host $host;',
+      '    }',
+      '}',
+    ].join('\\n');
     }
   }
 }
