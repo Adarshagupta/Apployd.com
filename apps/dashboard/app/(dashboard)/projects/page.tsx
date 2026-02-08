@@ -32,9 +32,9 @@ export default function ProjectsPage() {
 
   /* If user just came from /projects/new, flash a success message */
   useEffect(() => {
-    const created = searchParams.get('created');
+    const created = searchParams?.get('created');
     if (!created) return;
-    const secretSetup = searchParams.get('secretSetup');
+    const secretSetup = searchParams?.get('secretSetup');
     if (secretSetup === 'partial') {
       setMessage('Project created. Some environment variables could not be saved — add them on the project page.');
     } else if (secretSetup === 'ok') {

@@ -49,7 +49,7 @@ export default function SignupPage() {
     setGithubSubmitting(true);
 
     try {
-      const nextRaw = searchParams.get('next');
+      const nextRaw = searchParams?.get('next') ?? null;
       const nextPath =
         nextRaw && nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : '/overview';
       const data = await apiClient.get(

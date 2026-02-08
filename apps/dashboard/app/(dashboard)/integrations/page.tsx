@@ -65,8 +65,8 @@ export default function IntegrationsPage() {
   }, [projects, selectedProjectId]);
 
   useEffect(() => {
-    const githubState = searchParams.get('github');
-    const githubMessage = searchParams.get('githubMessage');
+    const githubState = searchParams?.get('github');
+    const githubMessage = searchParams?.get('githubMessage');
     if (githubState === 'connected') {
       setMessage('GitHub connected successfully.');
     } else if (githubState === 'error') {

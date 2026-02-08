@@ -187,8 +187,8 @@ export default function CreateProjectPage() {
   }, [githubStatus?.connected, loadGitHubRepositories]);
 
   useEffect(() => {
-    const githubState = searchParams.get('github');
-    const githubMessage = searchParams.get('githubMessage');
+    const githubState = searchParams?.get('github');
+    const githubMessage = searchParams?.get('githubMessage');
     if (githubState === 'connected') {
       setNotice('GitHub connected successfully.');
       loadGitHubStatus().catch(() => undefined);
