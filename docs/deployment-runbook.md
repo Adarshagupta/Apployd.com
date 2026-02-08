@@ -9,7 +9,7 @@
 
 ## First-time setup
 
-1. `bash infra/scripts/deploy-ubuntu.sh --public-domain plurihub.sylicaai.com --base-domain sylicaai.com --preview-base-domain preview.sylicaai.com --certbot-email ops@sylicaai.com --with-provision --run-certbot`
+1. `bash infra/scripts/deploy-ubuntu.sh --public-domain plurihub.sylicaai.com --base-domain sylicaai.com --preview-base-domain preview.sylicaai.com --certbot-email ops@sylicaai.com --cloudflare-api-token <token> --cloudflare-zone-id <zone-id> --with-provision --run-certbot`
 2. Verify generated env files:
    - `apps/control-plane/.env`
    - `services/deployment-engine/.env`

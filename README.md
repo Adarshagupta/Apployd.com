@@ -155,6 +155,8 @@ bash infra/scripts/deploy-ubuntu.sh \
   --base-domain sylicaai.com \
   --preview-base-domain preview.sylicaai.com \
   --certbot-email ops@sylicaai.com \
+  --cloudflare-api-token <your-cloudflare-token> \
+  --cloudflare-zone-id <your-cloudflare-zone-id> \
   --with-provision \
   --run-certbot
 ```

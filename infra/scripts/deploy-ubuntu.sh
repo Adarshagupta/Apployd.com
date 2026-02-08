@@ -30,6 +30,8 @@ Optional flags:
   --default-region        Engine/control-plane region (default: fsn1)
   --jwt-secret            JWT secret override
   --encryption-key        Encryption key override
+  --cloudflare-api-token  Cloudflare API token override
+  --cloudflare-zone-id    Cloudflare zone ID override
   --with-provision        Run host package provisioning first
   --run-certbot           Run certbot for public domain after Nginx config
 EOF
@@ -46,6 +48,8 @@ REDIS_URL=""
 DEFAULT_REGION=""
 JWT_SECRET_VALUE=""
 ENCRYPTION_KEY_VALUE=""
+CLOUDFLARE_API_TOKEN_VALUE=""
+CLOUDFLARE_ZONE_ID_VALUE=""
 WITH_PROVISION=false
 RUN_CERTBOT=false
 
@@ -93,6 +97,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --encryption-key)
       ENCRYPTION_KEY_VALUE="${2:-}"
+      shift 2
+      ;;
+    --cloudflare-api-token)
+      CLOUDFLARE_API_TOKEN_VALUE="${2:-}"
+      shift 2
+      ;;
+    --cloudflare-zone-id)
+      CLOUDFLARE_ZONE_ID_VALUE="${2:-}"
       shift 2
       ;;
     --with-provision)
@@ -177,6 +189,14 @@ fi
 
 if [[ -n "$ENCRYPTION_KEY_VALUE" ]]; then
   env_args+=(--encryption-key "$ENCRYPTION_KEY_VALUE")
+fi
+
+if [[ -n "$CLOUDFLARE_API_TOKEN_VALUE" ]]; then
+  env_args+=(--cloudflare-api-token "$CLOUDFLARE_API_TOKEN_VALUE")
+fi
+
+if [[ -n "$CLOUDFLARE_ZONE_ID_VALUE" ]]; then
+  env_args+=(--cloudflare-zone-id "$CLOUDFLARE_ZONE_ID_VALUE")
 fi
 
 bash "$SCRIPT_DIR/generate-production-env.sh" "${env_args[@]}"

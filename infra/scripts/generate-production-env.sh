@@ -29,6 +29,8 @@ Optional flags:
   --default-region        Default scheduler region (default: fsn1)
   --jwt-secret            JWT secret (auto-generated if omitted)
   --encryption-key        32+ char secret for AES encryption (auto-generated if omitted)
+  --cloudflare-api-token  Cloudflare API token (overrides CLOUDFLARE_API_TOKEN env)
+  --cloudflare-zone-id    Cloudflare zone ID (overrides CLOUDFLARE_ZONE_ID env)
 
 Runtime secrets are sourced from env vars when present:
   STRIPE_SECRET_KEY
@@ -52,6 +54,8 @@ REDIS_URL="redis://redis:6379"
 DEFAULT_REGION="fsn1"
 JWT_SECRET_VALUE=""
 ENCRYPTION_KEY_VALUE=""
+CLOUDFLARE_API_TOKEN_VALUE="${CLOUDFLARE_API_TOKEN:-replace}"
+CLOUDFLARE_ZONE_ID_VALUE="${CLOUDFLARE_ZONE_ID:-replace}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -97,6 +101,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --encryption-key)
       ENCRYPTION_KEY_VALUE="${2:-}"
+      shift 2
+      ;;
+    --cloudflare-api-token)
+      CLOUDFLARE_API_TOKEN_VALUE="${2:-}"
+      shift 2
+      ;;
+    --cloudflare-zone-id)
+      CLOUDFLARE_ZONE_ID_VALUE="${2:-}"
       shift 2
       ;;
     --help|-h)
@@ -161,8 +173,6 @@ STRIPE_WEBHOOK_SECRET_VALUE="${STRIPE_WEBHOOK_SECRET:-whsec_replace}"
 GITHUB_CLIENT_ID_VALUE="${GITHUB_CLIENT_ID:-}"
 GITHUB_CLIENT_SECRET_VALUE="${GITHUB_CLIENT_SECRET:-}"
 GITHUB_WEBHOOK_SECRET_VALUE="${GITHUB_WEBHOOK_SECRET:-}"
-CLOUDFLARE_API_TOKEN_VALUE="${CLOUDFLARE_API_TOKEN:-replace}"
-CLOUDFLARE_ZONE_ID_VALUE="${CLOUDFLARE_ZONE_ID:-replace}"
 
 CONTROL_PLANE_ENV="$ROOT_DIR/apps/control-plane/.env"
 ENGINE_ENV="$ROOT_DIR/services/deployment-engine/.env"
