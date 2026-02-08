@@ -2,9 +2,11 @@ import Stripe from 'stripe';
 
 import { env } from '../config/env.js';
 
-export const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-  apiVersion: '2025-02-24.acacia',
-});
+export const stripe = env.STRIPE_SECRET_KEY
+  ? new Stripe(env.STRIPE_SECRET_KEY, {
+      apiVersion: '2025-02-24.acacia',
+    })
+  : undefined;
 
 export const mapPlanPrice = (planCode: string): number => {
   switch (planCode) {

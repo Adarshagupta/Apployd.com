@@ -19,6 +19,10 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
   const access = new AccessService();
 
   app.post('/billing/checkout-session', { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (!stripe) {
+      return reply.serviceUnavailable('Billing not configured');
+    }
+
     const user = request.user as { userId: string; email: string };
     const body = checkoutSchema.parse(request.body);
 
@@ -117,6 +121,10 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/billing/webhook', async (request, reply) => {
+    if (!stripe || !env.STRIPE_WEBHOOK_SECRET) {
+      return reply.serviceUnavailable('Billing not configured');
+    }
+
     const signature = request.headers['stripe-signature'];
     if (!signature || typeof signature !== 'string') {
       return reply.badRequest('Missing stripe-signature header');
