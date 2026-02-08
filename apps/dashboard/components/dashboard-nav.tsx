@@ -15,7 +15,7 @@ const items = [
 ];
 
 export function DashboardNav() {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '';
 
   return (
     <div className="nav-shell lg:border-r">

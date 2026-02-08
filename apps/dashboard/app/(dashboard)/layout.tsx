@@ -54,7 +54,7 @@ const THEME_STORAGE_KEY = 'apployd_dashboard_theme';
 const AUTH_STORAGE_KEY = 'apployd_token';
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '/overview';
   const [theme, setTheme] = useState<DashboardTheme>('light');
   const [authChecked, setAuthChecked] = useState(false);
   const copy = pageTitles[pathname] ?? {
