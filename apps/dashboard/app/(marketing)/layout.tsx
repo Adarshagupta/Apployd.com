@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 
 import styles from '../landing.module.css';
 
@@ -18,10 +19,10 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
       {/* Nav */}
       <header className={styles.navWrap}>
         <div className={styles.navShell}>
-          <a href="/" className={styles.brand}>
+          <Link href="/" className={styles.brand}>
             <span className={styles.brandMark} />
             APployd
-          </a>
+          </Link>
           <nav className={styles.navLinks}>
             {navLinks.map((l) => (
               <a key={l.href} href={l.href} className={styles.navLink}>
@@ -63,7 +64,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
             <div>
               <p style={{ margin: 0, fontWeight: 600, fontSize: '0.82rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(200,210,240,0.5)' }}>Product</p>
               <ul style={{ listStyle: 'none', margin: '0.6rem 0 0', padding: 0, display: 'grid', gap: '0.4rem' }}>
-                <li><a href="/#product" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Features</a></li>
+                <li><Link href="/#product" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Features</Link></li>
                 <li><a href="/pricing" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Pricing</a></li>
                 <li><a href="/security" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Security</a></li>
               </ul>

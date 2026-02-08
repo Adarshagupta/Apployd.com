@@ -115,7 +115,7 @@ export const serverRoutes: FastifyPluginAsync = async (app) => {
 
     const server = await prisma.server.update({
       where: { id: params.serverId },
-      data: body,
+      data: Object.fromEntries(Object.entries(body).filter(([, v]) => v !== undefined)) as any,
     });
 
     return { server };

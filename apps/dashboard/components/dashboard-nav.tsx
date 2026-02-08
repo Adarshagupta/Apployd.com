@@ -29,7 +29,7 @@ export function DashboardNav() {
           return (
             <Link
               key={item.href}
-              href={item.href as any}
+              href={item.href}
               className={`nav-link ${
                 active ? 'nav-link-active' : ''
               }`}

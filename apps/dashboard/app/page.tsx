@@ -96,34 +96,6 @@ const heroStats = [
   { label: 'Active Streams', value: '24/7' },
 ];
 
-function CorePlatformSvg({ accent }: { accent: string }) {
-  return (
-    <svg viewBox="0 0 760 520" className={styles.coreSvg} role="img" aria-label="Core platform visual">
-      <ellipse cx="380" cy="404" rx="276" ry="62" fill="none" stroke="#1f2634" strokeWidth="2" />
-      <rect x="132" y="182" width="496" height="220" rx="34" fill="#090a0f" stroke="#394052" strokeWidth="2" />
-      <rect x="200" y="118" width="166" height="132" rx="20" fill="#0b0d14" stroke="#474e60" strokeWidth="2" />
-      <rect x="394" y="118" width="166" height="132" rx="20" fill="#0b0d14" stroke="#474e60" strokeWidth="2" />
-      <rect x="298" y="258" width="166" height="132" rx="20" fill="#0b0d14" stroke="#474e60" strokeWidth="2" />
-      <rect x="228" y="146" width="112" height="78" rx="14" fill="none" stroke="#70788f" strokeDasharray="6 7" />
-      <rect x="422" y="146" width="112" height="78" rx="14" fill="none" stroke="#70788f" strokeDasharray="6 7" />
-      <rect x="326" y="286" width="112" height="78" rx="14" fill="none" stroke="#70788f" strokeDasharray="6 7" />
-      <path d="M280 168l20-26h20l-20 26z" fill={accent} opacity="0.22" />
-      <path d="M312 168l20-26h20l-20 26z" fill={accent} opacity="0.35" />
-      <path d="M344 168l20-26h20l-20 26z" fill={accent} opacity="0.48" />
-      <path d="M248 316a26 26 0 1 1 40 20" fill="none" stroke="#6c7386" strokeWidth="8" />
-      <path d="M276 342l20-8-6 18z" fill="#6c7386" />
-      <g transform="translate(466 186)">
-        <circle cx="0" cy="0" r="12" fill="#626a7f" />
-        <circle cx="26" cy="0" r="12" fill="#626a7f" />
-        <circle cx="13" cy="-17" r="12" fill="#626a7f" />
-        <circle cx="13" cy="17" r="12" fill="#626a7f" />
-      </g>
-      <path d="M360 334h44v22c0 8-8 14-22 14s-22-6-22-14z" fill="#626a7f" />
-      <circle cx="382" cy="342" r="6" fill="#0f121b" />
-    </svg>
-  );
-}
-
 /* Step 1: Analytics – bar chart / line graph / real-time dashboard */
 function AnalyticsSvg() {
   return (

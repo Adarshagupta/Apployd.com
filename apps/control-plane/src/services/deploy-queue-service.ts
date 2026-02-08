@@ -10,6 +10,7 @@ export class DeployQueueService {
     deploymentId: string;
     organizationId: string;
     projectId: string;
+    environment?: string;
     request: DeploymentRequest;
   }): Promise<void> {
     await redis.rpush(DEPLOY_QUEUE, JSON.stringify(payload));

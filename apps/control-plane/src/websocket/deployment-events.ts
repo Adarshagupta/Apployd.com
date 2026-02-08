@@ -128,7 +128,7 @@ export const deploymentWebsocketRoutes: FastifyPluginAsync = async (app) => {
           socket.close(1011, 'Failed to subscribe');
         });
 
-      sub.on('message', (_receivedChannel, message) => {
+      sub.on('message', (_receivedChannel: string, message: string) => {
         socket.send(message);
       });
 

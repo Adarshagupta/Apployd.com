@@ -71,8 +71,9 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
   const deploymentService = new DeploymentRequestService();
 
   app.get('/integrations/github/status', { preHandler: [app.authenticate] }, async (request) => {
+    const user = request.user as { userId: string; email: string };
     const connection = await prisma.gitHubConnection.findUnique({
-      where: { userId: request.user.userId },
+      where: { userId: user.userId },
       select: {
         username: true,
         avatarUrl: true,
@@ -90,6 +91,7 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/integrations/github/connect-url', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     if (!github.isConfigured()) {
       return reply.serviceUnavailable('GitHub OAuth is not configured on the server.');
     }
@@ -98,7 +100,7 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
     const state = randomBytes(24).toString('hex');
     const oauthState: OAuthStatePayload = {
       mode: 'connect',
-      userId: request.user.userId,
+      userId: user.userId,
       redirectTo: safeRedirectPath(query.redirectTo, '/settings'),
     };
 
@@ -259,17 +261,19 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.delete('/integrations/github/connection', { preHandler: [app.authenticate] }, async (request) => {
+    const user = request.user as { userId: string; email: string };
     await prisma.gitHubConnection.deleteMany({
-      where: { userId: request.user.userId },
+      where: { userId: user.userId },
     });
 
     return { success: true };
   });
 
   app.get('/integrations/github/repositories', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const query = repoQuerySchema.parse(request.query);
     const connection = await prisma.gitHubConnection.findUnique({
-      where: { userId: request.user.userId },
+      where: { userId: user.userId },
     });
 
     if (!connection) {
@@ -286,7 +290,7 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
       accessToken,
       page: query.page,
       perPage: query.perPage,
-      search: query.search,
+      ...(query.search && { search: query.search }),
     });
 
     return {
@@ -298,6 +302,7 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.patch('/projects/:projectId/git-settings', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
     const params = z.object({ projectId: z.string().cuid() }).parse(request.params);
     const body = updateGitSettingsSchema.parse(request.body);
 
@@ -311,7 +316,7 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      await access.requireOrganizationRole(request.user.userId, project.organizationId, 'developer');
+      await access.requireOrganizationRole(user.userId, project.organizationId, 'developer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -416,7 +421,7 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
           environment,
           gitUrl: payload.repository.clone_url,
           branch,
-          commitSha: payload.after,
+          ...(payload.after && { commitSha: payload.after }),
         });
         triggered += 1;
       } catch (error) {
@@ -471,7 +476,7 @@ const consumeOAuthState = async (
     return {
       payload: {
         mode: parsed.data.mode,
-        userId: parsed.data.userId,
+        ...(parsed.data.userId && { userId: parsed.data.userId }),
         redirectTo,
       },
       reason: null,

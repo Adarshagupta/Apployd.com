@@ -154,7 +154,7 @@ function HomePage() {
             Ready to deploy your next project?
           </h2>
           <p className="mt-6 text-xl text-teal-100">
-            Join thousands of developers who've made the switch to cost-effective, reliable backend hosting.
+            Join thousands of developers who&apos;ve made the switch to cost-effective, reliable backend hosting.
           </p>
           
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-6">

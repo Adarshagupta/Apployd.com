@@ -170,9 +170,6 @@ export function DeployForm({
   };
 
   const effectiveGitUrl = gitUrl || defaults?.gitUrl || '';
-  const effectiveBranch = branch || defaults?.branch || '';
-  const effectiveStartCommand = startCommand || defaults?.startCommand || '';
-  const effectivePort = port || defaults?.port || 3000;
 
   const hasDefaults = !!(defaults?.gitUrl);
 

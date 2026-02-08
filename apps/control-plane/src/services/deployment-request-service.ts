@@ -328,16 +328,16 @@ export class DeploymentRequestService {
     const payload: DeploymentRequest = {
       projectId: project.id,
       gitUrl: resolvedGitUrl,
-      branch: resolvedBranch,
-      commitSha: input.commitSha,
-      rootDirectory: resolvedRootDirectory,
-      buildCommand: resolvedBuildCommand,
-      startCommand: resolvedStartCommand,
+      ...(resolvedBranch && { branch: resolvedBranch }),
+      ...(input.commitSha && { commitSha: input.commitSha }),
+      ...(resolvedRootDirectory && { rootDirectory: resolvedRootDirectory }),
+      ...(resolvedBuildCommand && { buildCommand: resolvedBuildCommand }),
+      ...(resolvedStartCommand && { startCommand: resolvedStartCommand }),
       port: resolvedPort,
       env: { ...decryptedSecrets, ...(input.env ?? {}) },
-      environment: resolvedEnvironment,
+      ...(resolvedEnvironment && { environment: resolvedEnvironment }),
       serviceType: resolvedServiceType as 'web_service' | 'static_site',
-      outputDirectory: resolvedOutputDirectory,
+      ...(resolvedOutputDirectory && { outputDirectory: resolvedOutputDirectory }),
     };
 
     try {
@@ -407,7 +407,7 @@ export class DeploymentRequestService {
 
     await this.audit.record({
       organizationId: project.organizationId,
-      actorUserId: input.actorUserId,
+      ...(input.actorUserId && { actorUserId: input.actorUserId }),
       action: input.trigger === 'github_push' ? 'deployment.created.github_push' : 'deployment.created',
       entityType: 'deployment',
       entityId: deployment.id,

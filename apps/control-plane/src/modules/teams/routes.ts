@@ -36,11 +36,11 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/teams/invite', { preHandler: [app.authenticate] }, async (request, reply) => {
-    const user = request.user as { userId: string; email: string };
+    const reqUser = request.user as { userId: string; email: string };
     const body = inviteSchema.parse(request.body);
 
     try {
-      await access.requireOrganizationRole(user.userId, body.organizationId, 'admin');
+      await access.requireOrganizationRole(reqUser.userId, body.organizationId, 'admin');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }

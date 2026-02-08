@@ -212,7 +212,7 @@ export class ProjectUsageService {
       _max: {
         recordedAt: true,
       },
-    })) as ProjectUsageAggregateRow[];
+    } as any)) as ProjectUsageAggregateRow[];
 
     const byProjectId = this.buildSnapshots(projectResources, aggregates, window);
     return { window: this.toWindowShape(window), byProjectId };
@@ -254,7 +254,7 @@ export class ProjectUsageService {
       },
       _sum: { quantity: true },
       _max: { recordedAt: true },
-    })) as ProjectUsageAggregateRow[];
+    } as any)) as ProjectUsageAggregateRow[];
 
     const snapshots = this.buildSnapshots([project], aggregates, window);
     const snapshot = snapshots[projectId] ?? this.buildSnapshot(project, zeroTotals(), window, null);

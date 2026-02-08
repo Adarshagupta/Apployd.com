@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 import { env } from '../config/env.js';
 
 export const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-  apiVersion: '2024-12-18.acacia',
+  apiVersion: '2025-02-24.acacia',
 });
 
 export const mapPlanPrice = (planCode: string): number => {
