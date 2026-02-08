@@ -126,8 +126,11 @@ log_info "  Email: $EMAIL"
 log_info "Cleaning up old installation..."
 
 # Stop and remove old containers
-cd "$SCRIPT_DIR/infra/docker"
-docker-compose down 2>/dev/null || true
+DOCKER_COMPOSE_FILE="$SCRIPT_DIR/infra/docker/docker-compose.yml"
+if [ -f "$DOCKER_COMPOSE_FILE" ]; then
+    cd "$SCRIPT_DIR/infra/docker"
+    docker-compose -f "$DOCKER_COMPOSE_FILE" down 2>/dev/null || true
+fi
 
 # Remove old nginx configs
 rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
@@ -180,13 +183,20 @@ log_info "✓ Environment files created"
 # ==========================================
 log_info "Building Docker images (this may take 10-15 minutes)..."
 
+DOCKER_COMPOSE_FILE="$SCRIPT_DIR/infra/docker/docker-compose.yml"
+
+if [ ! -f "$DOCKER_COMPOSE_FILE" ]; then
+    log_error "docker-compose.yml not found at $DOCKER_COMPOSE_FILE"
+    exit 1
+fi
+
 cd "$SCRIPT_DIR/infra/docker"
 
 # Clean up old images to save space
 docker system prune -f --volumes 2>/dev/null || true
 
 # Build with docker-compose
-docker-compose build --no-cache
+docker-compose -f "$DOCKER_COMPOSE_FILE" build --no-cache
 
 log_info "✓ Docker images built"
 
@@ -195,7 +205,8 @@ log_info "✓ Docker images built"
 # ==========================================
 log_info "Starting Redis..."
 
-docker-compose up -d redis
+cd "$SCRIPT_DIR/infra/docker"
+docker-compose -f "$DOCKER_COMPOSE_FILE" up -d redis
 
 # Wait for Redis
 sleep 5
@@ -210,9 +221,9 @@ log_info "Running database migrations..."
 cd "$SCRIPT_DIR/infra/docker"
 
 # Generate Prisma client and run migrations
-docker-compose run --rm control-plane sh -c "npx prisma migrate deploy && npx prisma db push --skip-generate" || {
+docker-compose -f "$DOCKER_COMPOSE_FILE" run --rm control-plane sh -c "npx prisma migrate deploy && npx prisma db push --skip-generate" || {
     log_warn "Migration failed, trying db push..."
-    docker-compose run --rm control-plane npx prisma db push --force-reset --skip-generate
+    docker-compose -f "$DOCKER_COMPOSE_FILE" run --rm control-plane npx prisma db push --force-reset --skip-generate
 }
 
 log_info "✓ Database migrations complete"
@@ -222,17 +233,18 @@ log_info "✓ Database migrations complete"
 # ==========================================
 log_info "Starting all services..."
 
-docker-compose up -d
+cd "$SCRIPT_DIR/infra/docker"
+docker-compose -f "$DOCKER_COMPOSE_FILE" up -d
 
 # Wait for services to be ready
 log_info "Waiting for services to start..."
 sleep 10
 
 # Check if services are running
-if docker-compose ps | grep -q "Up"; then
+if docker-compose -f "$DOCKER_COMPOSE_FILE" ps | grep -q "Up"; then
     log_info "✓ All services started"
 else
-    log_error "Some services failed to start. Check logs with: docker-compose logs"
+    log_error "Some services failed to start. Check logs with: cd infra/docker && docker-compose logs"
     exit 1
 fi
 
@@ -433,7 +445,7 @@ cd "$SCRIPT_DIR/infra/docker"
 
 # Check Docker containers
 log_info "Docker containers status:"
-docker-compose ps
+docker-compose -f "$DOCKER_COMPOSE_FILE" ps
 
 # Test endpoints
 log_info "Testing endpoints..."
