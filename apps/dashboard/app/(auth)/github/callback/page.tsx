@@ -35,6 +35,7 @@ export default function GitHubAuthCallbackPage() {
         const target = `/login?githubLogin=error&githubMessage=${encodeURIComponent(
           'Missing GitHub login code.',
         )}&next=${encodeURIComponent(next)}`;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         router.replace(target as any);
         return;
       }
@@ -51,6 +52,7 @@ export default function GitHubAuthCallbackPage() {
 
         window.localStorage.setItem('apployd_token', payload.token);
         const redirectTo = resolveSafePath(payload.redirectTo, next);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         router.replace(redirectTo as any);
       } catch (error) {
         if (canceled) {
@@ -61,6 +63,7 @@ export default function GitHubAuthCallbackPage() {
         const target = `/login?githubLogin=error&githubMessage=${encodeURIComponent(
           message,
         )}&next=${encodeURIComponent(next)}`;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         router.replace(target as any);
       }
     };
