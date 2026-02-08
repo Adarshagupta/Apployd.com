@@ -7,6 +7,8 @@ import { SectionCard } from '../../../components/section-card';
 import { apiClient } from '../../../lib/api';
 import { useWorkspace } from '../../../lib/workspace';
 
+export const dynamic = 'force-dynamic';
+
 interface Repository {
   id: string;
   name: string;

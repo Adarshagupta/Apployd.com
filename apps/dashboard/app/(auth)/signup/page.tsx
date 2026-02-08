@@ -10,6 +10,8 @@ import { apiClient } from '../../../lib/api';
 
 import styles from '../auth.module.css';
 
+export const dynamic = 'force-dynamic';
+
 export default function SignupPage() {
   const [form, setForm] = useState({
     name: '',

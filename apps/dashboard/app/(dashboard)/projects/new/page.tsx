@@ -9,6 +9,8 @@ import { SectionCard } from '../../../../components/section-card';
 import { apiClient } from '../../../../lib/api';
 import { useWorkspace } from '../../../../lib/workspace';
 
+export const dynamic = 'force-dynamic';
+
 const SLUG_PATTERN = /^[a-z0-9-]+$/;
 const ENV_KEY_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
 

@@ -7,6 +7,8 @@ import { useSearchParams } from 'next/navigation';
 import { SectionCard } from '../../../components/section-card';
 import { useWorkspace } from '../../../lib/workspace';
 
+export const dynamic = 'force-dynamic';
+
 export default function ProjectsPage() {
   const {
     organizations,
