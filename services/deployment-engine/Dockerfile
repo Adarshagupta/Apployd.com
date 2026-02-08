@@ -7,6 +7,7 @@ COPY services/deployment-engine/package.json services/deployment-engine/package.
 RUN npm install
 
 COPY . .
+RUN npx prisma generate --schema=apps/control-plane/prisma/schema.prisma
 RUN npm --workspace packages/shared run build && npm --workspace services/deployment-engine run build
 
 FROM node:20-alpine

@@ -7,6 +7,7 @@ COPY apps/control-plane/package.json apps/control-plane/package.json
 RUN npm install
 
 COPY . .
+RUN npx prisma generate --schema=apps/control-plane/prisma/schema.prisma
 RUN npm --workspace packages/shared run build && npm --workspace apps/control-plane run build
 
 FROM node:20-alpine
