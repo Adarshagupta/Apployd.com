@@ -249,9 +249,52 @@ else
 fi
 
 # ==========================================
-# 9. Setup Nginx
+# 9. Setup SSL Certificates FIRST
+# ==========================================
+log_info "Setting up SSL certificates..."
+
+# Remove ALL conflicting nginx configs first
+rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
+rm -f /etc/nginx/sites-available/default 2>/dev/null || true
+rm -f /etc/nginx/conf.d/default.conf 2>/dev/null || true
+rm -f /etc/nginx/sites-enabled/$DOMAIN.conf 2>/dev/null || true
+rm -f /etc/nginx/sites-available/$DOMAIN.conf 2>/dev/null || true
+rm -f /etc/nginx/sites-enabled/*.conf 2>/dev/null || true
+
+# Check if certificate already exists
+if [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
+    log_info "Obtaining SSL certificate for $DOMAIN..."
+    
+    # Stop nginx so certbot can use port 80
+    systemctl stop nginx 2>/dev/null || true
+    
+    # Get certificate using standalone mode
+    certbot certonly --standalone \
+        -d "$DOMAIN" \
+        --non-interactive \
+        --agree-tos \
+        --email "$EMAIL" \
+        --preferred-challenges http || {
+        log_error "Failed to obtain SSL certificate"
+        log_info "Make sure:"
+        log_info "  1. DNS for $DOMAIN points to this server"
+        log_info "  2. Ports 80 and 443 are open"
+        log_info "  3. No other service is using port 80"
+        exit 1
+    }
+    
+    log_info "✓ SSL certificate obtained"
+else
+    log_info "✓ SSL certificate already exists"
+fi
+
+# ==========================================
+# 10. Setup Nginx (AFTER certs are ready)
 # ==========================================
 log_info "Configuring Nginx..."
+
+# Make sure nginx is stopped while we reconfigure
+systemctl stop nginx 2>/dev/null || true
 
 # Create nginx config
 cat > /etc/nginx/sites-available/$DOMAIN.conf <<'NGINXCONF'
@@ -273,14 +316,14 @@ server {
     listen 80;
     server_name DOMAIN_PLACEHOLDER;
     
-    # ACME challenge for Let's Encrypt
+    # ACME challenge for Let's Encrypt renewal
     location /.well-known/acme-challenge/ {
         root /var/www/html;
     }
     
     # Redirect all other traffic to HTTPS
     location / {
-        return 301 https://$server_name$request_uri;
+        return 301 https://$host$request_uri;
     }
 }
 
@@ -288,7 +331,7 @@ server {
     listen 443 ssl http2;
     server_name DOMAIN_PLACEHOLDER;
     
-    # SSL configuration (will be added by certbot)
+    # SSL configuration
     ssl_certificate /etc/letsencrypt/live/DOMAIN_PLACEHOLDER/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/DOMAIN_PLACEHOLDER/privkey.pem;
     
@@ -380,46 +423,25 @@ NGINXCONF
 # Replace domain placeholder
 sed -i "s/DOMAIN_PLACEHOLDER/$DOMAIN/g" /etc/nginx/sites-available/$DOMAIN.conf
 
-# Enable site
+# Enable site (only our config, nothing else)
 ln -sf /etc/nginx/sites-available/$DOMAIN.conf /etc/nginx/sites-enabled/$DOMAIN.conf
+
+# Verify no other configs are in sites-enabled
+for f in /etc/nginx/sites-enabled/*; do
+    if [ "$(basename $f)" != "$DOMAIN.conf" ]; then
+        log_warn "Removing conflicting nginx config: $f"
+        rm -f "$f"
+    fi
+done
 
 # Test nginx config
 nginx -t || {
     log_error "Nginx configuration test failed"
+    nginx -t 2>&1
     exit 1
 }
 
 log_info "✓ Nginx configured"
-
-# ==========================================
-# 10. Setup SSL with Let's Encrypt
-# ==========================================
-log_info "Setting up SSL certificates..."
-
-# Check if certificate already exists
-if [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
-    # Stop nginx temporarily
-    systemctl stop nginx
-    
-    # Get certificate
-    certbot certonly --standalone \
-        -d "$DOMAIN" \
-        --non-interactive \
-        --agree-tos \
-        --email "$EMAIL" \
-        --preferred-challenges http || {
-        log_error "Failed to obtain SSL certificate"
-        log_info "Make sure:"
-        log_info "  1. DNS for $DOMAIN points to this server"
-        log_info "  2. Ports 80 and 443 are open"
-        log_info "  3. No other service is using port 80"
-        exit 1
-    }
-    
-    log_info "✓ SSL certificate obtained"
-else
-    log_info "✓ SSL certificate already exists"
-fi
 
 # Setup auto-renewal
 (crontab -l 2>/dev/null | grep -v certbot; echo "0 0,12 * * * certbot renew --quiet --post-hook 'systemctl reload nginx'") | crontab -
@@ -430,7 +452,7 @@ fi
 log_info "Starting Nginx..."
 
 systemctl enable nginx
-systemctl restart nginx
+systemctl start nginx
 
 log_info "✓ Nginx started"
 
