@@ -1,5 +1,4 @@
-# If already cloned, just navigate and deploy:
-cd Apployd.com && \
+git pull origin main
 bash infra/scripts/deploy-ubuntu.sh \
   --public-domain plurihub.sylicaai.com \
   --base-domain sylicaai.com \
@@ -9,6 +8,3 @@ bash infra/scripts/deploy-ubuntu.sh \
   --cloudflare-zone-id 7b6143ba123ac62841b3827bd5de7c63 \
   --with-provision \
   --run-certbot
-
-# 3. Check status
-docker ps && curl http://localhost:4000/health
