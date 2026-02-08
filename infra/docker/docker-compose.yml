@@ -1,17 +1,6 @@
 version: '3.9'
 
 services:
-  postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: apployd
-    ports:
-      - "5432:5432"
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-
   redis:
     image: redis:7-alpine
     ports:
@@ -24,7 +13,6 @@ services:
     env_file:
       - ../../apps/control-plane/.env
     depends_on:
-      - postgres
       - redis
     ports:
       - "4000:4000"
@@ -36,7 +24,6 @@ services:
     env_file:
       - ../../services/deployment-engine/.env
     depends_on:
-      - postgres
       - redis
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -86,6 +73,5 @@ services:
       - "9100:9100"
 
 volumes:
-  pg_data:
   nginx_sites:
   nginx_letsencrypt:
