@@ -36,7 +36,7 @@ export default function LoginPage() {
     try {
       const data = await apiClient.post('/auth/login', { email, password });
       window.localStorage.setItem('apployd_token', data.token);
-      const nextRaw = searchParams.get('next');
+      const nextRaw = searchParams?.get('next') ?? null;
       const nextPath =
         nextRaw && nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : '/overview';
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -53,7 +53,7 @@ export default function LoginPage() {
     setGithubSubmitting(true);
 
     try {
-      const nextRaw = searchParams.get('next');
+      const nextRaw = searchParams?.get('next') ?? null;
       const nextPath =
         nextRaw && nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : '/overview';
       const data = await apiClient.get(
