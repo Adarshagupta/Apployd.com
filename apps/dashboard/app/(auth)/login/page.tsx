@@ -20,8 +20,8 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const githubLoginState = searchParams.get('githubLogin');
-    const githubMessage = searchParams.get('githubMessage');
+    const githubLoginState = searchParams?.get('githubLogin');
+    const githubMessage = searchParams?.get('githubMessage');
 
     if (githubLoginState === 'error') {
       setError(githubMessage ?? 'GitHub sign-in failed.');
