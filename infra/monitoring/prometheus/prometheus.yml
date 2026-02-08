@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'apployd-control-plane'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['control-plane:4000']
+
+  - job_name: 'apployd-deployment-engine'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['deployment-engine:9102']
+
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']

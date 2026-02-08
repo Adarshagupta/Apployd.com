@@ -1,0 +1,13 @@
+sequenceDiagram
+  participant CP as Control Plane
+  participant Q as Redis Queue
+  participant DE as Deployment Engine
+  participant D as Docker
+  participant N as Nginx
+
+  CP->>Q: enqueue deployment
+  DE->>Q: consume
+  DE->>D: build image
+  DE->>D: run container
+  DE->>N: update config
+  DE->>CP: publish ready event

@@ -1,0 +1,277 @@
+openapi: 3.1.0
+info:
+  title: Apployd Control Plane API
+  version: 0.1.0
+  description: REST API for account, projects, deployments, billing, and observability.
+servers:
+  - url: http://localhost:4000/api/v1
+paths:
+  /auth/signup:
+    post:
+      tags: [Auth]
+      summary: Create user and organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name, organizationName, organizationSlug]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                name: { type: string }
+                organizationName: { type: string }
+                organizationSlug: { type: string }
+      responses:
+        '201':
+          description: Signed up
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login and receive JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200': { description: Authenticated }
+  /organizations:
+    get:
+      tags: [Organizations]
+      security: [{ bearerAuth: [] }]
+      summary: List organizations for current user
+      responses:
+        '200': { description: Organization list }
+    post:
+      tags: [Organizations]
+      security: [{ bearerAuth: [] }]
+      summary: Create organization with free subscription
+      responses:
+        '201': { description: Organization created }
+  /projects:
+    get:
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      summary: List projects by organization
+      parameters:
+        - in: query
+          name: organizationId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Project list }
+    post:
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      summary: Create project with resource allocation
+      responses:
+        '201': { description: Project created }
+  /projects/{projectId}/resources:
+    patch:
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      summary: Update project resource allocation
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Updated }
+  /projects/{projectId}/secrets:
+    get:
+      tags: [Secrets]
+      security: [{ bearerAuth: [] }]
+      summary: List secret keys for project
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Secret metadata }
+  /projects/{projectId}/secrets/{key}:
+    put:
+      tags: [Secrets]
+      security: [{ bearerAuth: [] }]
+      summary: Upsert encrypted secret
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: key
+          required: true
+          schema: { type: string }
+      responses:
+        '201': { description: Secret stored }
+    delete:
+      tags: [Secrets]
+      security: [{ bearerAuth: [] }]
+      summary: Delete secret
+      responses:
+        '200': { description: Secret deleted }
+  /deployments:
+    get:
+      tags: [Deployments]
+      security: [{ bearerAuth: [] }]
+      summary: List deployments for project
+      parameters:
+        - in: query
+          name: projectId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Deployment history }
+    post:
+      tags: [Deployments]
+      security: [{ bearerAuth: [] }]
+      summary: Trigger deployment
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: { type: string }
+          description: Replay-safe key for deploy request deduplication (1 hour window).
+      responses:
+        '202': { description: Deployment queued }
+        '200': { description: Idempotent replay response with existing deployment }
+        '402': { description: Active subscription required }
+        '409': { description: Resource pool constraint violation }
+  /deployments/{deploymentId}:
+    get:
+      tags: [Deployments]
+      security: [{ bearerAuth: [] }]
+      summary: Get deployment status by id
+      parameters:
+        - in: path
+          name: deploymentId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Deployment status }
+  /deployments/{deploymentId}/wake:
+    post:
+      tags: [Deployments]
+      security: [{ bearerAuth: [] }]
+      summary: Wake sleeping deployment container
+      parameters:
+        - in: path
+          name: deploymentId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Wake in progress }
+  /usage/summary:
+    get:
+      tags: [Usage]
+      security: [{ bearerAuth: [] }]
+      summary: Show pooled usage for current billing period
+      parameters:
+        - in: query
+          name: organizationId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Usage snapshot }
+  /usage/daily:
+    get:
+      tags: [Usage]
+      security: [{ bearerAuth: [] }]
+      summary: Daily aggregate usage for one metric
+      parameters:
+        - in: query
+          name: organizationId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: metricType
+          required: true
+          schema:
+            type: string
+            enum: [cpu_millicore_seconds, ram_mb_seconds, bandwidth_bytes, request_count]
+        - in: query
+          name: days
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 90 }
+      responses:
+        '200': { description: Daily usage series }
+  /plans:
+    get:
+      tags: [Plans]
+      summary: List available subscription plans
+      responses:
+        '200': { description: Plan list }
+  /plans/current:
+    get:
+      tags: [Plans]
+      security: [{ bearerAuth: [] }]
+      summary: Get current subscription and plan for organization
+      parameters:
+        - in: query
+          name: organizationId
+          required: false
+          schema: { type: string }
+      responses:
+        '200': { description: Current plan }
+  /billing/checkout-session:
+    post:
+      tags: [Billing]
+      security: [{ bearerAuth: [] }]
+      summary: Start Stripe subscription checkout
+      responses:
+        '200': { description: Checkout URL }
+  /billing/invoices:
+    get:
+      tags: [Billing]
+      security: [{ bearerAuth: [] }]
+      summary: List recorded invoices
+      parameters:
+        - in: query
+          name: organizationId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Invoice list }
+  /billing/webhook:
+    post:
+      tags: [Billing]
+      summary: Stripe webhook endpoint
+      responses:
+        '200': { description: Webhook accepted }
+  /logs:
+    get:
+      tags: [Logs]
+      security: [{ bearerAuth: [] }]
+      summary: Query project logs
+      responses:
+        '200': { description: Logs }
+  /metrics/query:
+    get:
+      tags: [Metrics]
+      security: [{ bearerAuth: [] }]
+      summary: Query project metrics time series
+      responses:
+        '200': { description: Metrics }
+  /audit:
+    get:
+      tags: [Audit]
+      security: [{ bearerAuth: [] }]
+      summary: Query organization audit logs
+      responses:
+        '200': { description: Audit events }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

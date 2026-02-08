@@ -1,0 +1,492 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-0: #ffffff;
+  --bg-1: #ffffff;
+  --bg-2: #ffffff;
+  --card: transparent;
+  --card-strong: transparent;
+  --line: #d8d8de;
+  --line-strong: #bdbdc8;
+  --text: #111111;
+  --text-soft: #2f2f38;
+  --text-muted: #62626d;
+  --brand: #111111;
+  --brand-strong: #000000;
+  --accent: #111111;
+  --accent-strong: #000000;
+  --accent-alt: #111111;
+  --danger: #dc2626;
+  color-scheme: light;
+}
+
+.app-shell.theme-light {
+  color-scheme: light;
+}
+
+.app-shell.theme-dark {
+  --bg-0: #070b12;
+  --bg-1: #0d1320;
+  --bg-2: #141d2c;
+  --card: rgba(11, 16, 26, 0.82);
+  --card-strong: rgba(10, 16, 26, 0.95);
+  --line: #27344b;
+  --line-strong: #3a4a67;
+  --text: #e8effd;
+  --text-soft: #d0dbf0;
+  --text-muted: #9aaacc;
+  --brand: #f3f7ff;
+  --brand-strong: #ffffff;
+  --accent: #dbe7ff;
+  --accent-strong: #f2f7ff;
+  --accent-alt: #b6ccff;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  @apply m-0;
+  font-family: var(--font-heading), sans-serif;
+  color: var(--text);
+  background: var(--bg-0);
+  position: relative;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: none;
+}
+
+body::after {
+  content: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+@layer components {
+  .app-shell {
+    @apply min-h-screen w-full;
+    position: relative;
+    isolation: isolate;
+    background: var(--bg-0);
+    color: var(--text);
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  .panel {
+    @apply border-b backdrop-blur-md;
+    background: var(--card);
+    border-color: var(--line);
+    box-shadow: none;
+  }
+
+  .panel-muted {
+    @apply rounded-3xl border backdrop-blur-md;
+    background: var(--card);
+    border-color: var(--line);
+    box-shadow: none;
+  }
+
+  .section-band {
+    @apply border-t px-4 py-6 md:px-6 md:py-7;
+    background: var(--bg-0);
+    border-color: var(--line);
+    position: relative;
+    animation: reveal-up 0.5s ease-out both;
+  }
+
+  .section-band::before {
+    content: none;
+  }
+
+  .field-label {
+    @apply mb-1 block text-xs font-semibold uppercase tracking-[0.12em];
+    color: var(--text-muted);
+  }
+
+  .field-input {
+    @apply w-full rounded-xl border px-3 py-2 text-sm outline-none transition-all duration-200;
+    border-color: var(--line);
+    background: var(--bg-1);
+    color: var(--text);
+    box-shadow: none;
+  }
+
+  .field-input:focus {
+    border-color: var(--line-strong);
+    box-shadow: 0 0 0 2px rgba(95, 119, 165, 0.25);
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold text-white transition-all duration-200;
+    background: #0b0b0f;
+    border: 1px solid #0b0b0f;
+    box-shadow: 0 8px 18px rgba(15, 15, 20, 0.24);
+  }
+
+  .btn-primary:hover {
+    background: #000000;
+    border-color: #000000;
+    transform: translateY(-1px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.28);
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-xl border px-6 py-3 text-sm font-semibold transition-all duration-200;
+    border-color: var(--line-strong);
+    color: var(--text);
+    background: var(--bg-1);
+    box-shadow: 0 6px 14px rgba(17, 17, 17, 0.08);
+  }
+
+  .btn-secondary:hover {
+    background: var(--bg-2);
+    border-color: var(--accent-alt);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 18px rgba(0, 0, 0, 0.14);
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center rounded-xl border px-4 py-2 text-sm font-semibold transition-all duration-200;
+    border-color: #16161a;
+    color: #ffffff;
+    background: #1a1a1f;
+    box-shadow: 0 6px 14px rgba(17, 17, 17, 0.14);
+  }
+
+  .btn-danger:hover {
+    background: #000000;
+    border-color: #000000;
+    transform: translateY(-1px);
+    box-shadow: 0 10px 18px rgba(0, 0, 0, 0.22);
+  }
+
+  .metric-card {
+    @apply rounded-2xl border p-4;
+    border-color: var(--line);
+    background: var(--card);
+    box-shadow: none;
+  }
+
+  .mono {
+    font-family: var(--font-mono), monospace;
+  }
+
+  .title-gradient {
+    color: var(--text);
+  }
+
+  .status-pill {
+    @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em];
+    color: var(--text);
+    background: var(--card);
+    border: 1px solid var(--line-strong);
+    box-shadow: none;
+  }
+
+  .nav-shell {
+    @apply border-b px-3 py-3 lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:py-4;
+    border-color: var(--line);
+    background: var(--card);
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+
+  .nav-link {
+    @apply block whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200;
+    color: var(--text-soft);
+    border: 1px solid transparent;
+  }
+
+  .nav-link:hover {
+    border-color: var(--line-strong);
+    background: var(--bg-1);
+    transform: translateY(-1px);
+  }
+
+  .nav-link-active {
+    color: var(--text);
+    background: var(--bg-1);
+    border-color: var(--line-strong);
+    box-shadow: none;
+  }
+
+  .auth-hero {
+    @apply relative overflow-hidden border-r p-8 md:p-12;
+    border-color: var(--line);
+    background: transparent;
+  }
+
+  .auth-hero::after {
+    content: none;
+  }
+
+  .auth-panel {
+    @apply border-l px-4 py-10 md:px-10;
+    border-color: var(--line);
+    background: transparent;
+    backdrop-filter: none;
+  }
+
+  .fade-in-up {
+    animation: reveal-up 0.6s ease-out forwards;
+  }
+}
+
+.app-shell.theme-dark .btn-primary {
+  background: #dbe7ff;
+  color: #0d1320;
+  border-color: #506286;
+  box-shadow: none;
+}
+
+.app-shell.theme-dark .btn-primary:hover {
+  background: #f2f7ff;
+  border-color: #8aa5d8;
+  box-shadow: none;
+}
+
+.app-shell.theme-dark .btn-danger {
+  border-color: #4d6084;
+  background: #141d2d;
+  box-shadow: none;
+}
+
+.app-shell.theme-dark .btn-danger:hover {
+  border-color: #89a4d8;
+  background: #1a2639;
+}
+
+.app-shell.theme-dark .text-slate-900 {
+  color: #e8effd !important;
+}
+
+.app-shell.theme-dark .text-slate-800 {
+  color: #dae4f7 !important;
+}
+
+.app-shell.theme-dark .text-slate-700 {
+  color: #c9d6ef !important;
+}
+
+.app-shell.theme-dark .text-slate-600 {
+  color: #aebcd8 !important;
+}
+
+.app-shell.theme-dark .text-slate-500 {
+  color: #94a5c4 !important;
+}
+
+.app-shell.theme-dark .text-sky-700 {
+  color: #88bbff !important;
+}
+
+.app-shell.theme-dark .border-slate-200 {
+  border-color: #27344b !important;
+}
+
+.app-shell.theme-dark .border-slate-300 {
+  border-color: #33425d !important;
+}
+
+.app-shell.theme-dark .border-slate-900 {
+  border-color: #8ca7d6 !important;
+}
+
+.app-shell.theme-dark input[type='range'] {
+  accent-color: #dce8ff;
+}
+
+/* ── Dark-mode overrides for Tailwind utility classes ── */
+
+/* White / light backgrounds → dark surface */
+.app-shell.theme-dark .bg-white {
+  background-color: var(--bg-2) !important;
+}
+.app-shell.theme-dark .bg-slate-50 {
+  background-color: var(--bg-1) !important;
+}
+.app-shell.theme-dark .bg-slate-100 {
+  background-color: var(--bg-2) !important;
+}
+
+/* Dark bg pills / tabs that invert in dark mode */
+.app-shell.theme-dark .bg-slate-900 {
+  background-color: #dbe7ff !important;
+}
+.app-shell.theme-dark .bg-slate-900.text-white {
+  color: #0d1320 !important;
+}
+
+/* Hover states */
+.app-shell.theme-dark .hover\:bg-slate-50:hover {
+  background-color: var(--bg-2) !important;
+}
+.app-shell.theme-dark .hover\:bg-slate-200:hover {
+  background-color: #27344b !important;
+}
+
+/* ── Status badges & colored backgrounds ── */
+
+/* Green (success / active) */
+.app-shell.theme-dark .bg-green-50 {
+  background-color: rgba(22, 101, 52, 0.2) !important;
+}
+.app-shell.theme-dark .bg-green-100 {
+  background-color: rgba(22, 101, 52, 0.25) !important;
+}
+.app-shell.theme-dark .bg-green-600 {
+  background-color: #15803d !important;
+}
+.app-shell.theme-dark .text-green-700 {
+  color: #6ee7b7 !important;
+}
+.app-shell.theme-dark .border-green-300 {
+  border-color: rgba(34, 197, 94, 0.3) !important;
+}
+.app-shell.theme-dark .border-green-200 {
+  border-color: rgba(34, 197, 94, 0.2) !important;
+}
+
+/* Blue (info / preview) */
+.app-shell.theme-dark .bg-blue-50 {
+  background-color: rgba(30, 64, 175, 0.18) !important;
+}
+.app-shell.theme-dark .bg-blue-100 {
+  background-color: rgba(30, 64, 175, 0.22) !important;
+}
+.app-shell.theme-dark .bg-blue-500 {
+  background-color: #3b82f6 !important;
+}
+.app-shell.theme-dark .bg-blue-600 {
+  background-color: #2563eb !important;
+}
+.app-shell.theme-dark .text-blue-700 {
+  color: #93c5fd !important;
+}
+.app-shell.theme-dark .text-blue-800 {
+  color: #bfdbfe !important;
+}
+.app-shell.theme-dark .text-blue-600 {
+  color: #93c5fd !important;
+}
+.app-shell.theme-dark .border-blue-200 {
+  border-color: rgba(59, 130, 246, 0.25) !important;
+}
+.app-shell.theme-dark .border-blue-100 {
+  border-color: rgba(59, 130, 246, 0.18) !important;
+}
+.app-shell.theme-dark .hover\:bg-blue-100:hover {
+  background-color: rgba(30, 64, 175, 0.3) !important;
+}
+
+/* Red (error) */
+.app-shell.theme-dark .bg-red-50 {
+  background-color: rgba(153, 27, 27, 0.18) !important;
+}
+.app-shell.theme-dark .bg-red-100 {
+  background-color: rgba(153, 27, 27, 0.25) !important;
+}
+.app-shell.theme-dark .text-red-700 {
+  color: #fca5a5 !important;
+}
+.app-shell.theme-dark .border-red-200 {
+  border-color: rgba(239, 68, 68, 0.25) !important;
+}
+
+/* Amber (warning) */
+.app-shell.theme-dark .bg-amber-50 {
+  background-color: rgba(146, 64, 14, 0.18) !important;
+}
+.app-shell.theme-dark .bg-amber-100 {
+  background-color: rgba(146, 64, 14, 0.25) !important;
+}
+.app-shell.theme-dark .text-amber-700 {
+  color: #fcd34d !important;
+}
+.app-shell.theme-dark .hover\:bg-amber-100:hover {
+  background-color: rgba(146, 64, 14, 0.3) !important;
+}
+
+/* Dashed borders (empty states) */
+.app-shell.theme-dark .border-dashed {
+  border-color: #33425d !important;
+}
+
+/* ── Interactive text in dark mode ── */
+.app-shell.theme-dark .hover\:text-slate-800:hover {
+  color: #e8effd !important;
+}
+.app-shell.theme-dark .hover\:text-slate-700:hover {
+  color: #dae4f7 !important;
+}
+.app-shell.theme-dark .hover\:underline:hover {
+  text-decoration: underline;
+}
+
+/* ── Misc box shadows (remove light-mode shadows) ── */
+.app-shell.theme-dark .shadow-sm {
+  box-shadow: none !important;
+}
+
+/* ── Log output area ── */
+.app-shell.theme-dark .bg-gray-900 {
+  background-color: #070b12 !important;
+}
+.app-shell.theme-dark .bg-gray-50 {
+  background-color: var(--bg-1) !important;
+}
+
+@keyframes reveal-up {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    transform: scale(0.95);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+}
+
+@keyframes float-cloud {
+  0%,
+  100% {
+    transform: translateY(0px) translateX(0px);
+  }
+  50% {
+    transform: translateY(8px) translateX(-10px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}

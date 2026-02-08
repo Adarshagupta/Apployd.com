@@ -1,0 +1,91 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: apployd
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  control-plane:
+    build:
+      context: ../../
+      dockerfile: apps/control-plane/Dockerfile
+    env_file:
+      - ../../apps/control-plane/.env
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "4000:4000"
+
+  deployment-engine:
+    build:
+      context: ../../
+      dockerfile: services/deployment-engine/Dockerfile
+    env_file:
+      - ../../services/deployment-engine/.env
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./nginx/templates:/opt/apployd/nginx/templates
+
+  dashboard:
+    build:
+      context: ../../
+      dockerfile: apps/dashboard/Dockerfile
+    env_file:
+      - ../../apps/dashboard/.env.local
+    ports:
+      - "3000:3000"
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      - dashboard
+      - control-plane
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../nginx/templates:/etc/nginx/templates:ro
+      - nginx_sites:/etc/nginx/sites-enabled
+      - nginx_letsencrypt:/etc/letsencrypt
+
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    volumes:
+      - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    ports:
+      - "3001:3000"
+    volumes:
+      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    ports:
+      - "9100:9100"
+
+volumes:
+  pg_data:
+  nginx_sites:
+  nginx_letsencrypt:

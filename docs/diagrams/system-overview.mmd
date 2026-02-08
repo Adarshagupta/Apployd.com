@@ -1,0 +1,9 @@
+flowchart LR
+  Dashboard --> API
+  API --> Postgres
+  API --> Redis
+  API --> Stripe
+  Redis --> Engine
+  Engine --> Docker
+  Engine --> Nginx
+  Engine --> Cloudflare

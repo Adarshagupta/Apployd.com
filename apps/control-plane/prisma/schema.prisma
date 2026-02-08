@@ -1,0 +1,479 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrgRole {
+  owner
+  admin
+  developer
+  viewer
+}
+
+enum PlanCode {
+  free
+  dev
+  pro
+  max
+  enterprise
+}
+
+enum SubscriptionStatus {
+  active
+  trialing
+  past_due
+  canceled
+  incomplete
+  unpaid
+}
+
+enum DeploymentStatus {
+  queued
+  building
+  deploying
+  ready
+  failed
+  rolled_back
+}
+
+enum ContainerStatus {
+  pending
+  running
+  sleeping
+  stopped
+  crashed
+}
+
+enum ServerStatus {
+  healthy
+  degraded
+  draining
+  offline
+}
+
+enum UsageMetricType {
+  cpu_millicore_seconds
+  ram_mb_seconds
+  bandwidth_bytes
+  request_count
+}
+
+enum InvoiceStatus {
+  draft
+  open
+  paid
+  void
+  uncollectible
+}
+
+enum SleepStatus {
+  awake
+  sleeping
+  waking
+}
+
+enum DomainStatus {
+  pending_verification
+  active
+  failed
+  removing
+}
+
+model User {
+  id             String               @id @default(cuid())
+  email          String               @unique
+  passwordHash   String
+  name           String?
+  avatarUrl      String?
+  oauthProvider  String?
+  oauthSubject   String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  projects       Project[]
+  ownedOrganizations Organization[] @relation("OrganizationOwner")
+  memberships    OrganizationMember[]
+  auditLogs      AuditLog[]
+  githubConnection GitHubConnection?
+
+  @@index([oauthProvider, oauthSubject])
+  @@map("users")
+}
+
+model Organization {
+  id                String                @id @default(cuid())
+  slug              String                @unique
+  name              String
+  ownerId           String
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  owner             User                  @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  memberships       OrganizationMember[]
+  projects          Project[]
+  subscriptions     Subscription[]
+  usageRecords      UsageRecord[]
+  auditLogs         AuditLog[]
+
+  @@index([ownerId])
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String
+  role           OrgRole
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId, role])
+  @@map("organization_members")
+}
+
+model Project {
+  id                   String       @id @default(cuid())
+  organizationId       String
+  name                 String
+  slug                 String
+  createdById          String
+  runtime              String       @default("node")
+  serviceType          String       @default("web_service")
+  outputDirectory      String?
+  gitProvider          String?
+  repoUrl              String?
+  repoOwner            String?
+  repoName             String?
+  repoFullName         String?
+  branch               String       @default("main")
+  installCommand       String?
+  buildCommand         String?
+  startCommand         String?
+  rootDirectory        String?
+  autoDeployEnabled    Boolean      @default(true)
+  previewDeploymentsEnabled Boolean @default(true)
+  sleepEnabled         Boolean      @default(false)
+  sleepAfterSeconds    Int          @default(900)
+  targetPort           Int          @default(3000)
+  resourceRamMb        Int          @default(256)
+  resourceCpuMillicore Int          @default(250)
+  resourceBandwidthGb  Int          @default(25)
+  activeDeploymentId   String?      @unique
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy            User         @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  activeDeployment     Deployment?  @relation("ActiveDeployment", fields: [activeDeploymentId], references: [id], onDelete: SetNull)
+  deployments          Deployment[] @relation("ProjectDeployments")
+  containers           Container[]
+  usageRecords         UsageRecord[]
+  logs                 LogEntry[]
+  metrics              MetricEntry[]
+  secrets              ProjectSecret[]
+  customDomains        CustomDomain[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, sleepEnabled])
+  @@index([organizationId, repoFullName])
+  @@map("projects")
+}
+
+model Server {
+  id                    String       @id @default(cuid())
+  name                  String       @unique
+  region                String
+  ipv4                  String       @unique
+  status                ServerStatus @default(healthy)
+  totalRamMb            Int
+  totalCpuMillicores    Int
+  totalBandwidthGb      Int
+  reservedRamMb         Int          @default(0)
+  reservedCpuMillicores Int          @default(0)
+  reservedBandwidthGb   Int          @default(0)
+  maxContainers         Int          @default(200)
+  dockerVersion         String?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  deployments           Deployment[]
+  containers            Container[]
+  metrics               MetricEntry[]
+
+  @@index([status, region])
+  @@map("servers")
+}
+
+model Deployment {
+  id              String           @id @default(cuid())
+  projectId       String
+  serverId        String?
+  containerId     String?
+  capacityReserved Boolean         @default(false)
+  status          DeploymentStatus @default(queued)
+  environment     String           @default("production") // "production" | "preview"
+  gitUrl          String
+  commitSha       String?
+  branch          String?
+  imageTag        String?
+  buildLogs       String?
+  deployLogs      String?
+  errorMessage    String?
+  domain          String?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  project         Project          @relation("ProjectDeployments", fields: [projectId], references: [id], onDelete: Cascade)
+  activeForProject Project?        @relation("ActiveDeployment")
+  server          Server?          @relation(fields: [serverId], references: [id], onDelete: SetNull)
+  container       Container?       @relation(fields: [containerId], references: [id], onDelete: SetNull)
+  logs            LogEntry[]
+
+  @@index([projectId, createdAt])
+  @@index([serverId, status])
+  @@index([status, createdAt])
+  @@index([projectId, environment, status])
+  @@map("deployments")
+}
+
+model Container {
+  id                  String          @id @default(cuid())
+  projectId           String
+  serverId            String
+  dockerContainerId   String          @unique
+  imageTag            String
+  internalPort        Int
+  hostPort            Int
+  status              ContainerStatus @default(pending)
+  sleepStatus         SleepStatus     @default(awake)
+  lastRequestAt       DateTime?
+  startedAt           DateTime?
+  stoppedAt           DateTime?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  project             Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  server              Server          @relation(fields: [serverId], references: [id], onDelete: Restrict)
+  deployments         Deployment[]
+  logs                LogEntry[]
+  metrics             MetricEntry[]
+
+  @@index([projectId, status])
+  @@index([serverId, status])
+  @@index([sleepStatus, lastRequestAt])
+  @@map("containers")
+}
+
+model Plan {
+  id                   String         @id @default(cuid())
+  code                 PlanCode       @unique
+  displayName          String
+  priceUsdMonthly      Decimal        @db.Decimal(10, 2)
+  includedRamMb        Int
+  includedCpuMillicore Int
+  includedBandwidthGb  Int
+  allowsSleepBypass    Boolean        @default(false)
+  maxProjects          Int?
+  stripePriceId        String?        @unique
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  subscriptions        Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id                    String             @id @default(cuid())
+  organizationId        String
+  planId                String
+  stripeCustomerId      String
+  stripeSubscriptionId  String             @unique
+  status                SubscriptionStatus @default(incomplete)
+  currentPeriodStart    DateTime
+  currentPeriodEnd      DateTime
+  cancelAtPeriodEnd     Boolean            @default(false)
+  poolRamMb             Int
+  poolCpuMillicores     Int
+  poolBandwidthGb       Int
+  overageEnabled        Boolean            @default(true)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  organization          Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan                  Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+  usageRecords          UsageRecord[]
+  invoices              Invoice[]
+
+  @@index([organizationId, status])
+  @@index([currentPeriodEnd])
+  @@map("subscriptions")
+}
+
+model UsageRecord {
+  id               String           @id @default(cuid())
+  organizationId   String
+  subscriptionId   String
+  projectId        String?
+  metricType       UsageMetricType
+  quantity         BigInt
+  unit             String
+  recordedAt       DateTime
+  createdAt        DateTime         @default(now())
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscription     Subscription     @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  project          Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, recordedAt])
+  @@index([subscriptionId, metricType, recordedAt])
+  @@index([projectId, recordedAt])
+  @@map("usage_records")
+}
+
+model Invoice {
+  id                String        @id @default(cuid())
+  subscriptionId    String
+  stripeInvoiceId   String        @unique
+  amountDueUsd      Decimal       @db.Decimal(10, 2)
+  amountPaidUsd     Decimal       @db.Decimal(10, 2)
+  currency          String        @default("usd")
+  status            InvoiceStatus
+  hostedInvoiceUrl  String?
+  invoicePdfUrl     String?
+  dueAt             DateTime?
+  paidAt            DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  subscription      Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, createdAt])
+  @@index([status, dueAt])
+  @@map("invoices")
+}
+
+model LogEntry {
+  id            String       @id @default(cuid())
+  projectId     String
+  deploymentId  String?
+  containerId   String?
+  level         String
+  message       String
+  source        String
+  metadata      Json?
+  timestamp     DateTime     @default(now())
+  project       Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deployment    Deployment?  @relation(fields: [deploymentId], references: [id], onDelete: SetNull)
+  container     Container?   @relation(fields: [containerId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, timestamp])
+  @@index([deploymentId, timestamp])
+  @@index([containerId, timestamp])
+  @@map("logs")
+}
+
+model MetricEntry {
+  id            String      @id @default(cuid())
+  projectId     String?
+  containerId   String?
+  serverId      String?
+  name          String
+  value         Float
+  unit          String
+  labels        Json?
+  timestamp     DateTime    @default(now())
+  project       Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  container     Container?  @relation(fields: [containerId], references: [id], onDelete: SetNull)
+  server        Server?     @relation(fields: [serverId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, timestamp])
+  @@index([containerId, timestamp])
+  @@index([serverId, timestamp])
+  @@index([name, timestamp])
+  @@map("metrics")
+}
+
+model AuditLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  actorUserId    String?
+  action         String
+  entityType     String
+  entityId       String
+  metadata       Json?
+  timestamp      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorUser      User?        @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, timestamp])
+  @@index([actorUserId, timestamp])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+model ProjectSecret {
+  id             String   @id @default(cuid())
+  projectId      String
+  key            String
+  encryptedValue String
+  iv             String
+  authTag        String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, key])
+  @@index([projectId, createdAt])
+  @@map("project_secrets")
+}
+
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  provider    String
+  eventId     String
+  eventType   String
+  payload     Json?
+  processedAt DateTime @default(now())
+
+  @@unique([provider, eventId])
+  @@index([provider, processedAt])
+  @@map("webhook_events")
+}
+
+model CustomDomain {
+  id                    String       @id @default(cuid())
+  projectId             String
+  domain                String       @unique
+  status                DomainStatus @default(pending_verification)
+  verificationToken     String       @unique @default(cuid())
+  cnameTarget           String
+  verifiedAt            DateTime?
+  certificateIssuedAt   DateTime?
+  certificateExpiresAt  DateTime?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  project               Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status])
+  @@index([status, certificateExpiresAt])
+  @@map("custom_domains")
+}
+
+model GitHubConnection {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  githubUserId         String
+  username             String
+  avatarUrl            String?
+  tokenScope           String?
+  encryptedAccessToken String
+  iv                   String
+  authTag              String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([githubUserId])
+  @@index([username])
+  @@map("github_connections")
+}
