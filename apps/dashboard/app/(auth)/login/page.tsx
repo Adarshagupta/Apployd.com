@@ -39,7 +39,8 @@ export default function LoginPage() {
       const nextRaw = searchParams.get('next');
       const nextPath =
         nextRaw && nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : '/overview';
-      router.push(nextPath);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      router.push(nextPath as any);
     } catch (err) {
       setError((err as Error).message);
     } finally {

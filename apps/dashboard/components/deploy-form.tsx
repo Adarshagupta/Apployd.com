@@ -74,6 +74,7 @@ export function DeployForm({
     setShowOverrides(false);
     setServiceType((defaults?.serviceType as 'web_service' | 'static_site') || 'web_service');
     setOutputDirectory(defaults?.outputDirectory ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   useEffect(() => {
