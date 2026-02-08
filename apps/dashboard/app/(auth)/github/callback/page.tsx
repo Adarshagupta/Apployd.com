@@ -35,7 +35,7 @@ export default function GitHubAuthCallbackPage() {
         const target = `/login?githubLogin=error&githubMessage=${encodeURIComponent(
           'Missing GitHub login code.',
         )}&next=${encodeURIComponent(next)}`;
-        router.replace(target);
+        router.replace(target as any);
         return;
       }
 
@@ -51,7 +51,7 @@ export default function GitHubAuthCallbackPage() {
 
         window.localStorage.setItem('apployd_token', payload.token);
         const redirectTo = resolveSafePath(payload.redirectTo, next);
-        router.replace(redirectTo);
+        router.replace(redirectTo as any);
       } catch (error) {
         if (canceled) {
           return;
@@ -61,7 +61,7 @@ export default function GitHubAuthCallbackPage() {
         const target = `/login?githubLogin=error&githubMessage=${encodeURIComponent(
           message,
         )}&next=${encodeURIComponent(next)}`;
-        router.replace(target);
+        router.replace(target as any);
       }
     };
 
