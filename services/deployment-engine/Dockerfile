@@ -4,6 +4,7 @@ WORKDIR /app
 COPY package.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/package.json
 COPY services/deployment-engine/package.json services/deployment-engine/package.json
+ENV PRISMA_SKIP_POSTINSTALL_GENERATE=1
 RUN npm install
 
 COPY . .
