@@ -14,6 +14,10 @@ RUN npm --workspace packages/shared run build && npm --workspace services/deploy
 FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
+
+# Install Docker CLI for managing deployments
+RUN apk add --no-cache docker-cli
+
 COPY --from=base /app /app
 EXPOSE 9102
 CMD ["npm", "--workspace", "services/deployment-engine", "run", "start"]
