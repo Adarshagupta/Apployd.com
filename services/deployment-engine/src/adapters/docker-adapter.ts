@@ -317,7 +317,7 @@ export class DockerAdapter {
 
       onLog?.(`Building ${isStatic ? 'static site' : 'web service'} image (clone → install → build${isStatic ? ' → nginx' : ''}) ...`);
       await runCommandStreaming(
-        `docker build --no-cache ${args.join(' ')} -t ${shellEscape(imageTag)} ${shellEscape(ctxDir)}`,
+        `docker build --progress=plain --no-cache ${args.join(' ')} -t ${shellEscape(imageTag)} ${shellEscape(ctxDir)}`,
         onLog,
       );
       onLog?.('Docker image built successfully');
