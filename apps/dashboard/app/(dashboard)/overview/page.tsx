@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 
 import { SectionCard } from '../../../components/section-card';
 import { apiClient } from '../../../lib/api';
-import { useWorkspace } from '../../../lib/workspace';
+import { useWorkspaceContext } from '../../../components/workspace-provider';
 
 interface RecentDeployment {
   id: string;
@@ -145,16 +145,16 @@ const formatBillingWindow = (start?: string, end?: string): string => {
 const deploymentTone = (status: string): string => {
   const normalized = status.toLowerCase();
   if (normalized === 'ready') {
-    return 'bg-green-50 text-green-700 border border-green-200';
+    return 'bg-slate-100 text-slate-900 border border-slate-300';
   }
   if (normalized === 'failed') {
-    return 'bg-red-50 text-red-700 border border-red-200';
+    return 'bg-slate-200 text-slate-900 border border-slate-400';
   }
   if (normalized === 'building' || normalized === 'deploying') {
-    return 'bg-blue-50 text-blue-700 border border-blue-200';
+    return 'bg-slate-100 text-slate-700 border border-slate-300';
   }
   if (normalized === 'queued') {
-    return 'bg-amber-50 text-amber-700 border border-amber-100';
+    return 'bg-slate-50 text-slate-600 border border-slate-200';
   }
   return 'bg-slate-100 text-slate-700 border border-slate-200';
 };
@@ -167,21 +167,21 @@ const utilizationTone = (percent: number): {
   if (percent >= 90) {
     return {
       label: 'Critical',
-      badgeClass: 'bg-red-50 text-red-700 border border-red-200',
-      barClass: 'bg-red-600',
+      badgeClass: 'bg-slate-900 text-white border border-slate-800',
+      barClass: 'bg-slate-900',
     };
   }
   if (percent >= 70) {
     return {
       label: 'Elevated',
-      badgeClass: 'bg-amber-50 text-amber-700 border border-amber-100',
-      barClass: 'bg-amber-500',
+      badgeClass: 'bg-slate-700 text-white border border-slate-600',
+      barClass: 'bg-slate-700',
     };
   }
   return {
     label: 'Healthy',
-    badgeClass: 'bg-green-50 text-green-700 border border-green-200',
-    barClass: 'bg-green-600',
+    badgeClass: 'bg-slate-100 text-slate-900 border border-slate-300',
+    barClass: 'bg-slate-400',
   };
 };
 
@@ -190,10 +190,9 @@ export default function OverviewPage() {
   const {
     organizations,
     selectedOrganizationId,
-    setSelectedOrganizationId,
     projects,
     loading,
-  } = useWorkspace();
+  } = useWorkspaceContext();
 
   const [summary, setSummary] = useState<UsageSummaryResponse | null>(null);
   const [subscription, setSubscription] = useState<CurrentSubscription | null>(null);
@@ -323,22 +322,19 @@ export default function OverviewPage() {
     <div className="space-y-4">
       <SectionCard title="Mission Control" subtitle="Live operational posture for the selected organization.">
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-          <article
-            className="relative overflow-hidden rounded-3xl border border-slate-200 p-5 md:p-6"
-            style={{ background: 'linear-gradient(145deg, var(--bg-1), var(--bg-2))' }}
-          >
-            <div className="pointer-events-none absolute -right-20 -top-16 h-44 w-44 rounded-full bg-slate-900/5 blur-2xl" />
+          <article className="workspace-card md:p-6">
+            <div className="pointer-events-none absolute -right-20 -top-16 h-44 w-44 rounded-full opacity-30 blur-3xl" style={{ background: 'radial-gradient(circle, var(--accent-alt), transparent)' }} />
 
             <div className="relative flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Workspace</p>
-                <h3 className="mt-2 text-2xl font-semibold text-slate-900 md:text-3xl">
+                <p className="workspace-label">Workspace</p>
+                <h3 className="workspace-title">
                   {selectedOrganization?.name ?? 'No organization selected'}
                 </h3>
-                <p className="mt-2 text-sm text-slate-600">
+                <p className="workspace-subtitle">
                   {subscription?.plan?.displayName ?? 'No active plan'} • {subscription?.status ?? 'inactive'}
                 </p>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="workspace-meta">
                   {formatBillingWindow(subscription?.currentPeriodStart, subscription?.currentPeriodEnd)}
                 </p>
               </div>
@@ -355,38 +351,22 @@ export default function OverviewPage() {
               </button>
             </div>
 
-            <label className="relative mt-5 block max-w-md">
-              <span className="field-label">Organization</span>
-              <select
-                className="field-input"
-                value={selectedOrganizationId}
-                onChange={(event) => setSelectedOrganizationId(event.target.value)}
-              >
-                {!organizations.length ? <option value="">No organizations</option> : null}
-                {organizations.map((org) => (
-                  <option key={org.id} value={org.id}>
-                    {org.name} ({org.role})
-                  </option>
-                ))}
-              </select>
-            </label>
-
             <div className="relative mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-2xl border border-slate-200 bg-white/70 p-3">
-                <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Projects</p>
-                <p className="mt-1 text-xl font-semibold text-slate-900">{formatInteger(projects.length)}</p>
+              <div className="stat-card-overview">
+                <p className="stat-label">Projects</p>
+                <p className="stat-value">{formatInteger(projects.length)}</p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white/70 p-3">
-                <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Deployments</p>
-                <p className="mt-1 text-xl font-semibold text-slate-900">{formatInteger(recentDeployments.length)}</p>
+              <div className="stat-card-overview">
+                <p className="stat-label">Deployments</p>
+                <p className="stat-value">{formatInteger(recentDeployments.length)}</p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white/70 p-3">
-                <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Overall Load</p>
-                <p className="mt-1 text-xl font-semibold text-slate-900">{overallLoadPercent.toFixed(1)}%</p>
+              <div className="stat-card-overview">
+                <p className="stat-label">Overall Load</p>
+                <p className="stat-value">{overallLoadPercent.toFixed(1)}%</p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white/70 p-3">
-                <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Last Sync</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">
+              <div className="stat-card-overview">
+                <p className="stat-label">Last Sync</p>
+                <p className="stat-value-sm">
                   {lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString() : '--'}
                 </p>
               </div>
@@ -400,11 +380,11 @@ export default function OverviewPage() {
                 type="button"
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 onClick={() => router.push(action.href as any)}
-                className="group rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left transition hover:bg-slate-100"
+                className="action-card"
               >
-                <p className="text-sm font-semibold text-slate-900 transition group-hover:text-slate-800">{action.title}</p>
-                <p className="mt-1 text-xs text-slate-600">{action.description}</p>
-                <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                <p className="action-card-title">{action.title}</p>
+                <p className="action-card-description">{action.description}</p>
+                <p className="action-card-cta">
                   Open {'>'}
                 </p>
               </button>
@@ -415,7 +395,7 @@ export default function OverviewPage() {
 
       <SectionCard title="Capacity Radar" subtitle="Resource pressure across pooled limits for the current billing window.">
         {!selectedOrganizationId ? (
-          <p className="text-sm text-slate-600">Select an organization to load capacity metrics.</p>
+          <p className="empty-state-text">Select an organization to load capacity metrics.</p>
         ) : (
           <div className="grid gap-4 lg:grid-cols-3">
             {utilizationMetrics.map((metric) => {
@@ -423,11 +403,11 @@ export default function OverviewPage() {
               const barWidth = `${Math.min(100, Math.max(metric.percent, metric.percent > 0 ? 6 : 0)).toFixed(1)}%`;
 
               return (
-                <article key={metric.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <article key={metric.id} className="capacity-card">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{metric.label}</p>
-                      <p className="mt-2 text-lg font-semibold text-slate-900">{metric.usedLabel}</p>
+                      <p className="stat-label">{metric.label}</p>
+                      <p className="mt-2 text-lg font-semibold" style={{ color: 'var(--text)' }}>{metric.usedLabel}</p>
                     </div>
                     <span
                       className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${tone.badgeClass}`}
@@ -437,17 +417,17 @@ export default function OverviewPage() {
                   </div>
 
                   <div className="mt-4">
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                    <div className="h-2 w-full overflow-hidden rounded-full" style={{ background: 'var(--bg-2)' }}>
                       <div className={`h-full rounded-full transition-all duration-500 ${tone.barClass}`} style={{ width: barWidth }} />
                     </div>
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-600">
+                  <div className="mt-3 flex items-center justify-between gap-3 text-xs" style={{ color: 'var(--text-muted)' }}>
                     <span>{metric.percent.toFixed(1)}% of pool</span>
                     <span>Capacity: {metric.capacityLabel}</span>
                   </div>
 
-                  <p className="mt-2 text-xs text-slate-500">Headroom: {formatCompact(Math.max(0, metric.capacity - metric.used))}</p>
+                  <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>Headroom: {formatCompact(Math.max(0, metric.capacity - metric.used))}</p>
                 </article>
               );
             })}
@@ -457,7 +437,7 @@ export default function OverviewPage() {
 
       <SectionCard title="Deployment Feed" subtitle="Latest deployment transitions across this organization.">
         {loading && !recentDeployments.length ? (
-          <p className="text-sm text-slate-600">Loading deployments...</p>
+          <p className="empty-state-text">Loading deployments...</p>
         ) : recentDeployments.length ? (
           <div className="space-y-2">
             {recentDeployments.map((deployment) => (
@@ -466,12 +446,12 @@ export default function OverviewPage() {
                 type="button"
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 onClick={() => router.push(`/projects/${deployment.project.id}/deployments/${deployment.id}` as any)}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left transition hover:bg-slate-100"
+                className="deployment-card"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">{deployment.project.name}</p>
-                    <p className="mono mt-1 text-xs text-slate-500">{deployment.project.slug}</p>
+                    <p className="deployment-title">{deployment.project.name}</p>
+                    <p className="mono deployment-meta mt-1">{deployment.project.slug}</p>
                   </div>
                   <span
                     className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${deploymentTone(deployment.status)}`}
@@ -480,32 +460,32 @@ export default function OverviewPage() {
                   </span>
                 </div>
 
-                <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
+                <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
                   <div>
-                    <p className="text-slate-500">Branch</p>
-                    <p className="mono mt-0.5 text-slate-700">{deployment.branch ?? '-'}</p>
+                    <p className="deployment-meta-label">Branch</p>
+                    <p className="mono deployment-meta-value">{deployment.branch ?? '-'}</p>
                   </div>
                   <div>
-                    <p className="text-slate-500">Domain</p>
-                    <p className="mt-0.5 truncate text-slate-700">{deployment.domain ?? 'no-domain'}</p>
+                    <p className="deployment-meta-label">Domain</p>
+                    <p className="deployment-meta-value truncate">{deployment.domain ?? 'no-domain'}</p>
                   </div>
                   <div>
-                    <p className="text-slate-500">Created</p>
-                    <p className="mt-0.5 text-slate-700">{formatRelativeTime(deployment.createdAt)}</p>
-                    <p className="text-[11px] text-slate-500">{new Date(deployment.createdAt).toLocaleString()}</p>
+                    <p className="deployment-meta-label">Created</p>
+                    <p className="deployment-meta-value">{formatRelativeTime(deployment.createdAt)}</p>
+                    <p className="deployment-meta text-[11px]">{new Date(deployment.createdAt).toLocaleString()}</p>
                   </div>
                 </div>
               </button>
             ))}
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-slate-300 px-6 py-10 text-center">
-            <p className="text-sm text-slate-600">No deployments yet for this organization.</p>
+          <div className="empty-state">
+            <p className="empty-state-text">No deployments yet for this organization.</p>
           </div>
         )}
       </SectionCard>
 
-      {message ? <p className="text-sm text-red-600">{message}</p> : null}
+      {message ? <p className="text-sm" style={{ color: 'var(--danger)' }}>{message}</p> : null}
     </div>
   );
 }

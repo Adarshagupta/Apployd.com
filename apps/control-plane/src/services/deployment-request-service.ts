@@ -136,6 +136,7 @@ export class DeploymentRequestService {
             organizationSlug: project.organization.slug,
             baseDomain: env.PREVIEW_BASE_DOMAIN,
             ref: input.commitSha ?? input.branch ?? 'preview',
+            style: env.PREVIEW_DOMAIN_STYLE,
           })
         : `${sanitizeDomainLabel(project.slug, 'project')}.${sanitizeDomainLabel(project.organization.slug, 'org')}.${env.BASE_DOMAIN}`);
 
@@ -564,7 +565,13 @@ const buildPreviewDomain = (input: {
   organizationSlug: string;
   baseDomain: string;
   ref: string;
+  style: 'project' | 'project_ref';
 }): string => {
+  const projectLabel = sanitizeDomainLabel(input.projectSlug, 'project');
+  if (input.style === 'project') {
+    return `${projectLabel}.${input.baseDomain}`;
+  }
+
   const previewLabel = buildPreviewLabel(input.projectSlug, input.ref);
   const organizationLabel = sanitizeDomainLabel(input.organizationSlug, 'org');
   return `${previewLabel}.${organizationLabel}.${input.baseDomain}`;

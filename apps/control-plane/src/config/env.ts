@@ -37,6 +37,7 @@ const envSchema = z.object({
   CLOUDFLARE_ZONE_ID: z.string().optional(),
   BASE_DOMAIN: z.string().min(3),
   PREVIEW_BASE_DOMAIN: z.string().min(3).optional(),
+  PREVIEW_DOMAIN_STYLE: z.enum(['project', 'project_ref']).default('project_ref'),
   DEFAULT_REGION: z.string().default('fsn1'),
   AUTO_PROVISION_DEV_SERVER: booleanFromEnv.optional(),
   DEV_SERVER_NAME: z.string().min(2).default('local-dev-1'),

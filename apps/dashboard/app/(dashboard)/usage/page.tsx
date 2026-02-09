@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { SectionCard } from '../../../components/section-card';
 import { UsageChart } from '../../../components/usage-chart';
 import { apiClient } from '../../../lib/api';
-import { useWorkspace } from '../../../lib/workspace';
+import { useWorkspaceContext } from '../../../components/workspace-provider';
 
 interface DailyPoint {
   day: string;
@@ -47,7 +47,7 @@ interface ProjectUsageRow {
 }
 
 export default function UsagePage() {
-  const { organizations, selectedOrganizationId, setSelectedOrganizationId } = useWorkspace();
+  const { selectedOrganizationId } = useWorkspaceContext();
   const [summary, setSummary] = useState<{
     pools: { ramMb: number; cpuMillicores: number; bandwidthGb: number };
     usage: Record<string, string>;
@@ -141,21 +141,7 @@ export default function UsagePage() {
   return (
     <div className="space-y-4">
       <SectionCard title="Usage Summary" subtitle="Live metering against the active subscription pool.">
-        <label className="mb-3 block max-w-sm">
-          <span className="field-label">Organization</span>
-          <select
-            className="field-input"
-            value={selectedOrganizationId}
-            onChange={(event) => setSelectedOrganizationId(event.target.value)}
-          >
-            {!organizations.length ? <option value="">No organizations</option> : null}
-            {organizations.map((org) => (
-              <option key={org.id} value={org.id}>
-                {org.name}
-              </option>
-            ))}
-          </select>
-        </label>
+
         {summary ? (
           <div className="grid gap-3 md:grid-cols-3">
             <div className="metric-card">
@@ -266,7 +252,7 @@ export default function UsagePage() {
         )}
       </SectionCard>
 
-      {message ? <p className="text-sm text-red-600">{message}</p> : null}
+      {message ? <p className="text-sm text-slate-900">{message}</p> : null}
     </div>
   );
 }

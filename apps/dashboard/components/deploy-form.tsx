@@ -291,7 +291,7 @@ export function DeployForm({
           {defaults?.startCommand ? <p>Start: {defaults.startCommand}</p> : <p className="text-xs text-slate-400">Start: auto-detect from package.json</p>}
         </div>
       ) : (
-        <p className="text-xs text-amber-700">
+        <p className="text-xs text-slate-700">
           No repository configured in project settings. Provide it below.
         </p>
       )}
@@ -316,7 +316,7 @@ export function DeployForm({
             type="button"
             className={`px-4 py-2 text-xs font-medium transition-colors ${
               serviceType === 'static_site'
-                ? 'bg-blue-600 text-white'
+                ? 'bg-slate-900 text-white'
                 : 'bg-white text-slate-600 hover:bg-slate-50'
             }`}
             onClick={() => setServiceType('static_site')}
@@ -328,9 +328,9 @@ export function DeployForm({
       </div>
 
       {serviceType === 'static_site' && (
-        <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 space-y-2">
+        <div className="rounded-lg border border-slate-300 bg-slate-100 p-3 space-y-2">
           <label>
-            <span className="text-xs font-semibold text-blue-800">Output / Publish Directory</span>
+            <span className="text-xs font-semibold text-slate-800">Output / Publish Directory</span>
             <input
               value={outputDirectory}
               onChange={(event) => setOutputDirectory(event.target.value)}
@@ -338,7 +338,7 @@ export function DeployForm({
               placeholder="dist"
             />
           </label>
-          <p className="text-[10px] text-blue-600">
+          <p className="text-[10px] text-slate-600">
             The folder containing your built static files (e.g. <code>dist</code>, <code>build</code>, <code>out</code>, <code>.next/out</code>).
             Your site will be served with nginx + SPA fallback.
           </p>
@@ -509,7 +509,7 @@ export function DeployForm({
             type="button"
             className={`px-3 py-1.5 text-xs font-medium transition-colors ${
               environment === 'preview'
-                ? 'bg-blue-600 text-white'
+                ? 'bg-slate-900 text-white'
                 : 'bg-white text-slate-600 hover:bg-slate-50'
             }`}
             onClick={() => setEnvironment('preview')}

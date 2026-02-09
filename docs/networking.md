@@ -3,13 +3,14 @@
 ## Edge Layer
 
 - Cloudflare handles DNS, TLS edge, WAF, and DDoS filtering.
-- Wildcard DNS expected: `*.apployd.app` -> ingress/public IP.
+- Wildcard DNS expected: `*.<base-domain>` -> ingress/public IP.
 - Nginx serves as reverse proxy and WebSocket gateway.
 
 ## Dynamic Domain Assignment
 
 - Production domain format: `<project-slug>.<org-slug>.<base-domain>`.
-- Preview domain format: `<project-slug>-<ref>-<hash>.<org-slug>.<preview-base-domain>`.
+- Preview domain format (`PREVIEW_DOMAIN_STYLE=project`): `<project-slug>.<preview-base-domain>`.
+- Preview domain format (`PREVIEW_DOMAIN_STYLE=project_ref`): `<project-slug>-<ref>-<hash>.<org-slug>.<preview-base-domain>`.
 - Control plane stores domain in `deployments.domain`.
 - Deployment engine writes/upserts Nginx vhost using template:
   - `infra/nginx/templates/project.conf.tpl`

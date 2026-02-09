@@ -24,6 +24,7 @@ const schema = z.object({
   REDIS_URL: z.string().url(),
   BASE_DOMAIN: z.string().min(3),
   PREVIEW_BASE_DOMAIN: z.string().min(3).optional(),
+  PREVIEW_DOMAIN_STYLE: z.enum(['project', 'project_ref']).default('project_ref'),
   CLOUDFLARE_API_TOKEN: z.string().optional(),
   CLOUDFLARE_ZONE_ID: z.string().optional(),
   NGINX_SITES_PATH: z.string().default('/etc/nginx/sites-enabled'),

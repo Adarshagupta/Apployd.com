@@ -7,7 +7,7 @@ Configure Nginx reverse proxy for dashboard + API on a single public domain.
 
 Usage:
   bash infra/scripts/configure-platform-nginx.sh \
-    --domain plurihub.sylicaai.com \
+    --domain sylicaai.com \
     --dashboard-upstream http://127.0.0.1:3000 \
     --api-upstream http://127.0.0.1:4000
 

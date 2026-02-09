@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { SectionCard } from '../../../components/section-card';
 import { apiClient } from '../../../lib/api';
-import { useWorkspace } from '../../../lib/workspace';
+import { useWorkspaceContext } from '../../../components/workspace-provider';
 
 interface Plan {
   code: string;
@@ -25,7 +25,7 @@ interface Invoice {
 }
 
 export default function BillingPage() {
-  const { organizations, selectedOrganizationId, setSelectedOrganizationId } = useWorkspace();
+  const { selectedOrganizationId } = useWorkspaceContext();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [currentPlan, setCurrentPlan] = useState<{
@@ -99,22 +99,7 @@ export default function BillingPage() {
   return (
     <div className="space-y-4">
       <SectionCard title="Subscription" subtitle="Manage plan upgrades/downgrades and payment lifecycle.">
-        <div className="grid gap-3 md:grid-cols-[320px_1fr]">
-          <label>
-            <span className="field-label">Organization</span>
-            <select
-              className="field-input"
-              value={selectedOrganizationId}
-              onChange={(event) => setSelectedOrganizationId(event.target.value)}
-            >
-              {!organizations.length ? <option value="">No organizations</option> : null}
-              {organizations.map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.name}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="grid gap-3">
           <div className="panel-muted p-3">
             <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Current subscription</p>
             <p className="mt-1 text-lg font-semibold text-slate-900">

@@ -1,10 +1,12 @@
 'use client';
 
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
 import { DashboardNav } from '../../components/dashboard-nav';
+import { WorkspaceProvider } from '../../components/workspace-provider';
 import { apiClient } from '../../lib/api';
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
@@ -40,9 +42,17 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
     title: 'Integrations',
     subtitle: 'GitHub connection and repository-backed deployment settings.',
   },
+  '/profile': {
+    title: 'Profile',
+    subtitle: 'Personal account details, security status, and session controls.',
+  },
   '/settings': {
     title: 'Settings',
     subtitle: 'Account profile, security posture, and environment settings.',
+  },
+  '/support': {
+    title: 'Help Center',
+    subtitle: 'Get support, browse FAQs, and access technical documentation.',
   },
 };
 
@@ -52,10 +62,11 @@ const PROJECT_DETAIL_RE = /^\/projects\/[a-f0-9-]+/i;
 type DashboardTheme = 'light' | 'dark';
 const THEME_STORAGE_KEY = 'apployd_dashboard_theme';
 const AUTH_STORAGE_KEY = 'apployd_token';
+const THEME_UPDATED_EVENT = 'apployd:dashboard-theme-updated';
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname() || '/overview';
-  const [theme, setTheme] = useState<DashboardTheme>('light');
+  const [theme, setTheme] = useState<DashboardTheme>('dark');
   const [authChecked, setAuthChecked] = useState(false);
   const copy = pageTitles[pathname as keyof typeof pageTitles] ?? {
     title: 'Dashboard',
@@ -78,9 +89,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       return;
     }
 
-    const prefersDark =
-      typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setTheme(prefersDark ? 'dark' : 'light');
+    setTheme('dark');
   }, []);
 
   useEffect(() => {
@@ -89,6 +98,27 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     }
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const syncThemeFromStorage = () => {
+      const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+      if (stored === 'light' || stored === 'dark') {
+        setTheme(stored);
+      }
+    };
+
+    window.addEventListener(THEME_UPDATED_EVENT, syncThemeFromStorage);
+    window.addEventListener('storage', syncThemeFromStorage);
+
+    return () => {
+      window.removeEventListener(THEME_UPDATED_EVENT, syncThemeFromStorage);
+      window.removeEventListener('storage', syncThemeFromStorage);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -127,10 +157,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const toggleTheme = () => {
-    setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
-  };
-
   if (!authChecked) {
     return (
       <main className={shellClassName}>
@@ -142,8 +168,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   }
 
   return (
+    <WorkspaceProvider>
     <main className={shellClassName}>
-      <div className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)]">
+      <div className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)]">
         <DashboardNav />
 
         <section className="min-w-0">
@@ -162,21 +189,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 </div>
               )}
               <div className="flex flex-wrap items-center gap-2">
-                <button className="btn-secondary" onClick={toggleTheme} type="button" aria-label="Toggle color mode">
-                  {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-                </button>
-                <button
-                  className="btn-secondary"
-                  onClick={() => {
-                    if (typeof window !== 'undefined') {
-                      window.localStorage.removeItem('apployd_token');
-                      window.location.href = '/login';
-                    }
-                  }}
-                  type="button"
-                >
-                  Sign out
-                </button>
+                <Link href="/billing" className="btn-secondary text-center">
+                  Upgrade
+                </Link>
+                <Link href="/projects/new" className="btn-primary text-center">
+                  New
+                </Link>
               </div>
             </div>
           </header>
@@ -184,5 +202,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </section>
       </div>
     </main>
+    </WorkspaceProvider>
   );
 }

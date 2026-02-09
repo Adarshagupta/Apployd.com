@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 
 import { SectionCard } from '../../../components/section-card';
 import { apiClient } from '../../../lib/api';
-import { useWorkspace } from '../../../lib/workspace';
+import { useWorkspaceContext } from '../../../components/workspace-provider';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,12 +34,10 @@ interface GitHubStatus {
 export default function IntegrationsPage() {
   const searchParams = useSearchParams();
   const {
-    organizations,
     selectedOrganizationId,
-    setSelectedOrganizationId,
     projects,
     refresh,
-  } = useWorkspace();
+  } = useWorkspaceContext();
   const [status, setStatus] = useState<GitHubStatus | null>(null);
   const [repos, setRepos] = useState<Repository[]>([]);
   const [search, setSearch] = useState('');
@@ -177,21 +175,6 @@ export default function IntegrationsPage() {
         title="GitHub Integration"
         subtitle="Connect GitHub once, then link repositories to projects for Vercel-style push deploys."
       >
-        <label className="mb-4 block max-w-sm">
-          <span className="field-label">Organization</span>
-          <select
-            value={selectedOrganizationId}
-            onChange={(event) => setSelectedOrganizationId(event.target.value)}
-            className="field-input"
-          >
-            {!organizations.length ? <option value="">No organizations</option> : null}
-            {organizations.map((org) => (
-              <option key={org.id} value={org.id}>
-                {org.name}
-              </option>
-            ))}
-          </select>
-        </label>
         <div className="panel-muted flex flex-wrap items-center justify-between gap-3 p-4">
           <div>
             <p className="text-sm font-semibold text-slate-900">Connection status</p>

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { LogsTable } from '../../../components/logs-table';
 import { SectionCard } from '../../../components/section-card';
 import { apiClient, resolveWebSocketBaseUrl } from '../../../lib/api';
-import { useWorkspace } from '../../../lib/workspace';
+import { useWorkspaceContext } from '../../../components/workspace-provider';
 
 interface LogRow {
   timestamp: string;
@@ -15,7 +15,7 @@ interface LogRow {
 }
 
 export default function LogsPage() {
-  const { organizations, selectedOrganizationId, setSelectedOrganizationId, projects } = useWorkspace();
+  const { selectedOrganizationId, projects } = useWorkspaceContext();
   const [projectId, setProjectId] = useState('');
   const [rows, setRows] = useState<LogRow[]>([]);
   const [message, setMessage] = useState('Select organization and project to view logs.');
@@ -109,22 +109,7 @@ export default function LogsPage() {
   return (
     <div className="space-y-4">
       <SectionCard title="Query Logs" subtitle="Load recent log records from centralized project logs.">
-        <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-          <label>
-            <span className="field-label">Organization</span>
-            <select
-              value={selectedOrganizationId}
-              onChange={(event) => setSelectedOrganizationId(event.target.value)}
-              className="field-input"
-            >
-              {!organizations.length ? <option value="">No organizations</option> : null}
-              {organizations.map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.name}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
           <label>
             <span className="field-label">Project</span>
             <select value={projectId} onChange={(event) => setProjectId(event.target.value)} className="field-input">

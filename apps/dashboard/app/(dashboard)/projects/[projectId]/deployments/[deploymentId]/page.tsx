@@ -38,12 +38,12 @@ interface DeploymentDetail {
 
 /* ---------- helpers ---------- */
 const STATUS_MAP: Record<string, { dot: string; bg: string; text: string; label: string }> = {
-  ready: { dot: 'bg-green-500', bg: 'bg-green-50 border-green-200', text: 'text-green-700', label: 'Ready' },
-  failed: { dot: 'bg-red-500', bg: 'bg-red-50 border-red-200', text: 'text-red-700', label: 'Failed' },
-  building: { dot: 'bg-blue-500', bg: 'bg-blue-50 border-blue-200', text: 'text-blue-700', label: 'Building' },
-  deploying: { dot: 'bg-blue-500', bg: 'bg-blue-50 border-blue-200', text: 'text-blue-700', label: 'Deploying' },
-  queued: { dot: 'bg-amber-500', bg: 'bg-amber-50 border-amber-200', text: 'text-amber-700', label: 'Queued' },
-  rolled_back: { dot: 'bg-amber-500', bg: 'bg-amber-50 border-amber-200', text: 'text-amber-700', label: 'Rolled back' },
+  ready: { dot: 'bg-slate-400', bg: 'bg-slate-100 border-slate-300', text: 'text-slate-900', label: 'Ready' },
+  failed: { dot: 'bg-slate-900', bg: 'bg-slate-200 border-slate-400', text: 'text-slate-900', label: 'Failed' },
+  building: { dot: 'bg-slate-700', bg: 'bg-slate-100 border-slate-300', text: 'text-slate-700', label: 'Building' },
+  deploying: { dot: 'bg-slate-700', bg: 'bg-slate-100 border-slate-300', text: 'text-slate-700', label: 'Deploying' },
+  queued: { dot: 'bg-slate-500', bg: 'bg-slate-50 border-slate-200', text: 'text-slate-600', label: 'Queued' },
+  rolled_back: { dot: 'bg-slate-600', bg: 'bg-slate-50 border-slate-200', text: 'text-slate-700', label: 'Rolled back' },
 };
 
 function statusInfo(status: string) {
@@ -118,9 +118,9 @@ export default function DeploymentDetailPage() {
   if (error || !deployment) {
     return (
       <div className="section-band">
-        <p className="text-sm text-red-600">{error || 'Deployment not found.'}</p>
+        <p className="text-sm text-slate-900">{error || 'Deployment not found.'}</p>
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-        <Link href={`/projects/${projectId}` as any} className="mt-3 inline-block text-sm text-blue-600 hover:underline">
+        <Link href={`/projects/${projectId}` as any} className="mt-3 inline-block text-sm text-slate-900 hover:underline">
           ← Back to project
         </Link>
       </div>
@@ -235,7 +235,7 @@ export default function DeploymentDetailPage() {
                 })}
               </div>
               <div className="bg-slate-950 p-4 max-h-[400px] overflow-auto">
-                <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap leading-relaxed">
+                <pre className="text-xs text-slate-300 font-mono whitespace-pre-wrap leading-relaxed">
                   {logsTab === 'build' && (deployment.buildLogs || 'No build logs available.')}
                   {logsTab === 'deploy' && (deployment.deployLogs || 'No deploy logs available.')}
                   {logsTab === 'error' && (deployment.errorMessage || 'No errors.')}
@@ -263,7 +263,7 @@ export default function DeploymentDetailPage() {
                     href={deploymentUrl ?? '#'}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 text-sm text-slate-800 hover:text-blue-600 font-medium transition"
+                    className="inline-flex items-center gap-1.5 text-sm text-slate-800 hover:text-slate-900 font-medium transition"
                   >
                     {deployment.domain}
                     <svg className="h-3.5 w-3.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -321,7 +321,7 @@ export default function DeploymentDetailPage() {
               <span className={`mt-2 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider ${
                 deployment.environment === 'production'
                   ? 'bg-slate-900 text-white'
-                  : 'bg-blue-100 text-blue-700'
+                  : 'bg-slate-700 text-white'
               }`}>
                 {deployment.environment}
               </span>

@@ -1,10 +1,10 @@
 git pull origin main
 bash infra/scripts/deploy-ubuntu.sh \
-  --public-domain plurihub.sylicaai.com \
+  --public-domain sylicaai.com \
   --base-domain sylicaai.com \
   --preview-base-domain preview.sylicaai.com \
   --certbot-email ops@sylicaai.com \
-  --cloudflare-api-token 9XD223ZyoczWK5AmWdhlaG05HDSuAfkWY-kxI0VB \
+  --cloudflare-api-token 5S8tpzUtXLTIPV9-0l3jeegcliqgjCPIPVL2vC9W \
   --cloudflare-zone-id 7b6143ba123ac62841b3827bd5de7c63 \
   --with-provision \
   --run-certbot

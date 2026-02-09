@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ResourceSlider } from '../../../../components/resource-slider';
 import { SectionCard } from '../../../../components/section-card';
 import { apiClient } from '../../../../lib/api';
-import { useWorkspace } from '../../../../lib/workspace';
+import { useWorkspaceContext } from '../../../../components/workspace-provider';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,12 +73,10 @@ export default function CreateProjectPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const {
-    organizations,
     selectedOrganizationId,
-    setSelectedOrganizationId,
     loading,
     error: workspaceError,
-  } = useWorkspace();
+  } = useWorkspaceContext();
 
   const [form, setForm] = useState({
     name: '',
@@ -330,23 +328,6 @@ export default function CreateProjectPage() {
         <form onSubmit={onSubmit} className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
           <section className="space-y-3">
             <div className="grid gap-3 md:grid-cols-2">
-              <label className="md:col-span-2">
-                <span className="field-label">Organization</span>
-                <select
-                  className="field-input"
-                  value={selectedOrganizationId}
-                  onChange={(event) => setSelectedOrganizationId(event.target.value)}
-                  disabled={!organizations.length}
-                >
-                  {!organizations.length ? <option value="">No organizations</option> : null}
-                  {organizations.map((org) => (
-                    <option key={org.id} value={org.id}>
-                      {org.name} ({org.role})
-                    </option>
-                  ))}
-                </select>
-              </label>
-
               <label>
                 <span className="field-label">Project name</span>
                 <input

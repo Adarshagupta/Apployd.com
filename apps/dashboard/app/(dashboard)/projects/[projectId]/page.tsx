@@ -7,7 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { DeployForm } from '../../../../components/deploy-form';
 import { ResourceSlider } from '../../../../components/resource-slider';
 import { apiClient } from '../../../../lib/api';
-import { useWorkspace } from '../../../../lib/workspace';
+import { useWorkspaceContext } from '../../../../components/workspace-provider';
 
 /* ---------- types ---------- */
 const ENV_KEY_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
@@ -104,7 +104,7 @@ export default function ProjectDetailPage() {
   const params = useParams<{ projectId: string }>();
   const { projectId } = params ?? { projectId: '' };
   const router = useRouter();
-  const { projects, refresh } = useWorkspace();
+  const { projects, refresh } = useWorkspaceContext();
 
   const project = useMemo(
     () => projects.find((p) => p.id === projectId) ?? null,
@@ -468,7 +468,7 @@ export default function ProjectDetailPage() {
     return (
       <div className="section-band">
         <p className="text-sm text-slate-600">Project not found or still loading…</p>
-        <Link href="/projects" className="mt-3 inline-block text-sm text-blue-600 hover:underline">
+        <Link href="/projects" className="mt-3 inline-block text-sm text-slate-900 hover:underline">
           ← Back to projects
         </Link>
       </div>
@@ -501,7 +501,7 @@ export default function ProjectDetailPage() {
               </a>
             )}
             {project.activeDeploymentId && (
-              <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
+              <span className="inline-flex items-center rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-medium text-white">
                 Active deployment
               </span>
             )}
@@ -510,12 +510,12 @@ export default function ProjectDetailPage() {
 
         {/* ---- In-progress deployment banner ---- */}
         {inProgressDeployment && (
-          <div className="mt-4 flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+          <div className="mt-4 flex items-center gap-3 rounded-lg border border-slate-300 bg-slate-100 px-4 py-3">
             <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-500" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-slate-400 opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-slate-900" />
             </span>
-            <p className="text-sm text-blue-800">
+            <p className="text-sm text-slate-800">
               <span className="font-medium">Deployment in progress</span>
               {' — '}
               <span className="capitalize">{inProgressDeployment.status}</span>
@@ -524,7 +524,7 @@ export default function ProjectDetailPage() {
             </p>
             <button
               type="button"
-              className="ml-auto text-xs font-medium text-blue-600 hover:underline"
+              className="ml-auto text-xs font-medium text-slate-900 hover:underline"
               onClick={() => setActiveTab('deploy')}
             >
               View logs →
@@ -547,7 +547,7 @@ export default function ProjectDetailPage() {
             >
               {tab.label}
               {tab.key === 'deploy' && inProgressDeployment && (
-                <span className="ml-1.5 inline-flex h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                <span className="ml-1.5 inline-flex h-2 w-2 rounded-full bg-slate-900 animate-pulse" />
               )}
               {activeTab === tab.key && (
                 <span className="absolute inset-x-0 -bottom-px h-0.5 bg-slate-900 rounded-full" />
@@ -604,7 +604,7 @@ export default function ProjectDetailPage() {
                     >
                     <article
                       className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 transition cursor-pointer ${
-                        isActive ? 'border-green-300 bg-green-50' : 'border-slate-200 hover:border-slate-300 hover:shadow-sm'
+                        isActive ? 'border-slate-900 bg-slate-100' : 'border-slate-200 hover:border-slate-300 hover:shadow-sm'
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -613,7 +613,7 @@ export default function ProjectDetailPage() {
                           className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
                             dep.environment === 'production'
                               ? 'bg-slate-900 text-white'
-                              : 'bg-blue-100 text-blue-700'
+                              : 'bg-slate-700 text-white'
                           }`}
                         >
                           {dep.environment === 'production' ? 'prod' : 'preview'}
@@ -623,22 +623,22 @@ export default function ProjectDetailPage() {
                         <span
                           className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
                             dep.status === 'ready'
-                              ? 'bg-green-100 text-green-700'
+                              ? 'bg-slate-200 text-slate-900'
                               : dep.status === 'failed'
-                                ? 'bg-red-100 text-red-700'
+                                ? 'bg-slate-900 text-white'
                                 : dep.status === 'rolled_back'
-                                  ? 'bg-amber-100 text-amber-700'
-                                  : 'bg-blue-100 text-blue-700'
+                                  ? 'bg-slate-700 text-white'
+                                  : 'bg-slate-100 text-slate-700'
                           }`}
                         >
                           {['queued', 'building', 'deploying'].includes(dep.status) && (
-                            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+                            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-slate-900 animate-pulse" />
                           )}
                           {dep.status}
                         </span>
 
                         {isActive && (
-                          <span className="inline-flex items-center rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                          <span className="inline-flex items-center rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-white">
                             LIVE
                           </span>
                         )}
@@ -689,7 +689,7 @@ export default function ProjectDetailPage() {
                           !isActive && (
                             <button
                               type="button"
-                              className="rounded-md bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-100 transition"
+                              className="rounded-md bg-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-900 hover:bg-slate-300 transition"
                               onClick={(e) => { e.stopPropagation(); handleRollback(dep.id); }}
                               disabled={deploymentAction === dep.id}
                             >
@@ -700,7 +700,7 @@ export default function ProjectDetailPage() {
                         {dep.environment === 'preview' && dep.status === 'ready' && (
                           <button
                             type="button"
-                            className="rounded-md bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100 transition"
+                            className="rounded-md bg-slate-700 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-slate-800 transition"
                             onClick={(e) => { e.stopPropagation(); handlePromote(dep.id); }}
                             disabled={deploymentAction === dep.id}
                           >
@@ -718,7 +718,7 @@ export default function ProjectDetailPage() {
                 <p className="text-sm text-slate-500">No deployments yet.</p>
                 <button
                   type="button"
-                  className="mt-3 text-sm font-medium text-blue-600 hover:underline"
+                  className="mt-3 text-sm font-medium text-slate-900 hover:underline"
                   onClick={() => setActiveTab('deploy')}
                 >
                   Create your first deployment →
@@ -927,40 +927,40 @@ export default function ProjectDetailPage() {
 
             {/* DNS instructions (shown after adding a domain) */}
             {domainInstructions && (
-              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-3">
-                <p className="text-sm font-medium text-blue-900">Configure DNS records at your domain registrar:</p>
+              <div className="rounded-xl border border-slate-300 bg-slate-100 p-4 space-y-3">
+                <p className="text-sm font-medium text-slate-900">Configure DNS records at your domain registrar:</p>
 
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-blue-700">Option 1 — CNAME (recommended)</p>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-700">Option 1 — CNAME (recommended)</p>
                   <div className="grid gap-2 md:grid-cols-2 text-sm">
                     <div>
-                      <span className="text-xs text-blue-600">Type</span>
+                      <span className="text-xs text-slate-600">Type</span>
                       <p className="mono rounded bg-white/70 px-2 py-1 text-slate-800">CNAME</p>
                     </div>
                     <div>
-                      <span className="text-xs text-blue-600">Host / Name</span>
+                      <span className="text-xs text-slate-600">Host / Name</span>
                       <p className="mono rounded bg-white/70 px-2 py-1 text-slate-800 select-all">{domainInstructions.cname.host}</p>
                     </div>
                     <div className="md:col-span-2">
-                      <span className="text-xs text-blue-600">Points to</span>
+                      <span className="text-xs text-slate-600">Points to</span>
                       <p className="mono rounded bg-white/70 px-2 py-1 text-slate-800 select-all">{domainInstructions.cname.value}</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-2 border-t border-blue-200 pt-3">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-blue-700">Option 2 — TXT verification</p>
+                <div className="space-y-2 border-t border-slate-300 pt-3">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-700">Option 2 — TXT verification</p>
                   <div className="grid gap-2 md:grid-cols-2 text-sm">
                     <div>
-                      <span className="text-xs text-blue-600">Type</span>
+                      <span className="text-xs text-slate-600">Type</span>
                       <p className="mono rounded bg-white/70 px-2 py-1 text-slate-800">TXT</p>
                     </div>
                     <div>
-                      <span className="text-xs text-blue-600">Host / Name</span>
+                      <span className="text-xs text-slate-600">Host / Name</span>
                       <p className="mono rounded bg-white/70 px-2 py-1 text-slate-800 select-all">{domainInstructions.txt.host}</p>
                     </div>
                     <div className="md:col-span-2">
-                      <span className="text-xs text-blue-600">Value</span>
+                      <span className="text-xs text-slate-600">Value</span>
                       <p className="mono rounded bg-white/70 px-2 py-1 text-slate-800 select-all">{domainInstructions.txt.value}</p>
                     </div>
                   </div>
@@ -968,7 +968,7 @@ export default function ProjectDetailPage() {
 
                 <button
                   type="button"
-                  className="text-xs text-blue-600 hover:underline"
+                  className="text-xs text-slate-900 hover:underline"
                   onClick={() => setDomainInstructions(null)}
                 >
                   Dismiss
@@ -992,11 +992,11 @@ export default function ProjectDetailPage() {
                         <span
                           className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
                             d.status === 'active'
-                              ? 'bg-green-100 text-green-700'
+                              ? 'bg-slate-900 text-white'
                               : d.status === 'pending_verification'
-                                ? 'bg-amber-100 text-amber-700'
+                                ? 'bg-slate-700 text-white'
                                 : d.status === 'failed'
-                                  ? 'bg-red-100 text-red-700'
+                                  ? 'bg-slate-200 text-slate-900'
                                   : 'bg-slate-100 text-slate-600'
                           }`}
                         >
@@ -1014,7 +1014,7 @@ export default function ProjectDetailPage() {
                       {d.status !== 'active' && (
                         <button
                           type="button"
-                          className="rounded-md bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100 transition"
+                          className="rounded-md bg-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-900 hover:bg-slate-300 transition"
                           onClick={() => verifyDomain(d.id)}
                           disabled={domainVerifying === d.id}
                         >

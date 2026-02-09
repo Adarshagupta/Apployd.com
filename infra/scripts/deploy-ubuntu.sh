@@ -9,20 +9,22 @@ Provision and deploy Apployd on Ubuntu with configurable domain settings.
 
 Usage:
   bash infra/scripts/deploy-ubuntu.sh \
-    --public-domain plurihub.sylicaai.com \
+    --public-domain sylicaai.com \
     --base-domain sylicaai.com \
-    --preview-base-domain preview.sylicaai.com \
+    --preview-base-domain sylicaai.com \
+    --preview-domain-style project \
     --certbot-email ops@sylicaai.com \
     --with-provision \
     --run-certbot
 
 Required flags:
-  --public-domain         Public dashboard domain (for example: plurihub.sylicaai.com)
+  --public-domain         Public dashboard domain (for example: sylicaai.com)
   --certbot-email         Email used by certbot
 
 Optional flags:
   --base-domain           Base domain for production deployment URLs
   --preview-base-domain   Base domain for preview deployment URLs
+  --preview-domain-style  Preview hostname style: project | project_ref
   --api-base-url          API base URL override
   --dashboard-base-url    Dashboard base URL override
   --database-url          PostgreSQL connection URL override
@@ -40,6 +42,7 @@ EOF
 PUBLIC_DOMAIN=""
 BASE_DOMAIN=""
 PREVIEW_BASE_DOMAIN=""
+PREVIEW_DOMAIN_STYLE=""
 API_BASE_URL=""
 DASHBOARD_BASE_URL=""
 CERTBOT_EMAIL=""
@@ -65,6 +68,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --preview-base-domain)
       PREVIEW_BASE_DOMAIN="${2:-}"
+      shift 2
+      ;;
+    --preview-domain-style)
+      PREVIEW_DOMAIN_STYLE="${2:-}"
       shift 2
       ;;
     --api-base-url)
@@ -161,6 +168,10 @@ fi
 
 if [[ -n "$PREVIEW_BASE_DOMAIN" ]]; then
   env_args+=(--preview-base-domain "$PREVIEW_BASE_DOMAIN")
+fi
+
+if [[ -n "$PREVIEW_DOMAIN_STYLE" ]]; then
+  env_args+=(--preview-domain-style "$PREVIEW_DOMAIN_STYLE")
 fi
 
 if [[ -n "$API_BASE_URL" ]]; then

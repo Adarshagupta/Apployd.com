@@ -34,7 +34,7 @@ nano .env
 
 ```bash
 # Your domain (must point to this server)
-DOMAIN=plurihub.sylicaai.com
+DOMAIN=sylicaai.com
 
 # Your email for SSL certificates
 EMAIL=your-email@example.com

@@ -10,18 +10,20 @@ Generate production env files for Ubuntu/GCP deployments.
 
 Usage:
   bash infra/scripts/generate-production-env.sh \
-    --public-domain plurihub.sylicaai.com \
+    --public-domain sylicaai.com \
     --base-domain sylicaai.com \
-    --preview-base-domain preview.sylicaai.com \
+    --preview-base-domain sylicaai.com \
+    --preview-domain-style project \
     --certbot-email ops@sylicaai.com
 
 Required flags:
-  --public-domain         Public dashboard domain (for example: plurihub.sylicaai.com)
+  --public-domain         Public dashboard domain (for example: sylicaai.com)
   --certbot-email         Email used by certbot
 
 Optional flags:
   --base-domain           Base domain for production deployment URLs (default: public domain)
   --preview-base-domain   Base domain for preview deployment URLs (default: base domain)
+  --preview-domain-style  Preview hostname style: project | project_ref (default: project)
   --api-base-url          API base URL (default: https://<public-domain>)
   --dashboard-base-url    Dashboard base URL (default: https://<public-domain>)
   --database-url          PostgreSQL connection URL (default: postgresql://postgres:postgres@postgres:5432/apployd)
@@ -46,6 +48,7 @@ EOF
 PUBLIC_DOMAIN=""
 BASE_DOMAIN=""
 PREVIEW_BASE_DOMAIN=""
+PREVIEW_DOMAIN_STYLE="project"
 API_BASE_URL=""
 DASHBOARD_BASE_URL=""
 CERTBOT_EMAIL=""
@@ -69,6 +72,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --preview-base-domain)
       PREVIEW_BASE_DOMAIN="${2:-}"
+      shift 2
+      ;;
+    --preview-domain-style)
+      PREVIEW_DOMAIN_STYLE="${2:-}"
       shift 2
       ;;
     --api-base-url)
@@ -143,6 +150,12 @@ if [[ -z "$PREVIEW_BASE_DOMAIN" ]]; then
   PREVIEW_BASE_DOMAIN="$BASE_DOMAIN"
 fi
 
+if [[ "$PREVIEW_DOMAIN_STYLE" != "project" && "$PREVIEW_DOMAIN_STYLE" != "project_ref" ]]; then
+  echo "Invalid --preview-domain-style value: $PREVIEW_DOMAIN_STYLE"
+  echo "Allowed values: project, project_ref"
+  exit 1
+fi
+
 if [[ -z "$API_BASE_URL" ]]; then
   API_BASE_URL="https://${PUBLIC_DOMAIN}"
 fi
@@ -197,6 +210,7 @@ CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN_VALUE
 CLOUDFLARE_ZONE_ID=$CLOUDFLARE_ZONE_ID_VALUE
 BASE_DOMAIN=$BASE_DOMAIN
 PREVIEW_BASE_DOMAIN=$PREVIEW_BASE_DOMAIN
+PREVIEW_DOMAIN_STYLE=$PREVIEW_DOMAIN_STYLE
 DEFAULT_REGION=$DEFAULT_REGION
 AUTO_PROVISION_DEV_SERVER=false
 EOF
@@ -207,6 +221,7 @@ DATABASE_URL=$DATABASE_URL
 REDIS_URL=$REDIS_URL
 BASE_DOMAIN=$BASE_DOMAIN
 PREVIEW_BASE_DOMAIN=$PREVIEW_BASE_DOMAIN
+PREVIEW_DOMAIN_STYLE=$PREVIEW_DOMAIN_STYLE
 CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN_VALUE
 CLOUDFLARE_ZONE_ID=$CLOUDFLARE_ZONE_ID_VALUE
 DOCKER_HOST=unix:///var/run/docker.sock
@@ -230,6 +245,7 @@ echo
 echo "Public domain: $PUBLIC_DOMAIN"
 echo "Production deployment domain base: $BASE_DOMAIN"
 echo "Preview deployment domain base: $PREVIEW_BASE_DOMAIN"
+echo "Preview deployment domain style: $PREVIEW_DOMAIN_STYLE"
 echo
 echo "Important: point DNS records/wildcards to this host:"
 echo "  - $PUBLIC_DOMAIN"

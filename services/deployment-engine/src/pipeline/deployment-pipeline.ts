@@ -478,6 +478,11 @@ const buildFallbackDomain = (input: {
 }): string => {
   const org = sanitizeDomainLabel(input.organizationSlug, 'org');
   if (input.environment === 'preview') {
+    const projectLabel = sanitizeDomainLabel(input.projectSlug, 'project');
+    if (env.PREVIEW_DOMAIN_STYLE === 'project') {
+      return `${projectLabel}.${env.PREVIEW_BASE_DOMAIN}`;
+    }
+
     const previewLabel = buildPreviewLabel(input.projectSlug, input.ref);
     return `${previewLabel}.${org}.${env.PREVIEW_BASE_DOMAIN}`;
   }

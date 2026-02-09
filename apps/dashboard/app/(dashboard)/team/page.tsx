@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { SectionCard } from '../../../components/section-card';
 import { apiClient } from '../../../lib/api';
-import { useWorkspace } from '../../../lib/workspace';
+import { useWorkspaceContext } from '../../../components/workspace-provider';
 
 interface Member {
   id: string;
@@ -17,7 +17,7 @@ interface Member {
 }
 
 export default function TeamPage() {
-  const { organizations, selectedOrganizationId, setSelectedOrganizationId } = useWorkspace();
+  const { selectedOrganizationId } = useWorkspaceContext();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('developer');
   const [members, setMembers] = useState<Member[]>([]);
@@ -65,23 +65,8 @@ export default function TeamPage() {
   return (
     <div className="space-y-4">
       <SectionCard title="Team & RBAC" subtitle="Role levels: owner, admin, developer, viewer.">
-        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-          <label>
-            <span className="field-label">Organization</span>
-            <select
-              value={selectedOrganizationId}
-              onChange={(event) => setSelectedOrganizationId(event.target.value)}
-              className="field-input"
-            >
-              {!organizations.length ? <option value="">No organizations</option> : null}
-              {organizations.map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button onClick={loadMembers} className="btn-secondary self-end">
+        <div className="flex items-end gap-3">
+          <button onClick={loadMembers} className="btn-secondary">
             Refresh
           </button>
         </div>
