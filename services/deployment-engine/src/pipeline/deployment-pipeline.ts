@@ -97,6 +97,7 @@ export class DeploymentPipeline {
             this.docker.buildImage(
               {
                 deploymentId: payload.deploymentId,
+                projectId: deployment.projectId,
                 gitUrl: payload.request.gitUrl,
                 branch: payload.request.branch ?? '',
                 commitSha: payload.request.commitSha ?? '',
