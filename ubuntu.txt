@@ -8,3 +8,6 @@ bash infra/scripts/deploy-ubuntu.sh \
   --cloudflare-zone-id 7b6143ba123ac62841b3827bd5de7c63 \
   --with-provision \
   --run-certbot
+
+docker logs docker-control-plane-1 --tail 20
+docker logs docker-deployment-engine-1 --tail 20

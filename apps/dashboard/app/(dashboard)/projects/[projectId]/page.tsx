@@ -123,18 +123,25 @@ export default function ProjectDetailPage() {
   const [usageDetails, setUsageDetails] = useState<ProjectUsageDetails | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
 
-  const loadDeployments = useCallback(async () => {
+  const loadDeployments = useCallback(async (options?: { silent?: boolean }) => {
     if (!projectId) return;
+    const silent = options?.silent ?? false;
     try {
-      setDeploymentsLoading(true);
+      if (!silent) {
+        setDeploymentsLoading(true);
+      }
       const data = (await apiClient.get(`/deployments?projectId=${projectId}`)) as {
         deployments?: DeploymentSummary[];
       };
       setDeployments(data.deployments ?? []);
     } catch {
-      setDeployments([]);
+      if (!silent) {
+        setDeployments([]);
+      }
     } finally {
-      setDeploymentsLoading(false);
+      if (!silent) {
+        setDeploymentsLoading(false);
+      }
     }
   }, [projectId]);
 
@@ -180,14 +187,14 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     if (!inProgressDeployment) return;
     const interval = setInterval(() => {
-      loadDeployments().catch(() => undefined);
+      loadDeployments({ silent: true }).catch(() => undefined);
     }, 5000);
     return () => clearInterval(interval);
   }, [inProgressDeployment, loadDeployments]);
 
   /** Called by DeployForm when a deployment reaches a terminal state. */
   const handleDeploymentComplete = useCallback(() => {
-    loadDeployments().catch(() => undefined);
+    loadDeployments({ silent: true }).catch(() => undefined);
     refresh().catch(() => undefined);
   }, [loadDeployments, refresh]);
 
