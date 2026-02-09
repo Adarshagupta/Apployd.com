@@ -335,6 +335,8 @@ function staticSiteDockerfile(projectId: string): string {
     'RUN printf "server {\\n  listen %s;\\n  listen [::]:%s;\\n  root /usr/share/nginx/html;\\n  index index.html;\\n  \\n  # Security headers (Vercel/Render grade)\\n  add_header X-Frame-Options \\"SAMEORIGIN\\" always;\\n  add_header X-Content-Type-Options \\"nosniff\\" always;\\n  add_header X-XSS-Protection \\"1; mode=block\\" always;\\n  add_header Referrer-Policy \\"strict-origin-when-cross-origin\\" always;\\n  add_header Permissions-Policy \\"camera=(), microphone=(), geolocation=()\\" always;\\n  \\n  # Remove nginx version\\n  server_tokens off;\\n  \\n  # SPA fallback\\n  location / {\\n    try_files \\$uri \\$uri/ /index.html;\\n  }\\n  \\n  # Static asset caching\\n  location ~* \\\\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)\\$ {\\n    expires 1y;\\n    add_header Cache-Control \\"public, immutable\\";\\n  }\\n}\\n" "${APP_PORT}" "${APP_PORT}" > /etc/nginx/conf.d/default.conf',
     '',
     'EXPOSE ${APP_PORT}',
+    '# Clear default entrypoint (it tries to modify config files, fails with read-only)',
+    'ENTRYPOINT []',
     'CMD ["nginx", "-g", "daemon off;"]',
   ].join('\n');
 }
@@ -473,7 +475,7 @@ export class DockerAdapter {
       '--tmpfs /app/.npm:rw,noexec,nosuid,size=256m',
       '--tmpfs /app/.cache:rw,noexec,nosuid,size=256m',
       '--tmpfs /app/node_modules/.cache:rw,noexec,nosuid,size=256m',
-      // nginx runtime dirs (harmless on non-nginx containers)
+      // nginx runtime dirs (required for read-only with nginx)
       '--tmpfs /var/cache/nginx:rw,noexec,nosuid,size=128m',
       '--tmpfs /var/log/nginx:rw,noexec,nosuid,size=64m',
       // Next.js/framework cache dirs
