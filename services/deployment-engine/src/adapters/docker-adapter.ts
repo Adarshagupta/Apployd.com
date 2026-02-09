@@ -10,6 +10,36 @@ const shellEscape = (value: string) =>
   process.platform === 'win32' ? `"${value.replace(/"/g, '\\"')}"` : `'${value.replace(/'/g, `'\"'\"'`)}'`;
 
 /**
+ * Sanitize sensitive data from logs and errors (Vercel/Render grade security)
+ * Prevents credential leaks in build logs, error messages, and monitoring
+ */
+const SENSITIVE_PATTERNS = [
+  /(?:password|passwd|pwd|secret|token|key|auth|api[-_]?key)[:=]\s*['"]?([^\s'"]+)/gi,
+  /(?:postgres|mysql|mongodb):\/\/[^:]+:([^@]+)@/gi,
+  /Bearer\s+([A-Za-z0-9\-._~+/]+=*)/gi,
+  /(?:^|&)(?:password|token|secret|key)=([^&\s]+)/gi,
+];
+
+function sanitizeLog(message: string): string {
+  let sanitized = message;
+  SENSITIVE_PATTERNS.forEach((pattern) => {
+    sanitized = sanitized.replace(pattern, (match) => {
+      return match.replace(/(?<=[:=])\s*['"]?[^\s'"]+/, ' [REDACTED]');
+    });
+  });
+  return sanitized;
+}
+
+/**
+ * Sanitize environment variable names for logging
+ * Only show names, never values
+ */
+function sanitizeEnvForLog(env: Record<string, string>): string {
+  const keys = Object.keys(env).sort();
+  return keys.length > 0 ? `(${keys.length} vars: ${keys.join(', ')})` : '(no env vars)';
+}
+
+/**
  * Universal multi-stage Dockerfile.
  *
  * Stage 1 — alpine/git clones the repo INSIDE Docker (no host git needed,
@@ -268,8 +298,8 @@ function staticSiteDockerfile(): string {
     '# Copy built static files into nginx',
     'COPY --from=builder /static-output/ /usr/share/nginx/html/',
     '',
-    '# Generate nginx config for the custom port + SPA fallback',
-    'RUN printf "server {\\n  listen %s;\\n  listen [::]:%s;\\n  root /usr/share/nginx/html;\\n  index index.html;\\n  location / {\\n    try_files \\$uri \\$uri/ /index.html;\\n  }\\n  location ~* \\\\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)\\$ {\\n    expires 1y;\\n    add_header Cache-Control \\"public, immutable\\";\\n  }\\n}\\n" "${APP_PORT}" "${APP_PORT}" > /etc/nginx/conf.d/default.conf',
+    '# Generate nginx config with production security headers',
+    'RUN printf "server {\\n  listen %s;\\n  listen [::]:%s;\\n  root /usr/share/nginx/html;\\n  index index.html;\\n  \\n  # Security headers (Vercel/Render grade)\\n  add_header X-Frame-Options \\"SAMEORIGIN\\" always;\\n  add_header X-Content-Type-Options \\"nosniff\\" always;\\n  add_header X-XSS-Protection \\"1; mode=block\\" always;\\n  add_header Referrer-Policy \\"strict-origin-when-cross-origin\\" always;\\n  add_header Permissions-Policy \\"camera=(), microphone=(), geolocation=()\\" always;\\n  \\n  # Remove nginx version\\n  server_tokens off;\\n  \\n  # SPA fallback\\n  location / {\\n    try_files \\$uri \\$uri/ /index.html;\\n  }\\n  \\n  # Static asset caching\\n  location ~* \\\\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)\\$ {\\n    expires 1y;\\n    add_header Cache-Control \\"public, immutable\\";\\n  }\\n}\\n" "${APP_PORT}" "${APP_PORT}" > /etc/nginx/conf.d/default.conf',
     '',
     'EXPOSE ${APP_PORT}',
     'CMD ["nginx", "-g", "daemon off;"]',
@@ -323,6 +353,11 @@ export class DockerAdapter {
   async buildImage(input: BuildImageInput, onLog?: LogCallback): Promise<string> {
     const imageTag = `apployd/${input.deploymentId}:latest`;
 
+    // Wrap log callback to sanitize sensitive data
+    const safeLog: LogCallback | undefined = onLog
+      ? (msg) => onLog(sanitizeLog(msg))
+      : undefined;
+
     // Minimal build-context: just our generated Dockerfile
     const ctxDir = await mkdtemp(join(tmpdir(), 'apployd-ctx-'));
 
@@ -331,6 +366,12 @@ export class DockerAdapter {
       if (input.rootDirectory && (input.rootDirectory.includes('..') || input.rootDirectory.startsWith('/'))) {
         throw new Error('Invalid rootDirectory: must be a relative path without ".."');
       }
+
+      // Sanitize git URL to remove credentials if present
+      const sanitizedGitUrl = input.gitUrl.replace(
+        /:\/\/([^:]+):([^@]+)@/,
+        '://[REDACTED]:[REDACTED]@',
+      );
 
       await writeFile(join(ctxDir, 'Dockerfile'), universalDockerfile(input.serviceType), 'utf8');
 
@@ -347,19 +388,19 @@ export class DockerAdapter {
       if (input.buildCommand) args.push(`--build-arg BUILD_CMD=${shellEscape(input.buildCommand)}`);
       if (!isStatic && input.startCommand) {
         if (isDevCommand(input.startCommand)) {
-          onLog?.(`Ignoring dev-mode start command "${input.startCommand}" — auto-detecting production command instead`);
+          safeLog?.(`Ignoring dev-mode start command "${input.startCommand}" — auto-detecting production command instead`);
         } else {
           args.push(`--build-arg START_CMD=${shellEscape(input.startCommand)}`);
         }
       }
       if (isStatic && input.outputDirectory) args.push(`--build-arg OUTPUT_DIR=${shellEscape(input.outputDirectory)}`);
 
-      onLog?.(`Building ${isStatic ? 'static site' : 'web service'} image (clone → install → build${isStatic ? ' → nginx' : ''}) ...`);
+      safeLog?.(`Building ${isStatic ? 'static site' : 'web service'} image from ${sanitizedGitUrl} (${input.branch})...`);
       await runCommandStreaming(
         `docker build --no-cache ${args.join(' ')} -t ${shellEscape(imageTag)} ${shellEscape(ctxDir)}`,
-        onLog,
+        safeLog,
       );
-      onLog?.('Docker image built successfully');
+      safeLog?.('Docker image built successfully');
 
       return imageTag;
     } finally {
@@ -386,14 +427,53 @@ export class DockerAdapter {
       'docker run -d',
       `--name apployd-${input.deploymentId}`,
       '--restart unless-stopped',
-      // Temporarily disabled read-only for debugging - will re-enable with proper tmpfs mounts
-      // '--read-only',
-      '--tmpfs /tmp:rw,noexec,nosuid',
+      
+      // ── Security: Read-only filesystem (Vercel/Render grade) ──
+      '--read-only',
+      '--tmpfs /tmp:rw,noexec,nosuid,size=512m',
+      '--tmpfs /run:rw,noexec,nosuid,size=64m',
+      '--tmpfs /var/run:rw,noexec,nosuid,size=64m',
+      // Node.js runtime dirs
+      '--tmpfs /app/.npm:rw,noexec,nosuid,size=256m',
+      '--tmpfs /app/.cache:rw,noexec,nosuid,size=256m',
+      '--tmpfs /app/node_modules/.cache:rw,noexec,nosuid,size=256m',
+      // nginx runtime dirs (harmless on non-nginx containers)
+      '--tmpfs /var/cache/nginx:rw,noexec,nosuid,size=128m',
+      '--tmpfs /var/log/nginx:rw,noexec,nosuid,size=64m',
+      // Next.js/framework cache dirs
+      '--tmpfs /app/.next:rw,noexec,nosuid,size=512m',
+      '--tmpfs /app/.nuxt:rw,noexec,nosuid,size=256m',
+      '--tmpfs /app/.output:rw,noexec,nosuid,size=256m',
+      
+      // ── Security: Capability drops & isolation ──
+      '--security-opt no-new-privileges:true',
+      '--cap-drop ALL',
+      '--cap-add NET_BIND_SERVICE',
+      '--cap-add CHOWN',
+      '--cap-add SETUID',
+      '--cap-add SETGID',
+      
+      // ── Security: Process limits (prevent fork bombs) ──
+      '--pids-limit 256',
+      '--ulimit nofile=4096:8192',
+      '--ulimit nproc=256:512',
+      
+      // ── Network & Resource isolation ──
       '--network apployd-net',
+      '--network-alias',
+      `deployment-${input.deploymentId}`,
       `--memory ${memoryLimit}`,
+      '--memory-swap',
+      memoryLimit, // No swap usage
+      '--oom-kill-disable=false',
       `--cpu-period 100000 --cpu-quota ${cpuQuota}`,
-      `-p ${hostPort}:${input.port}`,
+      
+      // ── Port mapping ──
+      `-p 127.0.0.1:${hostPort}:${input.port}`,
+      
+      // ── Environment variables (sanitized) ──
       envArgs,
+      
       input.imageTag,
     ].join(' ');
 
