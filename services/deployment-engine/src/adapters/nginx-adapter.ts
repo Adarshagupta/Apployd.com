@@ -53,6 +53,5 @@ export class NginxAdapter {
       '    }',
       '}',
     ].join('\\n');
-    }
   }
 }

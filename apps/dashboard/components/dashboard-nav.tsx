@@ -11,7 +11,9 @@ const items = [
   { href: '/logs', label: 'Logs' },
   { href: '/team', label: 'Team' },
   { href: '/integrations', label: 'Integrations' },
+  { href: '/profile', label: 'Profile' },
   { href: '/settings', label: 'Settings' },
+  { href: '/help', label: 'Help' },
 ];
 
 export function DashboardNav() {

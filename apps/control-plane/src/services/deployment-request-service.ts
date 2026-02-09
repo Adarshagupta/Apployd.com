@@ -506,7 +506,7 @@ export class DeploymentRequestService {
         "reservedCpuMillicores" = "reservedCpuMillicores" + ${request.cpuMillicores},
         "reservedBandwidthGb" = "reservedBandwidthGb" + ${request.bandwidthGb}
       WHERE "id" = ${serverId}
-        AND "status" = ${ServerStatus.healthy}
+        AND "status" = 'healthy'::"ServerStatus"
         AND "reservedRamMb" + ${request.ramMb} <= "totalRamMb"
         AND "reservedCpuMillicores" + ${request.cpuMillicores} <= "totalCpuMillicores"
         AND "reservedBandwidthGb" + ${request.bandwidthGb} <= "totalBandwidthGb"
