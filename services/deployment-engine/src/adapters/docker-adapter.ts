@@ -386,13 +386,9 @@ export class DockerAdapter {
       'docker run -d',
       `--name apployd-${input.deploymentId}`,
       '--restart unless-stopped',
-      '--read-only',
+      // Temporarily disabled read-only for debugging - will re-enable with proper tmpfs mounts
+      // '--read-only',
       '--tmpfs /tmp:rw,noexec,nosuid',
-      '--tmpfs /app/__pycache__:rw,noexec,nosuid',
-      // nginx needs writable cache/pid/log dirs (harmless no-op on non-nginx images)
-      '--tmpfs /var/cache/nginx:rw,noexec,nosuid',
-      '--tmpfs /var/run:rw,noexec,nosuid',
-      '--tmpfs /var/log/nginx:rw,noexec,nosuid',
       '--network apployd-net',
       `--memory ${memoryLimit}`,
       `--cpu-period 100000 --cpu-quota ${cpuQuota}`,
