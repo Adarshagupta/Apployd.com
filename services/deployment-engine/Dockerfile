@@ -15,8 +15,14 @@ FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Install Docker CLI for managing deployments
-RUN apk add --no-cache docker-cli
+# Install Docker CLI and buildx for managing deployments
+RUN apk add --no-cache docker-cli curl && \
+    mkdir -p /root/.docker/cli-plugins && \
+    curl -fsSL "https://github.com/docker/buildx/releases/download/v0.12.0/buildx-v0.12.0.linux-amd64" \
+      -o /root/.docker/cli-plugins/docker-buildx && \
+    chmod +x /root/.docker/cli-plugins/docker-buildx && \
+    docker buildx install && \
+    apk del curl
 
 COPY --from=base /app /app
 EXPOSE 9102
