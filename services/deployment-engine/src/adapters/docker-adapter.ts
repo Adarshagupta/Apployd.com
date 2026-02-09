@@ -475,9 +475,10 @@ export class DockerAdapter {
       '--tmpfs /app/.npm:rw,noexec,nosuid,size=256m',
       '--tmpfs /app/.cache:rw,noexec,nosuid,size=256m',
       '--tmpfs /app/node_modules/.cache:rw,noexec,nosuid,size=256m',
-      // nginx runtime dirs (required for read-only with nginx)
+      // nginx runtime dirs (required for read-only with nginx:alpine)
       '--tmpfs /var/cache/nginx:rw,noexec,nosuid,size=128m',
       '--tmpfs /var/log/nginx:rw,noexec,nosuid,size=64m',
+      '--tmpfs /var/lib/nginx:rw,noexec,nosuid,size=64m',
       // Next.js/framework cache dirs
       '--tmpfs /app/.next:rw,noexec,nosuid,size=512m',
       '--tmpfs /app/.nuxt:rw,noexec,nosuid,size=256m',
