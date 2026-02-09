@@ -40,9 +40,17 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
     title: 'Integrations',
     subtitle: 'GitHub connection and repository-backed deployment settings.',
   },
+  '/profile': {
+    title: 'Profile',
+    subtitle: 'Personal account details, security status, and session controls.',
+  },
   '/settings': {
     title: 'Settings',
     subtitle: 'Account profile, security posture, and environment settings.',
+  },
+  '/help': {
+    title: 'Help Center',
+    subtitle: 'Get support, browse FAQs, and access technical documentation.',
   },
 };
 

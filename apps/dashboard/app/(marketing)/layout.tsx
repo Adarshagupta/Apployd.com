@@ -5,9 +5,11 @@ import styles from '../landing.module.css';
 
 const navLinks = [
   { href: '/pricing', label: 'Pricing' },
+  { href: '/docs', label: 'Docs' },
   { href: '/about', label: 'About' },
   { href: '/blog', label: 'Blog' },
   { href: '/security', label: 'Security' },
+  { href: '/help', label: 'Help' },
   { href: '/contact', label: 'Contact' },
 ];
 
@@ -66,6 +68,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
               <ul style={{ listStyle: 'none', margin: '0.6rem 0 0', padding: 0, display: 'grid', gap: '0.4rem' }}>
                 <li><Link href="/#product" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Features</Link></li>
                 <li><a href="/pricing" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Pricing</a></li>
+                <li><a href="/docs" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Docs</a></li>
                 <li><a href="/security" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Security</a></li>
               </ul>
             </div>
@@ -74,6 +77,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
               <ul style={{ listStyle: 'none', margin: '0.6rem 0 0', padding: 0, display: 'grid', gap: '0.4rem' }}>
                 <li><a href="/about" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>About</a></li>
                 <li><a href="/blog" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Blog</a></li>
+                <li><a href="/help" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Help</a></li>
                 <li><a href="/contact" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Contact</a></li>
               </ul>
             </div>
@@ -82,6 +86,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
               <ul style={{ listStyle: 'none', margin: '0.6rem 0 0', padding: 0, display: 'grid', gap: '0.4rem' }}>
                 <li><a href="/privacy" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Privacy</a></li>
                 <li><a href="/terms" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Terms</a></li>
+                <li><a href="/legal/compliance" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Compliance</a></li>
               </ul>
             </div>
           </div>

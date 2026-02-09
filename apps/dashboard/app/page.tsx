@@ -10,9 +10,11 @@ import styles from './landing.module.css';
 const navLinks = [
   { href: '#product', label: 'Product' },
   { href: '/pricing', label: 'Pricing' },
+  { href: '/docs', label: 'Docs' },
   { href: '/about', label: 'About' },
   { href: '/blog', label: 'Blog' },
   { href: '/security', label: 'Security' },
+  { href: '/help', label: 'Help' },
 ];
 
 const platformModules = [
@@ -728,6 +730,7 @@ export default function HomePage() {
               <ul style={{ listStyle: 'none', margin: '0.6rem 0 0', padding: 0, display: 'grid', gap: '0.4rem' }}>
                 <li><a href="#product" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Features</a></li>
                 <li><a href="/pricing" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Pricing</a></li>
+                <li><a href="/docs" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Docs</a></li>
                 <li><a href="/security" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Security</a></li>
               </ul>
             </div>
@@ -736,7 +739,16 @@ export default function HomePage() {
               <ul style={{ listStyle: 'none', margin: '0.6rem 0 0', padding: 0, display: 'grid', gap: '0.4rem' }}>
                 <li><a href="/about" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>About</a></li>
                 <li><a href="/blog" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Blog</a></li>
+                <li><a href="/help" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Help</a></li>
                 <li><a href="/contact" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Contact</a></li>
+              </ul>
+            </div>
+            <div>
+              <p style={{ margin: 0, fontWeight: 600, fontSize: '0.82rem', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'rgba(200,210,240,0.5)' }}>Legal</p>
+              <ul style={{ listStyle: 'none', margin: '0.6rem 0 0', padding: 0, display: 'grid', gap: '0.4rem' }}>
+                <li><a href="/privacy" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Privacy</a></li>
+                <li><a href="/terms" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Terms</a></li>
+                <li><a href="/legal/compliance" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Compliance</a></li>
               </ul>
             </div>
           </div>
