@@ -15,7 +15,7 @@ interface LogRow {
 }
 
 export default function LogsPage() {
-  const { selectedOrganizationId: _selectedOrganizationId, projects } = useWorkspaceContext();
+  const { projects } = useWorkspaceContext();
   const [projectId, setProjectId] = useState('');
   const [rows, setRows] = useState<LogRow[]>([]);
   const [message, setMessage] = useState('Select organization and project to view logs.');

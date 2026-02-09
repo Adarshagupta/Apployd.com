@@ -34,7 +34,6 @@ interface GitHubStatus {
 export default function IntegrationsPage() {
   const searchParams = useSearchParams();
   const {
-    selectedOrganizationId: _selectedOrganizationId,
     projects,
     refresh,
   } = useWorkspaceContext();
