@@ -500,6 +500,7 @@ export class DeploymentRequestService {
     serverId: string,
     request: CapacityRequest,
   ): Promise<boolean> {
+    const healthyStatus = ServerStatus.healthy;
     const updatedRows = await tx.$executeRaw`
       UPDATE "servers"
       SET
@@ -507,7 +508,7 @@ export class DeploymentRequestService {
         "reservedCpuMillicores" = "reservedCpuMillicores" + ${request.cpuMillicores},
         "reservedBandwidthGb" = "reservedBandwidthGb" + ${request.bandwidthGb}
       WHERE "id" = ${serverId}
-        AND "status" = ${ServerStatus.healthy}
+        AND "status" = ${healthyStatus}::"ServerStatus"
         AND "reservedRamMb" + ${request.ramMb} <= "totalRamMb"
         AND "reservedCpuMillicores" + ${request.cpuMillicores} <= "totalCpuMillicores"
         AND "reservedBandwidthGb" + ${request.bandwidthGb} <= "totalBandwidthGb"
