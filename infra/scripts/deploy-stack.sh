@@ -27,7 +27,6 @@ npm --workspace services/deployment-engine run build
 npm --workspace apps/dashboard run build
 
 compose_services=(
-  postgres
   redis
   control-plane
   deployment-engine

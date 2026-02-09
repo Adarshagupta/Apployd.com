@@ -1,5 +1,4 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import type { FastifyJWT } from '@fastify/jwt';
 
 interface JwtUser {
   userId: string;
@@ -9,15 +8,23 @@ interface JwtUser {
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate(request: FastifyRequest, reply: FastifyReply): Promise<void>;
-    jwt: FastifyJWT;
+    jwt: {
+      sign(payload: object, options?: object): string;
+      verify(token: string, options?: object): object;
+      decode(token: string, options?: object): object | null;
+    };
   }
 
   interface FastifyRequest {
     user: JwtUser;
     rawBody?: Buffer;
+    jwtVerify(options?: object): Promise<void>;
+    jwtDecode(options?: object): Promise<object | null>;
   }
 
   interface FastifyReply {
+    jwtSign(payload: object, options?: object): Promise<string>;
+
     // @fastify/sensible HTTP error reply helpers
     badRequest(message?: string): FastifyReply;
     unauthorized(message?: string): FastifyReply;
