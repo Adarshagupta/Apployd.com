@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { LogMessage } from '@/lib/use-container-logs';
+import { LogMessage } from '../lib/use-container-logs';
 
 interface ContainerLogViewerProps {
   logs: LogMessage[];
