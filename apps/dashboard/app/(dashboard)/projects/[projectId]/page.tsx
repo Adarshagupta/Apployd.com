@@ -209,8 +209,8 @@ export default function ProjectDetailPage() {
       setContainers(fetchedContainers);
       
       // Auto-select first container if none selected
-      if (!selectedContainerId && fetchedContainers.length > 0) {
-        setSelectedContainerId(fetchedContainers[0].id);
+      if (!selectedContainerId && fetchedContainers.length > 0 && fetchedContainers[0]) {
+        setSelectedContainerId(fetchedContainers[0].id ?? null);
       }
     } catch {
       if (!silent) {
