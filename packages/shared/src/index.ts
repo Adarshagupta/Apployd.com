@@ -13,7 +13,7 @@ export interface AllocationRequest {
   bandwidthGb: number;
 }
 
-export type ServiceType = 'web_service' | 'static_site';
+export type ServiceType = 'web_service' | 'static_site' | 'python';
 
 export type DeploymentEnvironment = 'production' | 'preview';
 

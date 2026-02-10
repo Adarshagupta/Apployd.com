@@ -73,7 +73,7 @@ interface CreateDeploymentInput {
   port?: number;
   env?: Record<string, string>;
   idempotencyKey?: string;
-  serviceType?: 'web_service' | 'static_site';
+  serviceType?: 'web_service' | 'static_site' | 'python';
   outputDirectory?: string;
   /** For rollback: reuse an existing image without building */
   imageTag?: string;
@@ -338,7 +338,7 @@ export class DeploymentRequestService {
       port: resolvedPort,
       env: { ...decryptedSecrets, ...(input.env ?? {}) },
       ...(resolvedEnvironment && { environment: resolvedEnvironment }),
-      serviceType: resolvedServiceType as 'web_service' | 'static_site',
+      serviceType: resolvedServiceType as 'web_service' | 'static_site' | 'python',
       ...(resolvedOutputDirectory && { outputDirectory: resolvedOutputDirectory }),
     };
 

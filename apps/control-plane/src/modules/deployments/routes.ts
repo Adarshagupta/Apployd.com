@@ -34,7 +34,7 @@ const createDeploymentSchema = z.object({
   startCommand: z.string().min(1).max(300).optional(),
   port: z.number().int().min(1).max(65535).optional(),
   env: envSchema.default({}),
-  serviceType: z.enum(['web_service', 'static_site']).optional(),
+  serviceType: z.enum(['web_service', 'static_site', 'python']).optional(),
   outputDirectory: z.string().max(300).optional(),
 });
 

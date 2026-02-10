@@ -238,7 +238,7 @@ export default function ProjectDetailPage() {
     startCommand: '',
     targetPort: 3000,
     autoDeployEnabled: true,
-    serviceType: 'web_service' as 'web_service' | 'static_site',
+    serviceType: 'web_service' as 'web_service' | 'static_site' | 'python',
     outputDirectory: '',
     ram: 512,
     cpu: 500,
@@ -255,7 +255,7 @@ export default function ProjectDetailPage() {
       startCommand: project.startCommand ?? '',
       targetPort: project.targetPort ?? 3000,
       autoDeployEnabled: project.autoDeployEnabled,
-      serviceType: (project.serviceType as 'web_service' | 'static_site') ?? 'web_service',
+      serviceType: (project.serviceType as 'web_service' | 'static_site' | 'python') ?? 'web_service',
       outputDirectory: project.outputDirectory ?? '',
       ram: project.resourceRamMb,
       cpu: project.resourceCpuMillicore,
@@ -812,7 +812,19 @@ export default function ProjectDetailPage() {
                   onClick={() => setProjectSettings((p) => ({ ...p, serviceType: 'web_service' }))}
                 >
                   <span className="block">Web Service</span>
-                  <span className="block text-[10px] opacity-70">Backend, API, full-stack</span>
+                  <span className="block text-[10px] opacity-70">Backend, API, full-stack (Node.js)</span>
+                </button>
+                <button
+                  type="button"
+                  className={`px-4 py-2 text-xs font-medium transition-colors ${
+                    projectSettings.serviceType === 'python'
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                  onClick={() => setProjectSettings((p) => ({ ...p, serviceType: 'python' }))}
+                >
+                  <span className="block">Python</span>
+                  <span className="block text-[10px] opacity-70">Django, Flask, FastAPI</span>
                 </button>
                 <button
                   type="button"

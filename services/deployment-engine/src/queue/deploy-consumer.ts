@@ -24,7 +24,7 @@ const payloadSchema = z.object({
     startCommand: z.string().optional(),
     port: z.number().int(),
     environment: z.enum(['production', 'preview']).optional(),
-    serviceType: z.enum(['web_service', 'static_site']).optional(),
+    serviceType: z.enum(['web_service', 'static_site', 'python']).optional(),
     outputDirectory: z.string().optional(),
   }).transform(req => {
     // Remove undefined values from optional fields for exactOptionalPropertyTypes compliance

@@ -56,11 +56,147 @@ function sanitizeEnvForLog(env: Record<string, string>): string {
  *
  * Result: First build is full speed; subsequent builds are 2-10× faster.
  */
-function universalDockerfile(serviceType: 'web_service' | 'static_site' = 'web_service', projectId = 'default'): string {
+function universalDockerfile(serviceType: 'web_service' | 'static_site' | 'python' = 'web_service', projectId = 'default'): string {
   if (serviceType === 'static_site') {
     return staticSiteDockerfile(projectId);
   }
+  if (serviceType === 'python') {
+    return pythonDockerfile(projectId);
+  }
   return webServiceDockerfile(projectId);
+}
+
+/**
+ * Dockerfile for Python web service projects (Django, Flask, FastAPI, etc.).
+ * Uses BuildKit cache mounts for fast pip install between builds.
+ */
+function pythonDockerfile(projectId: string): string {
+  return [
+    '# syntax=docker/dockerfile:1',
+    '',
+    '# ---- Stage 1: Clone repository ----',
+    'FROM alpine/git:latest AS source',
+    'ARG GIT_URL',
+    'ARG GIT_BRANCH=""',
+    'ARG GIT_SHA=""',
+    'WORKDIR /repo',
+    'RUN if [ -n "${GIT_BRANCH}" ]; then git clone --depth=1 --branch "${GIT_BRANCH}" "${GIT_URL}" .; else git clone --depth=1 "${GIT_URL}" .; fi && \\',
+    '    if [ -n "${GIT_SHA}" ]; then git fetch --depth=1 origin "${GIT_SHA}" && git checkout "${GIT_SHA}"; fi',
+    '',
+    '# ---- Stage 2: Build Python application ----',
+    'FROM python:3.11-slim',
+    '',
+    '# Install system dependencies commonly needed for Python packages',
+    'RUN apt-get update && apt-get install -y --no-install-recommends \\',
+    '    build-essential gcc g++ \\',
+    '    libpq-dev libmariadb-dev libmariadb-dev-compat \\',
+    '    libffi-dev libssl-dev \\',
+    '    libxml2-dev libxslt-dev \\',
+    '    libjpeg-dev libpng-dev libwebp-dev \\',
+    '    curl git ca-certificates \\',
+    '    && rm -rf /var/lib/apt/lists/*',
+    '',
+    'ARG ROOT_DIR=.',
+    'WORKDIR /app',
+    '',
+    '# ── Copy dependency files first for better caching ──',
+    'COPY --from=source /repo/${ROOT_DIR}/requirements.txt* ./requirements.txt',
+    'RUN --mount=type=bind,from=source,source=/repo,target=/src \\',
+    '    for f in Pipfile Pipfile.lock pyproject.toml poetry.lock setup.py setup.cfg; do \\',
+    '      [ -f "/src/${ROOT_DIR}/$f" ] && cp "/src/${ROOT_DIR}/$f" ./ || true ; \\',
+    '    done',
+    '',
+    '# ── Install Python dependencies with persistent pip cache ──',
+    'RUN --mount=type=cache,id=pip-' + projectId + ',target=/root/.cache/pip \\',
+    '    set -ex; \\',
+    '    if [ -f requirements.txt ]; then \\',
+    '      echo ">>> Installing from requirements.txt"; \\',
+    '      pip install --no-deps -r requirements.txt || pip install -r requirements.txt; \\',
+    '    elif [ -f Pipfile ]; then \\',
+    '      echo ">>> Installing pipenv and dependencies"; \\',
+    '      pip install pipenv && pipenv install --system --deploy || pipenv install --system; \\',
+    '    elif [ -f pyproject.toml ]; then \\',
+    '      if grep -q "\\[tool.poetry\\]" pyproject.toml; then \\',
+    '        echo ">>> Installing poetry and dependencies"; \\',
+    '        pip install poetry && poetry config virtualenvs.create false && poetry install --no-dev --no-interaction --no-ansi; \\',
+    '      else \\',
+    '        echo ">>> Installing from pyproject.toml (pip)"; \\',
+    '        pip install .; \\',
+    '      fi; \\',
+    '    elif [ -f setup.py ]; then \\',
+    '      echo ">>> Installing from setup.py"; \\',
+    '      pip install .; \\',
+    '    else \\',
+    '      echo ">>> No dependency file found"; \\',
+    '    fi',
+    '',
+    '# Install common WSGI/ASGI servers if not already present',
+    'RUN pip install gunicorn uvicorn 2>/dev/null || true',
+    '',
+    '# ── Copy application code ──',
+    'COPY --from=source /repo/${ROOT_DIR}/ .',
+    '',
+    '# ── Run build command if provided ──',
+    'ARG BUILD_CMD=""',
+    'RUN if [ -n "${BUILD_CMD}" ]; then \\',
+    '      echo ">>> Running custom build: ${BUILD_CMD}"; \\',
+    '      sh -c "${BUILD_CMD}"; \\',
+    '    fi',
+    '',
+    '# ── Configure runtime ──',
+    'ARG APP_PORT=3000',
+    'ENV PORT=${APP_PORT}',
+    'ENV PYTHONUNBUFFERED=1',
+    'EXPOSE ${APP_PORT}',
+    '',
+    '# ── Auto-detect start command ──',
+    'ARG START_CMD=""',
+    'RUN set -e; \\',
+    '    if [ -n "${START_CMD}" ]; then \\',
+    '      echo ">>> Using custom start command: ${START_CMD}"; \\',
+    '      printf \'#!/bin/sh\\nexec %s\\n\' "${START_CMD}" > /entrypoint.sh; \\',
+    '    elif [ -f manage.py ]; then \\',
+    '      echo ">>> Detected Django project"; \\',
+    '      if grep -q "DJANGO_SETTINGS_MODULE" manage.py || [ -n "$(find . -name settings.py 2>/dev/null | head -1)" ]; then \\',
+    '        printf \'#!/bin/sh\\nexec gunicorn --bind 0.0.0.0:${PORT:-3000} --workers 2 $(python manage.py diffsettings 2>/dev/null | grep -oP "WSGI_APPLICATION = .\\047\\K[^\\047]+" || echo "$(basename $(pwd)).wsgi:application")\\n\' > /entrypoint.sh; \\',
+    '      else \\',
+    '        printf \'#!/bin/sh\\nexec python manage.py runserver 0.0.0.0:${PORT:-3000}\\n\' > /entrypoint.sh; \\',
+    '      fi; \\',
+    '    elif [ -f app.py ]; then \\',
+    '      echo ">>> Detected Flask app (app.py)"; \\',
+    '      if python -c "import gunicorn" 2>/dev/null; then \\',
+    '        printf \'#!/bin/sh\\nexec gunicorn --bind 0.0.0.0:${PORT:-3000} --workers 2 app:app\\n\' > /entrypoint.sh; \\',
+    '      else \\',
+    '        printf \'#!/bin/sh\\nexec python -m flask run --host=0.0.0.0 --port=${PORT:-3000}\\n\' > /entrypoint.sh; \\',
+    '      fi; \\',
+    '    elif [ -f main.py ]; then \\',
+    '      echo ">>> Detected main.py"; \\',
+    '      if grep -q "fastapi\\|FastAPI" main.py; then \\',
+    '        echo ">>> FastAPI detected, using uvicorn"; \\',
+    '        printf \'#!/bin/sh\\nexec uvicorn main:app --host 0.0.0.0 --port ${PORT:-3000}\\n\' > /entrypoint.sh; \\',
+    '      elif grep -q "flask\\|Flask" main.py; then \\',
+    '        echo ">>> Flask detected"; \\',
+    '        if python -c "import gunicorn" 2>/dev/null; then \\',
+    '          printf \'#!/bin/sh\\nexec gunicorn --bind 0.0.0.0:${PORT:-3000} --workers 2 main:app\\n\' > /entrypoint.sh; \\',
+    '        else \\',
+    '          printf \'#!/bin/sh\\nexec python main.py\\n\' > /entrypoint.sh; \\',
+    '        fi; \\',
+    '      else \\',
+    '        printf \'#!/bin/sh\\nexec python main.py\\n\' > /entrypoint.sh; \\',
+    '      fi; \\',
+    '    elif [ -f wsgi.py ]; then \\',
+    '      echo ">>> Detected wsgi.py"; \\',
+    '      printf \'#!/bin/sh\\nexec gunicorn --bind 0.0.0.0:${PORT:-3000} --workers 2 wsgi:application\\n\' > /entrypoint.sh; \\',
+    '    elif [ -f asgi.py ]; then \\',
+    '      echo ">>> Detected asgi.py"; \\',
+    '      printf \'#!/bin/sh\\nexec uvicorn asgi:application --host 0.0.0.0 --port ${PORT:-3000}\\n\' > /entrypoint.sh; \\',
+    '    else \\',
+    '      echo ">>> No Python entry point detected, will try to run main.py"; \\',
+    '      printf \'#!/bin/sh\\nif [ -f main.py ]; then exec python main.py; elif [ -f app.py ]; then exec python app.py; else echo "Error: No entry point found"; exit 1; fi\\n\' > /entrypoint.sh; \\',
+    '    fi && chmod +x /entrypoint.sh',
+    '',
+    'ENTRYPOINT ["/entrypoint.sh"]',
+  ].join('\n');
 }
 
 /**
@@ -351,7 +487,7 @@ interface BuildImageInput {
   buildCommand?: string;
   startCommand?: string;
   port: number;
-  serviceType?: 'web_service' | 'static_site';
+  serviceType?: 'web_service' | 'static_site' | 'python';
   outputDirectory?: string;
 }
 

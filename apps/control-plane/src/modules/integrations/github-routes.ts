@@ -42,7 +42,7 @@ const updateGitSettingsSchema = z.object({
   targetPort: z.number().int().min(1).max(65535).optional(),
   autoDeployEnabled: z.boolean().optional(),
   previewDeploymentsEnabled: z.boolean().optional(),
-  serviceType: z.enum(['web_service', 'static_site']).optional(),
+  serviceType: z.enum(['web_service', 'static_site', 'python']).optional(),
   outputDirectory: z.string().trim().max(300).nullable().optional(),
 });
 

@@ -42,8 +42,8 @@ export function DeployForm({
 }) {
   const [showOverrides, setShowOverrides] = useState(false);
   const [environment, setEnvironment] = useState<'production' | 'preview'>('production');
-  const [serviceType, setServiceType] = useState<'web_service' | 'static_site'>(
-    (defaults?.serviceType as 'web_service' | 'static_site') || 'web_service',
+  const [serviceType, setServiceType] = useState<'web_service' | 'static_site' | 'python'>(
+    (defaults?.serviceType as 'web_service' | 'static_site' | 'python') || 'web_service',
   );
   const [outputDirectory, setOutputDirectory] = useState(defaults?.outputDirectory ?? '');
   const [domain, setDomain] = useState('');
@@ -72,7 +72,7 @@ export function DeployForm({
     setBuildCommand('');
     setPort('');
     setShowOverrides(false);
-    setServiceType((defaults?.serviceType as 'web_service' | 'static_site') || 'web_service');
+    setServiceType((defaults?.serviceType as 'web_service' | 'static_site' | 'python') || 'web_service');
     setOutputDirectory(defaults?.outputDirectory ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
@@ -310,7 +310,19 @@ export function DeployForm({
             onClick={() => setServiceType('web_service')}
           >
             <span className="block text-xs">Web Service</span>
-            <span className="block text-[10px] opacity-70 mt-0.5">Backend, API, full-stack</span>
+            <span className="block text-[10px] opacity-70 mt-0.5">Backend, API, full-stack (Node.js)</span>
+          </button>
+          <button
+            type="button"
+            className={`px-4 py-2 text-xs font-medium transition-colors ${
+              serviceType === 'python'
+                ? 'bg-slate-900 text-white'
+                : 'bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+            onClick={() => setServiceType('python')}
+          >
+            <span className="block text-xs">Python</span>
+            <span className="block text-[10px] opacity-70 mt-0.5">Django, Flask, FastAPI</span>
           </button>
           <button
             type="button"
