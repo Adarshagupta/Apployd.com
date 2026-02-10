@@ -579,13 +579,13 @@ export default function ProjectDetailPage() {
         )}
 
         {/* ---- Tab bar ---- */}
-        <nav className="mt-5 flex gap-0 border-b border-slate-200">
+        <nav className="mt-5 flex gap-0 overflow-x-auto border-b border-slate-200 scrollbar-hide">
           {TABS.map((tab) => (
             <button
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`relative px-4 py-2.5 text-sm font-medium transition ${
+              className={`relative whitespace-nowrap px-4 py-2.5 text-sm font-medium transition ${
                 activeTab === tab.key
                   ? 'text-slate-900'
                   : 'text-slate-500 hover:text-slate-700'
