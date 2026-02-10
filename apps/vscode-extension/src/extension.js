@@ -136,6 +136,7 @@ class ApploydClient {
     });
   }
 
+  
   async verifyEmail(email, code) {
     return this.request('/auth/verify-email', {
       method: 'POST',
