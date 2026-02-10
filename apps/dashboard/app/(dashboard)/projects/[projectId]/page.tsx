@@ -1009,15 +1009,15 @@ export default function ProjectDetailPage() {
                   <div className="grid gap-2 md:grid-cols-2 text-sm">
                     <div>
                       <span className="text-xs text-slate-600">Type</span>
-                      <p className="mono rounded bg-white/70 px-2 py-1 text-slate-800">CNAME</p>
+                      <p className="mono rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-900">CNAME</p>
                     </div>
                     <div>
                       <span className="text-xs text-slate-600">Host / Name</span>
-                      <p className="mono rounded bg-white/70 px-2 py-1 text-slate-800 select-all">{domainInstructions.cname.host}</p>
+                      <p className="mono rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-900 select-all">{domainInstructions.cname.host}</p>
                     </div>
                     <div className="md:col-span-2">
                       <span className="text-xs text-slate-600">Points to</span>
-                      <p className="mono rounded bg-white/70 px-2 py-1 text-slate-800 select-all">{domainInstructions.cname.value}</p>
+                      <p className="mono rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-900 select-all">{domainInstructions.cname.value}</p>
                     </div>
                   </div>
                 </div>
@@ -1027,15 +1027,15 @@ export default function ProjectDetailPage() {
                   <div className="grid gap-2 md:grid-cols-2 text-sm">
                     <div>
                       <span className="text-xs text-slate-600">Type</span>
-                      <p className="mono rounded bg-white/70 px-2 py-1 text-slate-800">TXT</p>
+                      <p className="mono rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-900">TXT</p>
                     </div>
                     <div>
                       <span className="text-xs text-slate-600">Host / Name</span>
-                      <p className="mono rounded bg-white/70 px-2 py-1 text-slate-800 select-all">{domainInstructions.txt.host}</p>
+                      <p className="mono rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-900 select-all">{domainInstructions.txt.host}</p>
                     </div>
                     <div className="md:col-span-2">
                       <span className="text-xs text-slate-600">Value</span>
-                      <p className="mono rounded bg-white/70 px-2 py-1 text-slate-800 select-all">{domainInstructions.txt.value}</p>
+                      <p className="mono rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-900 select-all">{domainInstructions.txt.value}</p>
                     </div>
                   </div>
                 </div>

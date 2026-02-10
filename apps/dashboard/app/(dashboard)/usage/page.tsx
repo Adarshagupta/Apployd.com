@@ -54,6 +54,7 @@ export default function UsagePage() {
   const { selectedOrganizationId } = useWorkspaceContext();
   const [summary, setSummary] = useState<{
     pools: { ramMb: number; cpuMillicores: number; bandwidthGb: number };
+    allocated: { ramMb: number; cpuMillicores: number; bandwidthGb: number };
     usage: Record<string, string>;
   } | null>(null);
   const [cpuData, setCpuData] = useState<Array<{ label: string; value: number }>>([]);
@@ -149,6 +150,46 @@ export default function UsagePage() {
 
   return (
     <div className="space-y-4">
+      {/* Over-allocation Warning Banner */}
+      {summary && (
+        summary.allocated.ramMb > summary.pools.ramMb ||
+        summary.allocated.cpuMillicores > summary.pools.cpuMillicores ||
+        summary.allocated.bandwidthGb > summary.pools.bandwidthGb
+      ) && (
+        <div className="rounded-xl border-2 border-red-500 bg-red-50 p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">⚠️</span>
+            <div className="flex-1">
+              <h3 className="font-semibold text-red-900">Resource Pool Exceeded</h3>
+              <p className="mt-1 text-sm text-red-800">
+                Your projects have allocated more resources than your subscription allows. 
+                {summary.allocated.ramMb > summary.pools.ramMb && (
+                  <span className="block mt-1">
+                    • RAM: {summary.allocated.ramMb} MB allocated / {summary.pools.ramMb} MB pool 
+                    ({((summary.allocated.ramMb / summary.pools.ramMb - 1) * 100).toFixed(0)}% over limit)
+                  </span>
+                )}
+                {summary.allocated.cpuMillicores > summary.pools.cpuMillicores && (
+                  <span className="block mt-1">
+                    • CPU: {summary.allocated.cpuMillicores} mCPU allocated / {summary.pools.cpuMillicores} mCPU pool 
+                    ({((summary.allocated.cpuMillicores / summary.pools.cpuMillicores - 1) * 100).toFixed(0)}% over limit)
+                  </span>
+                )}
+                {summary.allocated.bandwidthGb > summary.pools.bandwidthGb && (
+                  <span className="block mt-1">
+                    • Bandwidth: {summary.allocated.bandwidthGb} GB allocated / {summary.pools.bandwidthGb} GB pool 
+                    ({((summary.allocated.bandwidthGb / summary.pools.bandwidthGb - 1) * 100).toFixed(0)}% over limit)
+                  </span>
+                )}
+              </p>
+              <p className="mt-2 text-sm font-semibold text-red-900">
+                Action Required: Reduce project allocations or upgrade your plan to avoid service disruptions.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <SectionCard title="Usage Summary" subtitle="Live metering against the active subscription pool.">
 
         {loading && !summary ? (
@@ -162,29 +203,137 @@ export default function UsagePage() {
             ))}
           </div>
         ) : summary ? (
-          <div className="grid gap-3 md:grid-cols-3">
+          <>
+            {/* Current Allocation vs Pool Limits */}
+            <div className="mb-6">
+              <h3 className="mb-3 text-sm font-semibold text-slate-700">Resource Allocation</h3>
+              <p className="mb-3 text-xs text-slate-600">Current resources allocated to projects vs subscription pool limits.</p>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="metric-card">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">CPU</p>
+                  <p className="mt-2 text-xl font-semibold text-slate-900">
+                    {summary.allocated.cpuMillicores.toLocaleString()} mCPU
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className={`h-full ${
+                          summary.allocated.cpuMillicores > summary.pools.cpuMillicores
+                            ? 'bg-red-500'
+                            : summary.allocated.cpuMillicores > summary.pools.cpuMillicores * 0.8
+                              ? 'bg-yellow-500'
+                              : 'bg-cyan-500'
+                        }`}
+                        style={{
+                          width: `${Math.min(100, (summary.allocated.cpuMillicores / summary.pools.cpuMillicores) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="text-xs text-slate-600">
+                      {((summary.allocated.cpuMillicores / summary.pools.cpuMillicores) * 100).toFixed(0)}%
+                    </p>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    of {summary.pools.cpuMillicores} mCPU pool
+                    {summary.allocated.cpuMillicores > summary.pools.cpuMillicores && (
+                      <span className="ml-1 font-semibold text-red-600">⚠ Over limit!</span>
+                    )}
+                  </p>
+                </div>
+                <div className="metric-card">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">RAM</p>
+                  <p className="mt-2 text-xl font-semibold text-slate-900">
+                    {summary.allocated.ramMb.toLocaleString()} MB
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className={`h-full ${
+                          summary.allocated.ramMb > summary.pools.ramMb
+                            ? 'bg-red-500'
+                            : summary.allocated.ramMb > summary.pools.ramMb * 0.8
+                              ? 'bg-yellow-500'
+                              : 'bg-cyan-500'
+                        }`}
+                        style={{
+                          width: `${Math.min(100, (summary.allocated.ramMb / summary.pools.ramMb) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="text-xs text-slate-600">
+                      {((summary.allocated.ramMb / summary.pools.ramMb) * 100).toFixed(0)}%
+                    </p>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    of {summary.pools.ramMb} MB pool
+                    {summary.allocated.ramMb > summary.pools.ramMb && (
+                      <span className="ml-1 font-semibold text-red-600">⚠ Over limit!</span>
+                    )}
+                  </p>
+                </div>
+                <div className="metric-card">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Bandwidth</p>
+                  <p className="mt-2 text-xl font-semibold text-slate-900">
+                    {summary.allocated.bandwidthGb.toLocaleString()} GB
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className={`h-full ${
+                          summary.allocated.bandwidthGb > summary.pools.bandwidthGb
+                            ? 'bg-red-500'
+                            : summary.allocated.bandwidthGb > summary.pools.bandwidthGb * 0.8
+                              ? 'bg-yellow-500'
+                              : 'bg-cyan-500'
+                        }`}
+                        style={{
+                          width: `${Math.min(100, (summary.allocated.bandwidthGb / summary.pools.bandwidthGb) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="text-xs text-slate-600">
+                      {((summary.allocated.bandwidthGb / summary.pools.bandwidthGb) * 100).toFixed(0)}%
+                    </p>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    of {summary.pools.bandwidthGb} GB pool
+                    {summary.allocated.bandwidthGb > summary.pools.bandwidthGb && (
+                      <span className="ml-1 font-semibold text-red-600">⚠ Over limit!</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Cumulative Metered Usage */}
+            <div>
+              <h3 className="mb-3 text-sm font-semibold text-slate-700">Metered Consumption</h3>
+              <p className="mb-3 text-xs text-slate-600">Cumulative usage during current billing period for cost tracking.</p>
+              <div className="grid gap-3 md:grid-cols-3">
             <div className="metric-card">
               <p className="text-xs uppercase tracking-[0.12em] text-slate-500">CPU</p>
               <p className="mt-2 text-xl font-semibold text-slate-900">
                 {formatCpu(summary.usage.cpu_millicore_seconds ?? '0')}
               </p>
-              <p className="mt-0.5 text-xs text-slate-500">pool: {summary.pools.cpuMillicores} mCPU</p>
+              <p className="mt-0.5 text-xs text-slate-500">millicore-seconds accumulated</p>
             </div>
             <div className="metric-card">
               <p className="text-xs uppercase tracking-[0.12em] text-slate-500">RAM</p>
               <p className="mt-2 text-xl font-semibold text-slate-900">
                 {formatRam(summary.usage.ram_mb_seconds ?? '0')}
               </p>
-              <p className="mt-0.5 text-xs text-slate-500">pool: {summary.pools.ramMb} MB</p>
+              <p className="mt-0.5 text-xs text-slate-500">megabyte-seconds accumulated</p>
             </div>
             <div className="metric-card">
               <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Bandwidth</p>
               <p className="mt-2 text-xl font-semibold text-slate-900">
                 {formatBandwidth(summary.usage.bandwidth_bytes ?? '0')}
               </p>
-              <p className="mt-0.5 text-xs text-slate-500">pool: {summary.pools.bandwidthGb} GB</p>
+              <p className="mt-0.5 text-xs text-slate-500">total data transferred</p>
             </div>
           </div>
+            </div>
+          </>
         ) : (
           <p className="text-sm text-slate-600">Select an organization to load usage metrics.</p>
         )}

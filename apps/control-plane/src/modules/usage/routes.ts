@@ -56,6 +56,16 @@ export const usageRoutes: FastifyPluginAsync = async (app) => {
       return acc;
     }, {});
 
+    // Calculate current allocation across all projects
+    const currentAllocation = await prisma.project.aggregate({
+      where: { organizationId: query.organizationId },
+      _sum: {
+        resourceRamMb: true,
+        resourceCpuMillicore: true,
+        resourceBandwidthGb: true,
+      },
+    });
+
     return {
       subscription,
       usage: totals,
@@ -63,6 +73,11 @@ export const usageRoutes: FastifyPluginAsync = async (app) => {
         ramMb: subscription.poolRamMb,
         cpuMillicores: subscription.poolCpuMillicores,
         bandwidthGb: subscription.poolBandwidthGb,
+      },
+      allocated: {
+        ramMb: currentAllocation._sum.resourceRamMb ?? 0,
+        cpuMillicores: currentAllocation._sum.resourceCpuMillicore ?? 0,
+        bandwidthGb: currentAllocation._sum.resourceBandwidthGb ?? 0,
       },
     };
   });
