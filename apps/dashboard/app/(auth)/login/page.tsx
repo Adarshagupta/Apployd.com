@@ -22,6 +22,17 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
+    // Redirect if already logged in
+    const token = window.localStorage.getItem('apployd_token');
+    if (token) {
+      const nextRaw = searchParams?.get('next') ?? null;
+      const nextPath =
+        nextRaw && nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : '/overview';
+      router.replace(nextPath as any);
+    }
+  }, [router, searchParams]);
+
+  useEffect(() => {
     const githubLoginState = searchParams?.get('githubLogin');
     const githubMessage = searchParams?.get('githubMessage');
 

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { LandingThreeBackground } from '../../../components/landing-three-background';
 import { SectionThreeBackground } from '../../../components/landing-section-three';
@@ -25,6 +25,14 @@ export default function SignupPage() {
   const [githubSubmitting, setGithubSubmitting] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  useEffect(() => {
+    // Redirect if already logged in
+    const token = window.localStorage.getItem('apployd_token');
+    if (token) {
+      router.replace('/overview');
+    }
+  }, [router]);
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();

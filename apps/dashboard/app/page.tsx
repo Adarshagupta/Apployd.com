@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { AuthRedirect } from '../components/auth-redirect';
 import { LandingParallaxController } from '../components/landing-parallax-controller';
 import { ProductStepTracker } from '../components/product-step-tracker';
 import { SectionThreeBackground } from '../components/landing-section-three';
@@ -416,6 +417,7 @@ function WorkflowBlocks() {
 export default function HomePage() {
   return (
     <main className={styles.page}>
+      <AuthRedirect to="/overview" />
       <LandingParallaxController />
       <LandingThreeBackground className={styles.threeCanvas ?? ''} />
       <div className={styles.pageVignette} />
