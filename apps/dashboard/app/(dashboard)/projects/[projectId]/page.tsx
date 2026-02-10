@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 import { DeployForm } from '../../../../components/deploy-form';
+import { LogsTable } from '../../../../components/logs-table';
 import { ResourceSlider } from '../../../../components/resource-slider';
 import { apiClient } from '../../../../lib/api';
 import { useWorkspaceContext } from '../../../../components/workspace-provider';
@@ -87,7 +88,7 @@ interface ProjectUsageDetails {
   };
 }
 
-type Tab = 'deployments' | 'settings' | 'domains' | 'environment' | 'usage' | 'deploy';
+type Tab = 'deployments' | 'settings' | 'domains' | 'environment' | 'usage' | 'logs' | 'deploy';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'deployments', label: 'Deployments' },
@@ -95,6 +96,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'domains', label: 'Domains' },
   { key: 'environment', label: 'Environment Variables' },
   { key: 'usage', label: 'Usage' },
+  { key: 'logs', label: 'Logs' },
   { key: 'deploy', label: 'Deploy' },
 ];
 
@@ -126,6 +128,17 @@ export default function ProjectDetailPage() {
   /* ---- Usage state ---- */
   const [usageDetails, setUsageDetails] = useState<ProjectUsageDetails | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
+
+  /* ---- Logs state ---- */
+  interface LogRow {
+    timestamp: string;
+    level: string;
+    message: string;
+    source: string;
+  }
+  const [logs, setLogs] = useState<LogRow[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [autoRefreshLogs, setAutoRefreshLogs] = useState(true);
 
   const loadDeployments = useCallback(async (options?: { silent?: boolean }) => {
     if (!projectId) return;
@@ -166,6 +179,30 @@ export default function ProjectDetailPage() {
     }
   }, [projectId]);
 
+  const loadLogs = useCallback(async (options?: { silent?: boolean }) => {
+    if (!projectId) {
+      setLogs([]);
+      return;
+    }
+
+    const silent = options?.silent ?? false;
+    try {
+      if (!silent) {
+        setLogsLoading(true);
+      }
+      const data = (await apiClient.get(`/logs?projectId=${projectId}&limit=200`)) as { logs?: LogRow[] };
+      setLogs(data.logs ?? []);
+    } catch {
+      if (!silent) {
+        setLogs([]);
+      }
+    } finally {
+      if (!silent) {
+        setLogsLoading(false);
+      }
+    }
+  }, [projectId]);
+
   useEffect(() => {
     loadDeployments().catch(() => undefined);
   }, [loadDeployments]);
@@ -176,6 +213,24 @@ export default function ProjectDetailPage() {
     }
     loadUsage().catch(() => undefined);
   }, [activeTab, loadUsage]);
+
+  useEffect(() => {
+    if (activeTab !== 'logs') {
+      return;
+    }
+    loadLogs().catch(() => undefined);
+  }, [activeTab, loadLogs]);
+
+  // Auto-refresh logs every 3 seconds when on logs tab with auto-refresh enabled
+  useEffect(() => {
+    if (activeTab !== 'logs' || !autoRefreshLogs) {
+      return;
+    }
+    const interval = setInterval(() => {
+      loadLogs({ silent: true }).catch(() => undefined);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [activeTab, autoRefreshLogs, loadLogs]);
 
   /** Find the most recent in-progress deployment (queued | building | deploying). */
   const inProgressDeployment = useMemo(
@@ -1369,6 +1424,59 @@ export default function ProjectDetailPage() {
               </>
             ) : (
               <p className="text-sm text-slate-500">No usage data available yet for this project.</p>
+            )}
+          </div>
+        )}
+
+        {/* ===== LOGS TAB ===== */}
+        {activeTab === 'logs' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">Project Logs</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Realtime logs from deployments and running containers for this project.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={autoRefreshLogs}
+                    onChange={(e) => setAutoRefreshLogs(e.target.checked)}
+                    className="rounded border-slate-300"
+                  />
+                  Auto-refresh (3s)
+                </label>
+                <button
+                  onClick={() => loadLogs()}
+                  disabled={logsLoading}
+                  className="btn-secondary"
+                >
+                  {logsLoading ? 'Loading...' : 'Refresh'}
+                </button>
+              </div>
+            </div>
+
+            {logsLoading && !logs.length ? (
+              <div className="rounded-xl border border-slate-200 p-8 text-center">
+                <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-cyan-500 border-r-transparent"></div>
+                <p className="mt-3 text-sm text-slate-600">Loading logs...</p>
+              </div>
+            ) : logs.length > 0 ? (
+              <div>
+                <p className="mb-2 text-xs text-slate-500">
+                  Showing last {logs.length} log entries • {autoRefreshLogs ? 'Auto-refreshing every 3 seconds' : 'Paused'}
+                </p>
+                <LogsTable rows={logs} />
+              </div>
+            ) : (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-8 text-center">
+                <p className="text-sm text-slate-600">No logs available yet for this project.</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Logs will appear here once deployments run or containers start.
+                </p>
+              </div>
             )}
           </div>
         )}
