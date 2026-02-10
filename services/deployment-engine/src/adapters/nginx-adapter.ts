@@ -52,6 +52,6 @@ export class NginxAdapter {
       '        proxy_set_header Host $host;',
       '    }',
       '}',
-    ].join('\\n');
+    ].join('\n');
   }
 }
