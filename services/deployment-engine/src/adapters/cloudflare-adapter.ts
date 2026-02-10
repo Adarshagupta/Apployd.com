@@ -17,7 +17,7 @@ export class CloudflareAdapter {
       name,
       content: ipAddress,
       ttl: 120,
-      proxied: true,
+      proxied: false, // DNS-only mode so Let's Encrypt SSL works directly
     };
 
     const existingId = await this.findRecordId(name);
