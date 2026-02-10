@@ -13,7 +13,8 @@ export function AuthRedirect({ to = '/overview' }: { to?: string }) {
 
     const token = window.localStorage.getItem(AUTH_STORAGE_KEY);
     if (token) {
-      router.replace(to);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      router.replace(to as any);
     }
   }, [router, to]);
 
