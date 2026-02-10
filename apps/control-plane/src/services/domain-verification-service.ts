@@ -94,6 +94,7 @@ export class DomainVerificationService {
         where: { id: domainId },
         data: { status: 'active', verifiedAt: new Date() },
       });
+      await this.tryActivateWwwCompanion(record.projectId, record.domain, cnameTarget);
       return cnameResult;
     }
 
@@ -104,6 +105,7 @@ export class DomainVerificationService {
         where: { id: domainId },
         data: { status: 'active', verifiedAt: new Date() },
       });
+      await this.tryActivateWwwCompanion(record.projectId, record.domain, cnameTarget);
       return txtResult;
     }
 
@@ -125,4 +127,96 @@ export class DomainVerificationService {
   static buildCnameTarget(projectSlug: string, orgSlug: string): string {
     return `${projectSlug}.${orgSlug}.${env.BASE_DOMAIN}`;
   }
+
+  private async tryActivateWwwCompanion(
+    projectId: string,
+    domain: string,
+    cnameTarget: string,
+  ): Promise<void> {
+    const companion = deriveWwwCompanionDomain(domain);
+    if (!companion) {
+      return;
+    }
+
+    const cname = await this.verifyCname(companion, cnameTarget);
+    if (!cname.verified) {
+      return;
+    }
+
+    const existing = await prisma.customDomain.findUnique({
+      where: { domain: companion },
+      select: {
+        id: true,
+        projectId: true,
+      },
+    });
+
+    if (existing && existing.projectId !== projectId) {
+      return;
+    }
+
+    if (existing) {
+      await prisma.customDomain.update({
+        where: { id: existing.id },
+        data: {
+          status: 'active',
+          verifiedAt: new Date(),
+          cnameTarget,
+        },
+      });
+      return;
+    }
+
+    await prisma.customDomain.create({
+      data: {
+        projectId,
+        domain: companion,
+        status: 'active',
+        verifiedAt: new Date(),
+        cnameTarget,
+      },
+    });
+  }
 }
+
+const COMMON_MULTI_PART_TLDS = new Set([
+  'co.uk',
+  'org.uk',
+  'gov.uk',
+  'ac.uk',
+  'co.in',
+  'co.jp',
+  'co.kr',
+  'com.au',
+  'net.au',
+  'org.au',
+  'com.br',
+  'com.mx',
+  'com.tr',
+  'com.sg',
+  'co.id',
+]);
+
+const deriveWwwCompanionDomain = (domain: string): string | null => {
+  const normalized = domain.toLowerCase().replace(/\.$/, '');
+  const labels = normalized.split('.');
+  if (labels.length < 2) {
+    return null;
+  }
+
+  if (normalized.startsWith('www.')) {
+    const withoutWww = normalized.slice(4);
+    return withoutWww.length > 0 ? withoutWww : null;
+  }
+
+  if (labels.length === 2) {
+    return `www.${normalized}`;
+  }
+
+  const suffix = labels.slice(-2).join('.');
+  if (labels.length === 3 && COMMON_MULTI_PART_TLDS.has(suffix)) {
+    return `www.${normalized}`;
+  }
+
+  return null;
+};

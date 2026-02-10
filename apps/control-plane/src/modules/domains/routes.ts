@@ -1,9 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { DeploymentStatus } from '@prisma/client';
 
 import { z } from 'zod';
 
 import { AccessService } from '../../services/access-service.js';
 import { AuditLogService } from '../../services/audit-log-service.js';
+import { DeploymentRequestError, DeploymentRequestService } from '../../services/deployment-request-service.js';
 import { DomainVerificationService } from '../../services/domain-verification-service.js';
 import { prisma } from '../../lib/prisma.js';
 
@@ -30,6 +32,7 @@ export const domainRoutes: FastifyPluginAsync = async (app) => {
   const access = new AccessService();
   const audit = new AuditLogService();
   const verifier = new DomainVerificationService();
+  const deploymentService = new DeploymentRequestService();
 
   /**
    * Helper: load project + org and assert user has at least the given role.
@@ -42,6 +45,85 @@ export const domainRoutes: FastifyPluginAsync = async (app) => {
     if (!project) throw new Error('Project not found');
     await access.requireOrganizationRole(userId, project.organizationId, role);
     return project;
+  };
+
+  const syncActiveDeploymentDomains = async (input: {
+    projectId: string;
+    actorUserId: string;
+  }): Promise<{ queued: boolean; deploymentId?: string; message: string }> => {
+    const project = await prisma.project.findUnique({
+      where: { id: input.projectId },
+      select: { activeDeploymentId: true },
+    });
+
+    if (!project?.activeDeploymentId) {
+      return {
+        queued: false,
+        message: 'No active deployment found to apply domain changes.',
+      };
+    }
+
+    const activeDeployment = await prisma.deployment.findUnique({
+      where: { id: project.activeDeploymentId },
+      select: {
+        id: true,
+        status: true,
+        environment: true,
+        gitUrl: true,
+        branch: true,
+        commitSha: true,
+        imageTag: true,
+      },
+    });
+
+    if (!activeDeployment || activeDeployment.status !== DeploymentStatus.ready) {
+      return {
+        queued: false,
+        message: 'Active deployment is not ready yet. Deploy again after it is ready.',
+      };
+    }
+
+    if (!activeDeployment.imageTag) {
+      return {
+        queued: false,
+        message: 'Active deployment has no reusable image. Trigger a new deployment to apply domains.',
+      };
+    }
+
+    try {
+      const result = await deploymentService.create({
+        projectId: input.projectId,
+        actorUserId: input.actorUserId,
+        trigger: 'manual',
+        environment: activeDeployment.environment as 'production' | 'preview',
+        gitUrl: activeDeployment.gitUrl,
+        ...(activeDeployment.branch ? { branch: activeDeployment.branch } : {}),
+        ...(activeDeployment.commitSha ? { commitSha: activeDeployment.commitSha } : {}),
+        imageTag: activeDeployment.imageTag,
+      });
+      return {
+        queued: true,
+        deploymentId: result.deploymentId,
+        message: 'Queued deployment to apply custom domain routing and SSL.',
+      };
+    } catch (error) {
+      const message =
+        error instanceof DeploymentRequestError
+          ? error.message
+          : 'Unable to queue domain sync deployment.';
+      app.log.warn(
+        {
+          projectId: input.projectId,
+          actorUserId: input.actorUserId,
+          error: message,
+        },
+        'Domain verified but automatic domain sync deployment could not be queued',
+      );
+      return {
+        queued: false,
+        message,
+      };
+    }
   };
 
   /* ── LIST domains for project ───────────────────────────────── */
@@ -151,7 +233,15 @@ export const domainRoutes: FastifyPluginAsync = async (app) => {
     if (!domainRecord) return reply.notFound('Domain not found');
 
     if (domainRecord.status === 'active') {
-      return { domain: domainRecord, verification: { verified: true, method: 'already_active', detail: 'Domain already verified' } };
+      const sync = await syncActiveDeploymentDomains({
+        projectId,
+        actorUserId: user.userId,
+      });
+      return {
+        domain: domainRecord,
+        verification: { verified: true, method: 'already_active', detail: 'Domain already verified' },
+        sync,
+      };
     }
 
     const result = await verifier.verify(domainId);
@@ -160,7 +250,17 @@ export const domainRoutes: FastifyPluginAsync = async (app) => {
       where: { id: domainId },
     });
 
-    return { domain: updated, verification: result };
+    const sync = result.verified
+      ? await syncActiveDeploymentDomains({
+          projectId,
+          actorUserId: user.userId,
+        })
+      : {
+          queued: false,
+          message: 'Domain was not verified, so no sync deployment was queued.',
+        };
+
+    return { domain: updated, verification: result, sync };
   });
 
   /* ── GET single domain ──────────────────────────────────────── */
@@ -212,6 +312,11 @@ export const domainRoutes: FastifyPluginAsync = async (app) => {
       metadata: { domain: domainRecord.domain },
     });
 
-    return reply.code(200).send({ deleted: true });
+    const sync = await syncActiveDeploymentDomains({
+      projectId,
+      actorUserId: user.userId,
+    });
+
+    return reply.code(200).send({ deleted: true, sync });
   });
 };
