@@ -128,9 +128,12 @@ export class DeploymentRequestService {
     const resolvedEnvironment = input.environment ?? 'production';
     const resolvedServiceType = input.serviceType ?? (project as any).serviceType ?? 'web_service';
     const resolvedOutputDirectory = input.outputDirectory ?? (project as any).outputDirectory ?? undefined;
+    const requestedDomain = input.domain
+      ? normalizeRequestedDomain(input.domain)
+      : undefined;
 
     // Preview deployments get a unique subdomain; production gets the canonical domain
-    const resolvedDomain = input.domain
+    const resolvedDomain = requestedDomain
       ?? (resolvedEnvironment === 'preview'
         ? buildPreviewDomain({
             projectSlug: project.slug,
@@ -538,6 +541,18 @@ export class DeploymentRequestService {
     return `https://${domain}`;
   }
 }
+
+const normalizeRequestedDomain = (value: string): string => {
+  const normalized = value.trim().toLowerCase().replace(/\.$/, '');
+  const isValidHostname = /^(?=.{1,253}$)(?!-)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(normalized);
+  if (!isValidHostname) {
+    throw new DeploymentRequestError(
+      'Domain must be a valid hostname (e.g. app.example.com).',
+      400,
+    );
+  }
+  return normalized;
+};
 
 const sanitizeDomainLabel = (value: string, fallback: string): string => {
   const normalized = value

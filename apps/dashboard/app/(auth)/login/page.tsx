@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
+  const [loginChallengeId, setLoginChallengeId] = useState('');
   const [verificationMessage, setVerificationMessage] = useState('');
   const [devCode, setDevCode] = useState('');
   const [showVerification, setShowVerification] = useState(false);
@@ -56,6 +57,7 @@ export default function LoginPage() {
       const data = await apiClient.post('/auth/login', { email, password });
       if (data.token) {
         window.localStorage.setItem('apployd_token', data.token);
+        setLoginChallengeId('');
         const nextRaw = searchParams?.get('next') ?? null;
         const nextPath =
           nextRaw && nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : '/overview';
@@ -65,7 +67,13 @@ export default function LoginPage() {
       }
 
       if (data.verificationRequired) {
+        const challengeId =
+          typeof data.loginChallengeId === 'string' ? data.loginChallengeId : '';
+        if (!challengeId) {
+          throw new Error('Login verification session is missing. Please sign in again.');
+        }
         setShowVerification(true);
+        setLoginChallengeId(challengeId);
         setVerificationMessage(data.message ?? 'Enter the verification code sent to your email.');
         setDevCode(typeof data.devCode === 'string' ? data.devCode : '');
         return;
@@ -82,11 +90,20 @@ export default function LoginPage() {
   const onVerifySubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
+    if (!loginChallengeId) {
+      setError('Login verification session expired. Please sign in again.');
+      return;
+    }
     setVerifying(true);
 
     try {
-      const data = await apiClient.post('/auth/verify-email', { email, code: verificationCode });
+      const data = await apiClient.post('/auth/verify-email', {
+        email,
+        code: verificationCode,
+        loginChallengeId,
+      });
       window.localStorage.setItem('apployd_token', data.token);
+      setLoginChallengeId('');
       const nextRaw = searchParams?.get('next') ?? null;
       const nextPath =
         nextRaw && nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : '/overview';
@@ -101,10 +118,17 @@ export default function LoginPage() {
 
   const onResendCode = async () => {
     setError('');
+    if (!loginChallengeId) {
+      setError('Login verification session expired. Please sign in again.');
+      return;
+    }
     setResending(true);
 
     try {
-      const data = await apiClient.post('/auth/resend-verification-code', { email });
+      const data = await apiClient.post('/auth/resend-verification-code', {
+        email,
+        loginChallengeId,
+      });
       setShowVerification(true);
       setVerificationMessage(data.message ?? 'Verification code sent.');
       setDevCode(typeof data.devCode === 'string' ? data.devCode : '');

@@ -686,7 +686,7 @@ export class DockerAdapter {
       if (containerId && (i < 5 || i % 5 === 0)) {
         try {
           const state = await runCommand(
-            `docker inspect --format={{.State.Running}} ${containerId}`,
+            `docker inspect --format={{.State.Running}} ${shellEscape(containerId)}`,
           );
           if (state.trim() === 'false') {
             onLog?.(`Health check: container exited prematurely (attempt ${i + 1}/${maxAttempts})`);
@@ -793,8 +793,11 @@ export class DockerAdapter {
    * Retrieves the last N lines of a container's logs.
    */
   async getContainerLogs(containerNameOrId: string, tailLines = 50): Promise<string> {
+    const safeTailLines = Math.max(1, Math.min(1000, Math.trunc(tailLines) || 50));
     try {
-      return await runCommand(`docker logs --tail ${tailLines} ${containerNameOrId}`);
+      return await runCommand(
+        `docker logs --tail ${safeTailLines} ${shellEscape(containerNameOrId)}`,
+      );
     } catch {
       return '(unable to retrieve container logs)';
     }

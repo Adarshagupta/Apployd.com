@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
+import { assertValidHostname } from '../core/domain-validation.js';
 import { env } from '../core/env.js';
 import { runHostCommand } from '../core/run-host-command.js';
 
@@ -14,15 +15,27 @@ interface ConfigureProxyInput {
 
 export class NginxAdapter {
   async configureProjectProxy(input: ConfigureProxyInput): Promise<void> {
-    const configPath = join(env.NGINX_SITES_PATH, `${input.domain}.conf`);
+    const domain = assertValidHostname(input.domain, 'domain');
+    const aliases = (input.aliases ?? []).map((alias, index) =>
+      assertValidHostname(alias, `alias #${index + 1}`),
+    );
+    const upstreamHost = input.upstreamHost.trim();
+    if (!/^(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|[a-z0-9.-]+)$/i.test(upstreamHost)) {
+      throw new Error(`Invalid upstream host: ${input.upstreamHost}`);
+    }
+    if (!Number.isInteger(input.upstreamPort) || input.upstreamPort < 1 || input.upstreamPort > 65535) {
+      throw new Error(`Invalid upstream port: ${input.upstreamPort}`);
+    }
+
+    const configPath = join(env.NGINX_SITES_PATH, `${domain}.conf`);
     const template = this.loadTemplate();
 
-    const aliasString = (input.aliases ?? []).join(' ');
+    const aliasString = aliases.join(' ');
 
     const rendered = template
-      .replaceAll('{{DOMAIN}}', input.domain)
+      .replaceAll('{{DOMAIN}}', domain)
       .replaceAll('{{ALIASES}}', aliasString)
-      .replaceAll('{{UPSTREAM_HOST}}', input.upstreamHost)
+      .replaceAll('{{UPSTREAM_HOST}}', upstreamHost)
       .replaceAll('{{UPSTREAM_PORT}}', String(input.upstreamPort));
 
     writeFileSync(configPath, rendered, { encoding: 'utf8' });

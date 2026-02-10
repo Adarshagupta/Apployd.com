@@ -2,6 +2,9 @@ import { runCommand } from './run-command.js';
 
 let isInContainerCached: boolean | null = null;
 
+const shellEscape = (value: string): string =>
+  `'${value.replace(/'/g, `'\"'\"'`)}'`;
+
 async function checkIsInContainer(): Promise<boolean> {
   if (isInContainerCached !== null) return isInContainerCached;
   
@@ -24,8 +27,7 @@ export async function runHostCommand(command: string): Promise<string> {
   
   if (isInContainer) {
     // Use nsenter to run on host - requires privileged container with pid=host
-    const escapedCommand = command.replace(/"/g, '\\"');
-    return runCommand(`nsenter -t 1 -m -u -n -i sh -c "${escapedCommand}"`);
+    return runCommand(`nsenter -t 1 -m -u -n -i sh -c ${shellEscape(command)}`);
   } else {
     return runCommand(command);
   }

@@ -22,10 +22,22 @@ const envSchema = z
     message: 'At most 50 environment variables are allowed per deployment request.',
   });
 
+const deploymentDomainSchema = z
+  .string()
+  .trim()
+  .min(3)
+  .max(253)
+  .transform((value) => value.toLowerCase().replace(/\.$/, ''))
+  .refine(
+    (value) =>
+      /^(?=.{1,253}$)(?!-)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(value),
+    'Domain must be a valid hostname (e.g. app.example.com)',
+  );
+
 const createDeploymentSchema = z.object({
   projectId: z.string().cuid(),
   environment: z.enum(['production', 'preview']).default('production'),
-  domain: z.string().min(3).max(255).optional(),
+  domain: deploymentDomainSchema.optional(),
   gitUrl: z.string().url().optional(),
   branch: z.string().optional(),
   commitSha: z.string().optional(),

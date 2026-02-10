@@ -4,6 +4,7 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { z } from 'zod';
 
+import { env } from '../../config/env.js';
 import { hashPassword, verifyPassword } from '../../lib/crypto.js';
 import { prisma } from '../../lib/prisma.js';
 import { redis } from '../../lib/redis.js';
@@ -27,13 +28,20 @@ const loginSchema = z.object({
   password: z.string().min(8),
 });
 
+const loginChallengeIdSchema = z
+  .string()
+  .regex(/^[a-f0-9]{48}$/i, 'Login challenge is invalid')
+  .transform((value) => value.toLowerCase());
+
 const verifyEmailSchema = z.object({
   email: z.string().email(),
   code: z.string().regex(/^\d{6}$/, 'Verification code must be 6 digits'),
+  loginChallengeId: loginChallengeIdSchema.optional(),
 });
 
 const resendVerificationSchema = z.object({
   email: z.string().email(),
+  loginChallengeId: loginChallengeIdSchema.optional(),
 });
 
 const githubLoginQuerySchema = z.object({
@@ -56,6 +64,7 @@ const githubExchangePayloadSchema = z.object({
 
 const OAUTH_STATE_PREFIX = 'apployd:oauth:github:';
 const LOGIN_RESULT_PREFIX = 'apployd:oauth:github:login:';
+const LOGIN_CHALLENGE_PREFIX = 'apployd:auth:login-challenge:';
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
   const github = new GitHubService();
@@ -202,6 +211,11 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       return reply.unauthorized('Invalid email or password');
     }
 
+    const loginChallengeId = await createLoginChallenge({
+      userId: user.id,
+      email: user.email,
+    });
+
     try {
       const dispatch = await emailVerification.sendCode({
         userId: user.id,
@@ -216,6 +230,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
           ? 'We sent a login verification code to your email.'
           : 'Please verify your email to complete sign in. We sent a verification code.',
         expiresInMinutes: dispatch.expiresInMinutes,
+        loginChallengeId,
         ...(dispatch.devCode ? { devCode: dispatch.devCode } : {}),
       });
     } catch (error) {
@@ -226,11 +241,14 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
             verificationRequired: true,
             email: user.email,
             message: error.message,
+            loginChallengeId,
           });
         }
 
+        await redis.del(loginChallengeKey(loginChallengeId));
         return reply.code(error.statusCode).send({ message: error.message });
       }
+      await redis.del(loginChallengeKey(loginChallengeId));
       throw error;
     }
   });
@@ -249,6 +267,21 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
     if (!user) {
       return reply.unauthorized('Invalid or expired verification code.');
+    }
+
+    const loginChallenge = body.loginChallengeId
+      ? await resolveLoginChallenge(body.loginChallengeId)
+      : null;
+
+    if (
+      body.loginChallengeId
+      && (!loginChallenge || loginChallenge.userId !== user.id || loginChallenge.email !== user.email)
+    ) {
+      return reply.unauthorized('Login verification session is invalid or expired. Please sign in again.');
+    }
+
+    if (user.emailVerifiedAt && !loginChallenge) {
+      return reply.unauthorized('Login verification session is invalid or expired. Please sign in again.');
     }
 
     try {
@@ -270,6 +303,10 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
+    if (body.loginChallengeId) {
+      await redis.del(loginChallengeKey(body.loginChallengeId));
+    }
+
     const token = app.jwt.sign({ userId: user.id, email: user.email });
     return {
       token,
@@ -284,21 +321,50 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
   app.post('/auth/resend-verification-code', async (request, reply) => {
     const body = resendVerificationSchema.parse(request.body);
-    const user = await prisma.user.findUnique({
-      where: { email: body.email },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        emailVerifiedAt: true,
-      },
-    });
+    const loginChallenge = body.loginChallengeId
+      ? await resolveLoginChallenge(body.loginChallengeId)
+      : null;
+
+    if (body.loginChallengeId && !loginChallenge) {
+      return reply.unauthorized('Login verification session is invalid or expired. Please sign in again.');
+    }
+
+    const user = loginChallenge
+      ? await prisma.user.findUnique({
+          where: { id: loginChallenge.userId },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            emailVerifiedAt: true,
+          },
+        })
+      : await prisma.user.findUnique({
+          where: { email: body.email },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            emailVerifiedAt: true,
+          },
+        });
 
     if (!user) {
+      if (loginChallenge) {
+        return reply.unauthorized('Login verification session is invalid or expired. Please sign in again.');
+      }
       return {
         success: true,
         message: 'If an account exists for that email, a verification code has been sent.',
       };
+    }
+
+    if (loginChallenge && loginChallenge.email !== user.email) {
+      return reply.unauthorized('Login verification session is invalid or expired. Please sign in again.');
+    }
+
+    if (user.emailVerifiedAt && !loginChallenge) {
+      return reply.unauthorized('Login verification session is invalid or expired. Please sign in again.');
     }
 
     try {
@@ -392,4 +458,45 @@ const safeRedirectPath = (value: string | undefined, fallback: string): string =
   }
 
   return fallback;
+};
+
+const loginChallengeSchema = z.object({
+  userId: z.string().cuid(),
+  email: z.string().email(),
+});
+
+const loginChallengeKey = (challengeId: string): string =>
+  `${LOGIN_CHALLENGE_PREFIX}${challengeId}`;
+
+const loginChallengeTtlSeconds = (): number =>
+  env.EMAIL_VERIFICATION_TTL_MINUTES * 60;
+
+const createLoginChallenge = async (payload: {
+  userId: string;
+  email: string;
+}): Promise<string> => {
+  const challengeId = randomBytes(24).toString('hex');
+  await redis.set(
+    loginChallengeKey(challengeId),
+    JSON.stringify(payload),
+    'EX',
+    loginChallengeTtlSeconds(),
+  );
+  return challengeId;
+};
+
+const resolveLoginChallenge = async (
+  challengeId: string,
+): Promise<{ userId: string; email: string } | null> => {
+  const stored = await redis.get(loginChallengeKey(challengeId));
+  if (!stored) {
+    return null;
+  }
+
+  try {
+    return loginChallengeSchema.parse(JSON.parse(stored));
+  } catch {
+    await redis.del(loginChallengeKey(challengeId));
+    return null;
+  }
 };

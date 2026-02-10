@@ -136,18 +136,24 @@ class ApploydClient {
     });
   }
 
-  
-  async verifyEmail(email, code) {
+  async verifyEmail(email, code, loginChallengeId = '') {
     return this.request('/auth/verify-email', {
       method: 'POST',
-      body: JSON.stringify({ email, code }),
+      body: JSON.stringify({
+        email,
+        code,
+        ...(loginChallengeId ? { loginChallengeId } : {}),
+      }),
     });
   }
 
-  async resendVerificationCode(email) {
+  async resendVerificationCode(email, loginChallengeId = '') {
     return this.request('/auth/resend-verification-code', {
       method: 'POST',
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({
+        email,
+        ...(loginChallengeId ? { loginChallengeId } : {}),
+      }),
     });
   }
 
@@ -768,8 +774,16 @@ async function activate(context) {
           const loginResult = await client.login(email, password);
           let token = loginResult?.token || null;
           let loginEmail = loginResult?.email || email;
+          const loginChallengeId =
+            typeof loginResult?.loginChallengeId === 'string'
+              ? loginResult.loginChallengeId
+              : '';
 
           if (!token && loginResult?.verificationRequired) {
+            if (!loginChallengeId) {
+              throw new Error('Login verification session is missing. Please sign in again.');
+            }
+
             vscode.window.showInformationMessage(
               loginResult.message || `Verification code sent to ${loginEmail}.`,
             );
@@ -800,14 +814,21 @@ async function activate(context) {
                   throw new Error('Sign in cancelled.');
                 }
 
-                const resendResult = await client.resendVerificationCode(loginEmail);
+                const resendResult = await client.resendVerificationCode(
+                  loginEmail,
+                  loginChallengeId,
+                );
                 vscode.window.showInformationMessage(
                   resendResult.message || `Verification code resent to ${loginEmail}.`,
                 );
                 continue;
               }
 
-              const verifyResult = await client.verifyEmail(loginEmail, code.trim());
+              const verifyResult = await client.verifyEmail(
+                loginEmail,
+                code.trim(),
+                loginChallengeId,
+              );
               token = verifyResult?.token || null;
               verified = Boolean(token);
             }
