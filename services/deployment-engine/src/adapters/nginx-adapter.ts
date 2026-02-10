@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 import { env } from '../core/env.js';
-import { runCommand } from '../core/run-command.js';
+import { runHostCommand } from '../core/run-host-command.js';
 
 interface ConfigureProxyInput {
   domain: string;
@@ -27,8 +27,8 @@ export class NginxAdapter {
 
     writeFileSync(configPath, rendered, { encoding: 'utf8' });
 
-    await runCommand('nginx -t');
-    await runCommand('systemctl reload nginx');
+    await runHostCommand('nginx -t');
+    await runHostCommand('systemctl reload nginx');
   }
 
   private loadTemplate(): string {

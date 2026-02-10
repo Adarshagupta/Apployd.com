@@ -1,5 +1,5 @@
 import { env } from '../core/env.js';
-import { runCommand } from '../core/run-command.js';
+import { runHostCommand } from '../core/run-host-command.js';
 
 export class SslAdapter {
   /**
@@ -19,6 +19,6 @@ export class SslAdapter {
       domainFlags,
     ].join(' ');
 
-    await runCommand(command);
+    await runHostCommand(command);
   }
 }

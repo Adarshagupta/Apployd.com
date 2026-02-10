@@ -23,6 +23,8 @@ services:
       - ../../services/deployment-engine/.env
     depends_on:
       - redis
+    privileged: true
+    pid: host
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./nginx/templates:/opt/apployd/nginx/templates

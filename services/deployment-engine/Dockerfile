@@ -16,7 +16,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Install Docker CLI + BuildKit (buildx) for cached, fast builds
-RUN apk add --no-cache docker-cli docker-cli-buildx
+# Install util-linux for nsenter (to run commands on host)
+RUN apk add --no-cache docker-cli docker-cli-buildx util-linux
 
 COPY --from=base /app /app
 EXPOSE 9102
