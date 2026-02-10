@@ -28,6 +28,7 @@ export default function LoginPage() {
       const nextRaw = searchParams?.get('next') ?? null;
       const nextPath =
         nextRaw && nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : '/overview';
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       router.replace(nextPath as any);
     }
   }, [router, searchParams]);
