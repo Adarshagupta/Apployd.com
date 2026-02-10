@@ -9,6 +9,7 @@ import { env } from '../core/env.js';
 import { prisma } from '../core/prisma.js';
 import { redis } from '../core/redis.js';
 import { withRetry } from '../core/retry.js';
+import { DeploymentEmailNotifier } from '../notifications/deployment-email-notifier.js';
 import type { QueueDeploymentPayload } from '../core/types.js';
 
 const CANCEL_MESSAGE_FRAGMENT = 'canceled by user';
@@ -36,6 +37,8 @@ export class DeploymentPipeline {
     env.CLOUDFLARE_API_TOKEN && env.CLOUDFLARE_ZONE_ID
       ? new CloudflareAdapter(env.CLOUDFLARE_API_TOKEN, env.CLOUDFLARE_ZONE_ID)
       : null;
+
+  private readonly emailNotifier = new DeploymentEmailNotifier();
 
   async execute(payload: QueueDeploymentPayload): Promise<void> {
     const deployment = await prisma.deployment.findUnique({
@@ -326,6 +329,18 @@ export class DeploymentPipeline {
         `${envLabel} deployment ready at ${this.resolvePublicUrl(domain)}`,
         deployment.projectId,
       );
+
+      await this.emailNotifier.sendDeploymentStatusEmail({
+        organizationId: deployment.project.organizationId,
+        projectId: deployment.projectId,
+        projectName: deployment.project.name,
+        deploymentId: payload.deploymentId,
+        environment: payload.environment,
+        status: 'ready',
+        domain,
+      }).catch((emailError) => {
+        console.error('Failed to send deployment success email', payload.deploymentId, emailError);
+      });
     } catch (error) {
       if (startedDockerContainerId) {
         await this.docker.stopContainer(startedDockerContainerId).catch(() => undefined);
@@ -352,6 +367,19 @@ export class DeploymentPipeline {
       }
 
       await this.publishEvent(payload.deploymentId, 'failed', (error as Error).message, deployment.projectId);
+
+      await this.emailNotifier.sendDeploymentStatusEmail({
+        organizationId: deployment.project.organizationId,
+        projectId: deployment.projectId,
+        projectName: deployment.project.name,
+        deploymentId: payload.deploymentId,
+        environment: payload.environment,
+        status: 'failed',
+        domain: deployment.domain,
+        errorMessage: (error as Error).message,
+      }).catch((emailError) => {
+        console.error('Failed to send deployment failure email', payload.deploymentId, emailError);
+      });
       throw error;
     }
   }

@@ -72,6 +72,8 @@ const request = async (path: string, options?: RequestInit) => {
   const isPublicAuthPath =
     path.startsWith('/auth/login') ||
     path.startsWith('/auth/signup') ||
+    path.startsWith('/auth/verify-email') ||
+    path.startsWith('/auth/resend-verification-code') ||
     path.startsWith('/auth/github');
   const shouldSendAuth =
     Boolean(token) && !isPublicAuthPath;

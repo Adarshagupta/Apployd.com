@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { hashPassword, verifyPassword } from '../../lib/crypto.js';
 import { prisma } from '../../lib/prisma.js';
 import { redis } from '../../lib/redis.js';
+import { EmailVerificationError, EmailVerificationService } from '../../services/email-verification-service.js';
 import { GitHubService } from '../../services/github-service.js';
 
 const signupSchema = z.object({
@@ -24,6 +25,15 @@ const signupSchema = z.object({
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
+});
+
+const verifyEmailSchema = z.object({
+  email: z.string().email(),
+  code: z.string().regex(/^\d{6}$/, 'Verification code must be 6 digits'),
+});
+
+const resendVerificationSchema = z.object({
+  email: z.string().email(),
 });
 
 const githubLoginQuerySchema = z.object({
@@ -49,13 +59,50 @@ const LOGIN_RESULT_PREFIX = 'apployd:oauth:github:login:';
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
   const github = new GitHubService();
+  const emailVerification = new EmailVerificationService();
 
   app.post('/auth/signup', async (request, reply) => {
     const body = signupSchema.parse(request.body);
 
-    const existingUser = await prisma.user.findUnique({ where: { email: body.email } });
+    const existingUser = await prisma.user.findUnique({
+      where: { email: body.email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        emailVerifiedAt: true,
+      },
+    });
     if (existingUser) {
-      return reply.conflict('Email already in use');
+      if (existingUser.emailVerifiedAt) {
+        return reply.conflict('Email already in use');
+      }
+
+      try {
+        const resend = await emailVerification.sendCode({
+          userId: existingUser.id,
+          email: existingUser.email,
+          name: existingUser.name,
+        });
+        return reply.code(202).send({
+          verificationRequired: true,
+          email: existingUser.email,
+          message: 'Account exists but email is not verified. A new code has been sent.',
+          expiresInMinutes: resend.expiresInMinutes,
+          ...(resend.devCode ? { devCode: resend.devCode } : {}),
+        });
+      } catch (error) {
+        if (error instanceof EmailVerificationError) {
+          return reply.code(error.statusCode).send({
+            message: error.message,
+          });
+        }
+        throw error;
+      }
+    }
+
+    if (!emailVerification.canDispatchCodes()) {
+      return reply.serviceUnavailable('Email verification service is not configured.');
     }
 
     const freePlan = await prisma.plan.findUnique({ where: { code: 'free' } });
@@ -111,20 +158,40 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       return { user, organization };
     });
 
-    const token = app.jwt.sign({
-      userId: result.user.id,
-      email: result.user.email,
-    });
-
-    return reply.code(201).send({
-      token,
-      user: {
-        id: result.user.id,
+    try {
+      const dispatch = await emailVerification.sendCode({
+        userId: result.user.id,
         email: result.user.email,
         name: result.user.name,
-      },
-      organization: result.organization,
-    });
+        bypassCooldown: true,
+      });
+
+      return reply.code(202).send({
+        verificationRequired: true,
+        email: result.user.email,
+        message: 'We sent a verification code to your email.',
+        expiresInMinutes: dispatch.expiresInMinutes,
+        ...(dispatch.devCode ? { devCode: dispatch.devCode } : {}),
+      });
+    } catch (error) {
+      if (error instanceof EmailVerificationError) {
+        app.log.error(
+          {
+            userId: result.user.id,
+            email: result.user.email,
+            error: error.message,
+          },
+          'Signup created but verification email could not be delivered',
+        );
+        return reply.code(202).send({
+          verificationRequired: true,
+          email: result.user.email,
+          message: 'Account created. Unable to send verification code right now, please request a new code.',
+          emailDeliveryFailed: true,
+        });
+      }
+      throw error;
+    }
   });
 
   app.post('/auth/login', async (request, reply) => {
@@ -133,6 +200,26 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const user = await prisma.user.findUnique({ where: { email: body.email } });
     if (!user || !verifyPassword(body.password, user.passwordHash)) {
       return reply.unauthorized('Invalid email or password');
+    }
+
+    if (!user.emailVerifiedAt) {
+      try {
+        await emailVerification.sendCode({
+          userId: user.id,
+          email: user.email,
+          name: user.name,
+        });
+      } catch (error) {
+        if (!(error instanceof EmailVerificationError)) {
+          app.log.warn({ error }, 'Failed to auto-send verification code on login');
+        }
+      }
+
+      return reply.code(403).send({
+        message: 'Please verify your email before signing in.',
+        verificationRequired: true,
+        email: user.email,
+      });
     }
 
     const token = app.jwt.sign({ userId: user.id, email: user.email });
@@ -145,6 +232,99 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         name: user.name,
       },
     };
+  });
+
+  app.post('/auth/verify-email', async (request, reply) => {
+    const body = verifyEmailSchema.parse(request.body);
+    const user = await prisma.user.findUnique({
+      where: { email: body.email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        emailVerifiedAt: true,
+      },
+    });
+
+    if (!user) {
+      return reply.unauthorized('Invalid or expired verification code.');
+    }
+
+    if (!user.emailVerifiedAt) {
+      try {
+        const valid = await emailVerification.verifyCode(user.id, body.code);
+        if (!valid) {
+          return reply.unauthorized('Invalid or expired verification code.');
+        }
+      } catch (error) {
+        if (error instanceof EmailVerificationError) {
+          return reply.code(error.statusCode).send({ message: error.message });
+        }
+        throw error;
+      }
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerifiedAt: new Date() },
+      });
+    }
+
+    const token = app.jwt.sign({ userId: user.id, email: user.email });
+    return {
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+      },
+      verified: true,
+    };
+  });
+
+  app.post('/auth/resend-verification-code', async (request, reply) => {
+    const body = resendVerificationSchema.parse(request.body);
+    const user = await prisma.user.findUnique({
+      where: { email: body.email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        emailVerifiedAt: true,
+      },
+    });
+
+    if (!user) {
+      return {
+        success: true,
+        message: 'If an account exists for that email, a verification code has been sent.',
+      };
+    }
+
+    if (user.emailVerifiedAt) {
+      return {
+        success: true,
+        message: 'Email is already verified.',
+      };
+    }
+
+    try {
+      const resend = await emailVerification.sendCode({
+        userId: user.id,
+        email: user.email,
+        name: user.name,
+      });
+      return {
+        success: true,
+        message: 'Verification code sent.',
+        expiresInMinutes: resend.expiresInMinutes,
+        ...(resend.devCode ? { devCode: resend.devCode } : {}),
+      };
+    } catch (error) {
+      if (error instanceof EmailVerificationError) {
+        return reply.code(error.statusCode).send({ message: error.message });
+      }
+      throw error;
+    }
   });
 
   app.get('/auth/github/login-url', async (request, reply) => {
@@ -197,6 +377,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         id: true,
         email: true,
         name: true,
+        emailVerifiedAt: true,
         createdAt: true,
       },
     });

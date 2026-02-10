@@ -18,6 +18,24 @@ const booleanFromEnv = z.preprocess((value) => {
   return value;
 }, z.boolean());
 
+const optionalString = z.preprocess((value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}, z.string().optional());
+
+const optionalEmail = z.preprocess((value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}, z.string().email().optional());
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(4000),
@@ -27,6 +45,16 @@ const envSchema = z.object({
   REDIS_URL: z.string().url(),
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  SMTP_HOST: z.string().default(''),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_SECURE: booleanFromEnv.optional(),
+  SMTP_USER: z.string().default(''),
+  SMTP_PASS: z.string().default(''),
+  SMTP_FROM_EMAIL: optionalEmail,
+  SMTP_FROM_NAME: optionalString.default('Apployd'),
+  EMAIL_VERIFICATION_TTL_MINUTES: z.coerce.number().int().min(1).max(60).default(10),
+  EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().min(5).max(3600).default(60),
+  EMAIL_VERIFICATION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
   GITHUB_CLIENT_ID: z.string().default(''),
   GITHUB_CLIENT_SECRET: z.string().default(''),
   GITHUB_OAUTH_REDIRECT_URI: z.string().url().optional(),
@@ -51,6 +79,7 @@ const parsedEnv = envSchema.parse(process.env);
 
 export const env = {
   ...parsedEnv,
+  SMTP_SECURE: parsedEnv.SMTP_SECURE ?? parsedEnv.SMTP_PORT === 465,
   PREVIEW_BASE_DOMAIN: parsedEnv.PREVIEW_BASE_DOMAIN ?? parsedEnv.BASE_DOMAIN,
   AUTO_PROVISION_DEV_SERVER:
     parsedEnv.AUTO_PROVISION_DEV_SERVER ?? parsedEnv.NODE_ENV !== 'production',

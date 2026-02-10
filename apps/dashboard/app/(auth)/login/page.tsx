@@ -15,14 +15,19 @@ export const dynamic = 'force-dynamic';
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verificationMessage, setVerificationMessage] = useState('');
+  const [devCode, setDevCode] = useState('');
+  const [showVerification, setShowVerification] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [resending, setResending] = useState(false);
   const [githubSubmitting, setGithubSubmitting] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    // Redirect if already logged in
     const token = window.localStorage.getItem('apployd_token');
     if (token) {
       const nextRaw = searchParams?.get('next') ?? null;
@@ -56,9 +61,50 @@ export default function LoginPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       router.push(nextPath as any);
     } catch (err) {
-      setError((err as Error).message);
+      const message = (err as Error).message;
+      setError(message);
+      if (message.toLowerCase().includes('verify your email')) {
+        setShowVerification(true);
+        setVerificationMessage('Your email is not verified yet. Enter the code we sent to continue.');
+      }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const onVerifySubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError('');
+    setVerifying(true);
+
+    try {
+      const data = await apiClient.post('/auth/verify-email', { email, code: verificationCode });
+      window.localStorage.setItem('apployd_token', data.token);
+      const nextRaw = searchParams?.get('next') ?? null;
+      const nextPath =
+        nextRaw && nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : '/overview';
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      router.push(nextPath as any);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const onResendCode = async () => {
+    setError('');
+    setResending(true);
+
+    try {
+      const data = await apiClient.post('/auth/resend-verification-code', { email });
+      setShowVerification(true);
+      setVerificationMessage(data.message ?? 'Verification code sent.');
+      setDevCode(typeof data.devCode === 'string' ? data.devCode : '');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setResending(false);
     }
   };
 
@@ -167,8 +213,44 @@ export default function LoginPage() {
               <button type="submit" className={styles.submit} disabled={submitting}>
                 {submitting ? 'Signing in...' : 'Sign in'}
               </button>
-              {error ? <p className={styles.error}>{error}</p> : null}
             </form>
+
+            {showVerification ? (
+              <form onSubmit={onVerifySubmit} className={styles.form}>
+                {verificationMessage ? <p>{verificationMessage}</p> : null}
+
+                <label className={styles.label}>
+                  <span className={styles.labelText}>Verification code</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="\d{6}"
+                    placeholder="123456"
+                    value={verificationCode}
+                    onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                    className={styles.input}
+                    required
+                  />
+                </label>
+
+                <button type="submit" className={styles.submit} disabled={verifying}>
+                  {verifying ? 'Verifying...' : 'Verify and sign in'}
+                </button>
+
+                <button
+                  type="button"
+                  className={styles.githubButton}
+                  onClick={onResendCode}
+                  disabled={resending || verifying}
+                >
+                  {resending ? 'Sending code...' : 'Resend code'}
+                </button>
+
+                {devCode ? <p>Development code: {devCode}</p> : null}
+              </form>
+            ) : null}
+
+            {error ? <p className={styles.error}>{error}</p> : null}
 
             <p className={styles.switchText}>
               New to Apployd? <Link href="/signup">Create account</Link>

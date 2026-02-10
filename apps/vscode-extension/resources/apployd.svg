@@ -1,0 +1,8 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <g fill="none" fill-rule="evenodd">
+    <rect x="18" y="18" width="92" height="92" rx="18" stroke="currentColor" stroke-width="10"/>
+    <path d="M42 84V44h20c16 0 28 8 28 20s-12 20-28 20H42z" stroke="currentColor" stroke-width="10" stroke-linejoin="round"/>
+    <path d="M42 64h22" stroke="currentColor" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="88" cy="64" r="6" fill="currentColor"/>
+  </g>
+</svg>

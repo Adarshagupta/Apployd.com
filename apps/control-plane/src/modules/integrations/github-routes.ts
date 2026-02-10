@@ -636,6 +636,7 @@ const resolveUserForGitHubLogin = async (input: {
           oauthSubject: githubSubject,
           avatarUrl: existingByEmail.avatarUrl ?? input.githubUser.avatarUrl,
           name: existingByEmail.name ?? input.githubUser.name ?? input.githubUser.login,
+          emailVerifiedAt: existingByEmail.emailVerifiedAt ?? new Date(),
         },
       });
     } else {
@@ -663,6 +664,7 @@ const resolveUserForGitHubLogin = async (input: {
             passwordHash: hashPassword(randomPassword),
             oauthProvider: 'github',
             oauthSubject: githubSubject,
+            emailVerifiedAt: new Date(),
           },
         });
 
@@ -711,7 +713,8 @@ const resolveUserForGitHubLogin = async (input: {
     user.oauthProvider !== 'github' ||
     user.oauthSubject !== githubSubject ||
     (!user.avatarUrl && input.githubUser.avatarUrl) ||
-    (!user.name && input.githubUser.name)
+    (!user.name && input.githubUser.name) ||
+    !user.emailVerifiedAt
   ) {
     user = await prisma.user.update({
       where: { id: user.id },
@@ -720,6 +723,7 @@ const resolveUserForGitHubLogin = async (input: {
         oauthSubject: githubSubject,
         avatarUrl: user.avatarUrl ?? input.githubUser.avatarUrl,
         name: user.name ?? input.githubUser.name ?? input.githubUser.login,
+        emailVerifiedAt: user.emailVerifiedAt ?? new Date(),
       },
     });
   }

@@ -6,6 +6,8 @@ Apployd is a SaaS backend hosting platform focused on affordability, container i
 
 - Control Plane API (`Fastify + TypeScript`) for auth, orgs, projects, deployments, billing, logs, metrics, teams, secrets, and audit logs.
 - Deployment Engine worker (`Node + TypeScript`) that consumes deployment jobs and automates build/run/routing/SSL.
+- Email verification codes for email/password signup and login gating for unverified accounts.
+- Deployment lifecycle email notifications (success/failure) to organization owner/admin/developer members.
 - Deployment idempotency for create-deploy requests (`Idempotency-Key`) and Stripe webhook deduplication (`webhook_events`).
 - PostgreSQL schema (Prisma) covering users, organizations, projects, deployments, servers, containers, plans, subscriptions, usage, invoices, logs, metrics, and audit data.
 - Next.js + Tailwind dashboard with pages for login/signup/projects/deploy/usage/billing/logs/settings/team and live deployment event streaming.
@@ -82,6 +84,7 @@ Important:
 - `ENGINE_LOCAL_MODE=true` enables local Docker-only deployment flow (skips DNS/Nginx/SSL automation and serves via `localhost:<port>`).
 - `ENGINE_METRICS_PORT` controls the engine `/metrics` port (change it if `9102` is already in use).
 - `DOCKER_HOST` must match your local Docker runtime (Windows Docker Desktop usually needs `npipe:////./pipe/docker_engine`).
+- SMTP env vars (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`) enable signup verification and deployment notification emails.
 
 ### Resource Rules
 

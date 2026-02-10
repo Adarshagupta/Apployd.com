@@ -6,6 +6,7 @@ import { prisma } from '../core/prisma.js';
 import { redis } from '../core/redis.js';
 import type { QueueDeploymentPayload } from '../core/types.js';
 import { deploymentDurationHistogram, deploymentProcessedCounter } from '../monitoring/metrics.js';
+import { DeploymentEmailNotifier } from '../notifications/deployment-email-notifier.js';
 import { DeploymentPipeline } from '../pipeline/deployment-pipeline.js';
 
 const payloadSchema = z.object({
@@ -56,6 +57,8 @@ export class DeployQueueConsumer {
   });
 
   private readonly pipeline = new DeploymentPipeline();
+
+  private readonly emailNotifier = new DeploymentEmailNotifier();
 
   async run(): Promise<void> {
     while (true) {
@@ -134,6 +137,22 @@ export class DeployQueueConsumer {
       return;
     }
 
+    const deployment = await prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: {
+        id: true,
+        domain: true,
+        environment: true,
+        project: {
+          select: {
+            id: true,
+            name: true,
+            organizationId: true,
+          },
+        },
+      },
+    });
+
     await prisma.logEntry
       .create({
         data: {
@@ -158,6 +177,21 @@ export class DeployQueueConsumer {
         }),
       )
       .catch(() => undefined);
+
+    if (deployment) {
+      await this.emailNotifier.sendDeploymentStatusEmail({
+        organizationId: deployment.project.organizationId,
+        projectId: deployment.project.id,
+        projectName: deployment.project.name,
+        deploymentId: deployment.id,
+        environment: deployment.environment as 'production' | 'preview',
+        status: 'failed',
+        domain: deployment.domain,
+        errorMessage: message,
+      }).catch((error) => {
+        console.error('Failed to send deployment failure email', deploymentId, error);
+      });
+    }
   }
 
   private toErrorMessage(error: unknown): string {

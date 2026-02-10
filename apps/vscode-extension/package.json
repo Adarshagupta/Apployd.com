@@ -1,0 +1,262 @@
+{
+  "name": "apployd-vscode-extension",
+  "displayName": "Apployd",
+  "description": "Manage Apployd organizations, projects, deployments, and logs from VS Code.",
+  "version": "0.1.0",
+  "publisher": "apployd",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./src/extension.js",
+  "activationEvents": [
+    "onView:apployd.overview",
+    "onView:apployd.projects",
+    "onView:apployd.deployments",
+    "onCommand:apployd.signIn",
+    "onCommand:apployd.signOut",
+    "onCommand:apployd.refresh",
+    "onCommand:apployd.openControlCenter",
+    "onCommand:apployd.selectOrganization",
+    "onCommand:apployd.deployProject",
+    "onCommand:apployd.cancelDeployment",
+    "onCommand:apployd.copyDeploymentId",
+    "onCommand:apployd.showProjectLogs",
+    "onCommand:apployd.openProjectDashboard",
+    "onCommand:apployd.openDashboard"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "Apployd",
+      "properties": {
+        "apployd.apiBaseUrl": {
+          "type": "string",
+          "default": "https://sylicaai.com/api/v1",
+          "description": "Base URL for the Apployd control-plane API."
+        },
+        "apployd.dashboardBaseUrl": {
+          "type": "string",
+          "default": "https://sylicaai.com",
+          "description": "Base URL for the Apployd dashboard UI."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "apployd",
+          "title": "Apployd",
+          "icon": "resources/apployd.svg"
+        }
+      ]
+    },
+    "views": {
+      "apployd": [
+        {
+          "id": "apployd.overview",
+          "name": "Overview"
+        },
+        {
+          "id": "apployd.projects",
+          "name": "Projects"
+        },
+        {
+          "id": "apployd.deployments",
+          "name": "Deployments"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "apployd.overview",
+        "contents": "$(rocket) **Run your infrastructure without leaving VS Code**\n\n[Sign In](command:apployd.signIn)  [Open Dashboard](command:apployd.openDashboard)\n\nUse Overview for account and organization controls.",
+        "when": "!apployd.signedIn"
+      },
+      {
+        "view": "apployd.projects",
+        "contents": "$(folder) **Projects will appear here after sign in.**\n\n[Sign In](command:apployd.signIn)  [Refresh](command:apployd.refresh)"
+      },
+      {
+        "view": "apployd.deployments",
+        "contents": "$(history) **Recent deployments for selected organization**\n\n[Refresh](command:apployd.refresh)  [Switch Organization](command:apployd.selectOrganization)"
+      }
+    ],
+    "commands": [
+      {
+        "command": "apployd.signIn",
+        "title": "Apployd: Sign In"
+      },
+      {
+        "command": "apployd.openControlCenter",
+        "title": "Apployd: Open Control Center"
+      },
+      {
+        "command": "apployd.signOut",
+        "title": "Apployd: Sign Out"
+      },
+      {
+        "command": "apployd.refresh",
+        "title": "Apployd: Refresh"
+      },
+      {
+        "command": "apployd.selectOrganization",
+        "title": "Apployd: Select Organization"
+      },
+      {
+        "command": "apployd.deployProject",
+        "title": "Apployd: Deploy Project"
+      },
+      {
+        "command": "apployd.cancelDeployment",
+        "title": "Apployd: Cancel Deployment"
+      },
+      {
+        "command": "apployd.copyDeploymentId",
+        "title": "Apployd: Copy Deployment ID"
+      },
+      {
+        "command": "apployd.showProjectLogs",
+        "title": "Apployd: Show Project Logs"
+      },
+      {
+        "command": "apployd.openProjectDashboard",
+        "title": "Apployd: Open Project Dashboard"
+      },
+      {
+        "command": "apployd.openDashboard",
+        "title": "Apployd: Open Dashboard"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "apployd.openControlCenter",
+          "when": "view == apployd.overview",
+          "group": "navigation"
+        },
+        {
+          "command": "apployd.refresh",
+          "when": "view == apployd.overview",
+          "group": "navigation@1"
+        },
+        {
+          "command": "apployd.refresh",
+          "when": "view == apployd.projects",
+          "group": "navigation"
+        },
+        {
+          "command": "apployd.signIn",
+          "when": "view == apployd.projects",
+          "group": "navigation@1"
+        },
+        {
+          "command": "apployd.selectOrganization",
+          "when": "view == apployd.projects",
+          "group": "navigation@2"
+        },
+        {
+          "command": "apployd.openControlCenter",
+          "when": "view == apployd.projects",
+          "group": "navigation@3"
+        },
+        {
+          "command": "apployd.refresh",
+          "when": "view == apployd.deployments",
+          "group": "navigation"
+        },
+        {
+          "command": "apployd.selectOrganization",
+          "when": "view == apployd.deployments",
+          "group": "navigation@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "apployd.deployProject",
+          "when": "view == apployd.projects && viewItem == apployd.project",
+          "group": "inline"
+        },
+        {
+          "command": "apployd.showProjectLogs",
+          "when": "view == apployd.projects && viewItem == apployd.project",
+          "group": "inline@1"
+        },
+        {
+          "command": "apployd.cancelDeployment",
+          "when": "view == apployd.projects && viewItem == apployd.project",
+          "group": "navigation"
+        },
+        {
+          "command": "apployd.openProjectDashboard",
+          "when": "view == apployd.projects && viewItem == apployd.project",
+          "group": "navigation@1"
+        },
+        {
+          "command": "apployd.cancelDeployment",
+          "when": "view == apployd.deployments && viewItem == apployd.deployment.inProgress",
+          "group": "inline"
+        },
+        {
+          "command": "apployd.copyDeploymentId",
+          "when": "view == apployd.deployments && viewItem == apployd.deployment",
+          "group": "inline@1"
+        },
+        {
+          "command": "apployd.copyDeploymentId",
+          "when": "view == apployd.deployments && viewItem == apployd.deployment.inProgress",
+          "group": "inline@1"
+        },
+        {
+          "command": "apployd.openProjectDashboard",
+          "when": "view == apployd.deployments && viewItem == apployd.deployment",
+          "group": "navigation"
+        },
+        {
+          "command": "apployd.openProjectDashboard",
+          "when": "view == apployd.deployments && viewItem == apployd.deployment.inProgress",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "apployd.openControlCenter"
+        },
+        {
+          "command": "apployd.signIn"
+        },
+        {
+          "command": "apployd.openDashboard"
+        },
+        {
+          "command": "apployd.signOut"
+        },
+        {
+          "command": "apployd.refresh"
+        },
+        {
+          "command": "apployd.selectOrganization"
+        },
+        {
+          "command": "apployd.deployProject"
+        },
+        {
+          "command": "apployd.cancelDeployment"
+        },
+        {
+          "command": "apployd.copyDeploymentId"
+        },
+        {
+          "command": "apployd.showProjectLogs"
+        },
+        {
+          "command": "apployd.openProjectDashboard"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "lint": "eslint src --ext .js"
+  }
+}
