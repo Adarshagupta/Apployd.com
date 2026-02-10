@@ -11,3 +11,5 @@ bash infra/scripts/deploy-ubuntu.sh \
 
 docker logs docker-control-plane-1 --tail 20
 docker logs docker-deployment-engine-1 --tail 20
+
+Adarsh@800850

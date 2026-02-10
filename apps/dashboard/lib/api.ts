@@ -1,7 +1,11 @@
 const AUTH_STORAGE_KEY = 'apployd_token';
 const LOCAL_API_FALLBACK = 'http://localhost:4000/api/v1';
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
+const toWebSocketScheme = (value: string) =>
+  value.replace(/^https:\/\//i, 'wss://').replace(/^http:\/\//i, 'ws://');
+const isLocalHostname = (value: string) => LOCAL_HOSTS.has(value.toLowerCase());
 
 export const resolveApiUrl = (): string => {
   if (process.env.NEXT_PUBLIC_API_URL) {
@@ -15,10 +19,38 @@ export const resolveApiUrl = (): string => {
   return LOCAL_API_FALLBACK;
 };
 
+export const normalizeWebSocketUrl = (socketUrl: string): string => {
+  if (typeof window === 'undefined') {
+    return socketUrl;
+  }
+
+  try {
+    const url = new URL(socketUrl, window.location.origin);
+    const appIsLocal = isLocalHostname(window.location.hostname);
+    const targetIsLocal = isLocalHostname(url.hostname);
+
+    if (!appIsLocal && targetIsLocal) {
+      url.protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      url.host = window.location.host;
+    }
+
+    return url.toString();
+  } catch {
+    return socketUrl;
+  }
+};
+
 export const resolveWebSocketBaseUrl = (): string => {
   const apiUrl = resolveApiUrl();
   const root = apiUrl.replace(/\/api\/v1\/?$/i, '');
-  return root.replace(/^https:\/\//i, 'wss://').replace(/^http:\/\//i, 'ws://');
+  const absoluteRoot =
+    root.startsWith('/')
+      ? typeof window !== 'undefined'
+        ? `${trimTrailingSlash(window.location.origin)}${root}`
+        : `http://localhost:4000${root}`
+      : root || (typeof window !== 'undefined' ? trimTrailingSlash(window.location.origin) : 'http://localhost:4000');
+
+  return normalizeWebSocketUrl(toWebSocketScheme(absoluteRoot));
 };
 
 const getToken = () => {

@@ -4,6 +4,7 @@ import { ServerStatus, type Deployment, type Prisma, type Server } from '@prisma
 import { setTimeout as sleep } from 'timers/promises';
 
 import { env } from '../config/env.js';
+import { resolveDeploymentWebsocketUrl } from '../lib/deployment-websocket-url.js';
 import { prisma } from '../lib/prisma.js';
 import { redis } from '../lib/redis.js';
 import { decryptSecret } from '../lib/secrets.js';
@@ -186,7 +187,7 @@ export class DeploymentRequestService {
               environment: existingDeployment.environment as 'production' | 'preview',
               domain: existingDeployment.domain,
               url: this.resolvePublicUrl(existingDeployment.domain),
-              websocket: `${env.API_BASE_URL.replace('http', 'ws')}/ws/deployments/${existingDeployment.id}`,
+              websocket: resolveDeploymentWebsocketUrl(existingDeployment.id),
               idempotentReplay: true,
             };
           }
@@ -426,7 +427,7 @@ export class DeploymentRequestService {
       environment: resolvedEnvironment,
       domain: deployment.domain,
       url: this.resolvePublicUrl(deployment.domain),
-      websocket: `${env.API_BASE_URL.replace('http', 'ws')}/ws/deployments/${deployment.id}`,
+      websocket: resolveDeploymentWebsocketUrl(deployment.id),
     };
   }
 

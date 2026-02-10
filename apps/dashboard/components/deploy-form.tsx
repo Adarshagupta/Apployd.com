@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { apiClient } from '../lib/api';
+import { apiClient, normalizeWebSocketUrl } from '../lib/api';
 
 const ENV_KEY_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
 
@@ -129,7 +129,7 @@ export function DeployForm({
   const connectDeploymentStream = (socketUrl: string) => {
     closeSocket();
     const token = typeof window !== 'undefined' ? window.localStorage.getItem('apployd_token') ?? '' : '';
-    const url = new URL(socketUrl);
+    const url = new URL(normalizeWebSocketUrl(socketUrl));
     if (token) {
       url.searchParams.set('token', token);
     }

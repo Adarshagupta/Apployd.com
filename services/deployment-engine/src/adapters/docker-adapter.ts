@@ -534,7 +534,7 @@ export class DockerAdapter {
    */
   async healthCheck(
     hostPort: number,
-    _containerPort: number,
+    containerPort: number,
     containerId?: string,
     onLog?: LogCallback,
   ): Promise<boolean> {
@@ -557,6 +557,16 @@ export class DockerAdapter {
           // inspect failed — container may have been removed
           onLog?.('Health check: unable to inspect container — it may have crashed');
           return false;
+        }
+      }
+
+      // Probe from inside the container first. This works even when the deployment-engine
+      // itself runs in Docker and cannot reach host loopback-mapped ports directly.
+      if (containerId) {
+        const internalOk = await this.containerProbe(containerId, containerPort);
+        if (internalOk) {
+          onLog?.(`Health check passed (container localhost:${containerPort} on attempt ${i + 1})`);
+          return true;
         }
       }
 
@@ -593,6 +603,31 @@ export class DockerAdapter {
 
     onLog?.('Health check: timed out after 30 seconds');
     return false;
+  }
+
+  private async containerProbe(containerId: string, containerPort: number): Promise<boolean> {
+    const probeScript = [
+      `if command -v curl >/dev/null 2>&1; then`,
+      `  curl -fsS --max-time 2 http://127.0.0.1:${containerPort}/ >/dev/null`,
+      `elif command -v wget >/dev/null 2>&1; then`,
+      `  wget -q -T 2 -O /dev/null http://127.0.0.1:${containerPort}/`,
+      `elif command -v busybox >/dev/null 2>&1; then`,
+      `  busybox wget -q -T 2 -O /dev/null http://127.0.0.1:${containerPort}/`,
+      `elif command -v nc >/dev/null 2>&1; then`,
+      `  nc -z -w2 127.0.0.1 ${containerPort}`,
+      'else',
+      '  exit 1',
+      'fi',
+    ].join('\n');
+
+    try {
+      await runCommand(
+        `docker exec ${shellEscape(containerId)} sh -lc ${shellEscape(probeScript)}`,
+      );
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**

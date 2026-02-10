@@ -2,11 +2,11 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { z } from 'zod';
 
-import { env } from '../../config/env.js';
 import { AccessService } from '../../services/access-service.js';
 import { AuditLogService } from '../../services/audit-log-service.js';
 import { DeployQueueService } from '../../services/deploy-queue-service.js';
 import { prisma } from '../../lib/prisma.js';
+import { resolveDeploymentWebsocketUrl } from '../../lib/deployment-websocket-url.js';
 import { DeploymentRequestError, DeploymentRequestService } from '../../services/deployment-request-service.js';
 import { SleepService } from '../../services/sleep-service.js';
 
@@ -233,7 +233,7 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
         activeDeploymentId: deployment.project.activeDeploymentId,
       },
       createdByName,
-      websocket: `${env.API_BASE_URL.replace('http', 'ws')}/ws/deployments/${deployment.id}`,
+      websocket: resolveDeploymentWebsocketUrl(deployment.id),
     };
   });
 
