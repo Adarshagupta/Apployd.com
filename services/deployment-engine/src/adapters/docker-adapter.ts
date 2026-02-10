@@ -111,7 +111,7 @@ function pythonDockerfile(projectId: string): string {
     '    set -ex; \\',
     '    if [ -f requirements.txt ]; then \\',
     '      echo ">>> Installing from requirements.txt"; \\',
-    '      pip install --no-deps -r requirements.txt || pip install -r requirements.txt; \\',
+    '      pip install -r requirements.txt; \\',
     '    elif [ -f Pipfile ]; then \\',
     '      echo ">>> Installing pipenv and dependencies"; \\',
     '      pip install pipenv && pipenv install --system --deploy || pipenv install --system; \\',
