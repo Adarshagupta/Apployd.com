@@ -39,7 +39,10 @@ export const buildApp = () => {
     credentials: true,
   });
   app.register(sensible);
-  app.register(jwt, { secret: env.JWT_SECRET });
+  app.register(jwt, {
+    secret: env.JWT_SECRET,
+    sign: { expiresIn: '7d' },
+  });
   app.register(websocket);
   app.register(authenticatePlugin);
 

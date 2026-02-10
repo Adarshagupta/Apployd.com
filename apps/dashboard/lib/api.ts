@@ -2,6 +2,13 @@ const AUTH_STORAGE_KEY = 'apployd_token';
 const LOCAL_API_FALLBACK = 'http://localhost:4000/api/v1';
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
+export class UnauthorizedError extends Error {
+  constructor(message = 'Unauthorized') {
+    super(message);
+    this.name = 'UnauthorizedError';
+  }
+}
+
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
 const toWebSocketScheme = (value: string) =>
   value.replace(/^https:\/\//i, 'wss://').replace(/^http:\/\//i, 'ws://');
@@ -92,6 +99,7 @@ const request = async (path: string, options?: RequestInit) => {
       if (!onAuthPage) {
         window.location.replace(`/login?next=${encodeURIComponent(next)}`);
       }
+      throw new UnauthorizedError(payload.message ?? 'Unauthorized');
     }
     throw new Error(payload.message ?? `HTTP ${response.status}`);
   }

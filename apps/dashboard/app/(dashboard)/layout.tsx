@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation';
 
 import { DashboardNav } from '../../components/dashboard-nav';
 import { WorkspaceProvider } from '../../components/workspace-provider';
-import { apiClient } from '../../lib/api';
+import { apiClient, UnauthorizedError } from '../../lib/api';
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/overview': {
@@ -145,10 +145,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           setAuthChecked(true);
         }
       })
-      .catch(() => {
-        window.localStorage.removeItem(AUTH_STORAGE_KEY);
+      .catch((error) => {
+        if (error instanceof UnauthorizedError) {
+          // Token is invalid/expired - api.ts already handles redirect
+          // Just ensure we don't set authChecked
+          return;
+        }
+        // For network errors or other issues, allow access (optimistic)
+        // User will get proper 401 on actual API calls if token is bad
         if (!cancelled) {
-          redirectToLogin();
+          setAuthChecked(true);
         }
       });
 
