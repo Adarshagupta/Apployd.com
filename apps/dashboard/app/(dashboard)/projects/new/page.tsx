@@ -13,6 +13,16 @@ export const dynamic = 'force-dynamic';
 
 const SLUG_PATTERN = /^[a-z0-9-]+$/;
 const ENV_KEY_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
+const MIN_RESOURCE_LIMITS = {
+  ram: 128,
+  cpu: 100,
+  bandwidth: 1,
+} as const;
+const DEFAULT_RESOURCE_LIMITS = {
+  ram: 512,
+  cpu: 500,
+  bandwidth: 50,
+} as const;
 
 interface EnvRow {
   key: string;
@@ -39,6 +49,17 @@ interface GitHubConnectionStatus {
     tokenScope: string | null;
     createdAt: string;
     updatedAt: string;
+  } | null;
+}
+
+interface CurrentSubscription {
+  status: string;
+  poolRamMb: number;
+  poolCpuMillicores: number;
+  poolBandwidthGb: number;
+  plan?: {
+    code: string;
+    displayName: string;
   } | null;
 }
 
@@ -69,6 +90,8 @@ const parseGithubRepo = (repoUrl: string) => {
   }
 };
 
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
 export default function CreateProjectPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -83,6 +106,8 @@ export default function CreateProjectPage() {
     slug: '',
     repoUrl: '',
     branch: 'main',
+    rootDirectory: '',
+    deploymentRegion: 'fsn1',
     buildCommand: '',
     startCommand: '',
     targetPort: 3000,
@@ -102,10 +127,29 @@ export default function CreateProjectPage() {
   const [githubLoading, setGithubLoading] = useState(false);
   const [githubConnecting, setGithubConnecting] = useState(false);
   const [selectedGithubRepoId, setSelectedGithubRepoId] = useState('');
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
+  const [subscription, setSubscription] = useState<CurrentSubscription | null>(null);
 
   const selectedGithubRepo = useMemo(
     () => githubRepos.find((repo) => repo.id === selectedGithubRepoId) ?? null,
     [githubRepos, selectedGithubRepoId],
+  );
+  const resourceLimits = useMemo(
+    () => ({
+      ram: Math.max(
+        MIN_RESOURCE_LIMITS.ram,
+        subscription?.poolRamMb ?? DEFAULT_RESOURCE_LIMITS.ram,
+      ),
+      cpu: Math.max(
+        MIN_RESOURCE_LIMITS.cpu,
+        subscription?.poolCpuMillicores ?? DEFAULT_RESOURCE_LIMITS.cpu,
+      ),
+      bandwidth: Math.max(
+        MIN_RESOURCE_LIMITS.bandwidth,
+        subscription?.poolBandwidthGb ?? DEFAULT_RESOURCE_LIMITS.bandwidth,
+      ),
+    }),
+    [subscription],
   );
 
   const slugError = useMemo(() => {
@@ -148,6 +192,24 @@ export default function CreateProjectPage() {
     }
   }, [githubStatus?.connected]);
 
+  const loadSubscription = useCallback(async () => {
+    if (!selectedOrganizationId) {
+      setSubscription(null);
+      return;
+    }
+
+    setSubscriptionLoading(true);
+    try {
+      const data = await apiClient.get(`/plans/current?organizationId=${selectedOrganizationId}`);
+      setSubscription((data.subscription ?? null) as CurrentSubscription | null);
+    } catch (error) {
+      setSubscription(null);
+      setMessage((error as Error).message);
+    } finally {
+      setSubscriptionLoading(false);
+    }
+  }, [selectedOrganizationId]);
+
   const connectGitHub = async () => {
     setGithubConnecting(true);
     setMessage('');
@@ -181,6 +243,10 @@ export default function CreateProjectPage() {
   }, [loadGitHubStatus]);
 
   useEffect(() => {
+    loadSubscription().catch(() => undefined);
+  }, [loadSubscription]);
+
+  useEffect(() => {
     if (githubStatus?.connected) {
       loadGitHubRepositories().catch(() => undefined);
     }
@@ -200,6 +266,15 @@ export default function CreateProjectPage() {
       setMessage(githubMessage ?? 'GitHub connection failed.');
     }
   }, [loadGitHubRepositories, loadGitHubStatus, searchParams]);
+
+  useEffect(() => {
+    setForm((prev) => ({
+      ...prev,
+      ram: clamp(prev.ram, MIN_RESOURCE_LIMITS.ram, resourceLimits.ram),
+      cpu: clamp(prev.cpu, MIN_RESOURCE_LIMITS.cpu, resourceLimits.cpu),
+      bandwidth: clamp(prev.bandwidth, MIN_RESOURCE_LIMITS.bandwidth, resourceLimits.bandwidth),
+    }));
+  }, [resourceLimits]);
 
   const searchGitHubRepos = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -250,6 +325,11 @@ export default function CreateProjectPage() {
     }
 
     const cleanedRepoUrl = form.repoUrl.trim();
+    const cleanedRootDirectory =
+      form.rootDirectory
+        .trim()
+        .replace(/^[\\/]+/, '')
+        .replace(/[\\/]+$/, '') || undefined;
     if (cleanedRepoUrl) {
       try {
         new URL(cleanedRepoUrl);
@@ -262,6 +342,13 @@ export default function CreateProjectPage() {
     try {
       setSubmitting(true);
       setMessage('');
+      const selectedRam = clamp(Number(form.ram), MIN_RESOURCE_LIMITS.ram, resourceLimits.ram);
+      const selectedCpu = clamp(Number(form.cpu), MIN_RESOURCE_LIMITS.cpu, resourceLimits.cpu);
+      const selectedBandwidth = clamp(
+        Number(form.bandwidth),
+        MIN_RESOURCE_LIMITS.bandwidth,
+        resourceLimits.bandwidth,
+      );
       const githubRepo = parseGithubRepo(cleanedRepoUrl);
       const response = await apiClient.post('/projects', {
         organizationId: selectedOrganizationId,
@@ -272,13 +359,15 @@ export default function CreateProjectPage() {
         repoName: githubRepo?.name,
         repoFullName: githubRepo?.fullName,
         branch: form.branch.trim() || 'main',
+        rootDirectory: cleanedRootDirectory,
+        deploymentRegion: form.deploymentRegion,
         buildCommand: form.buildCommand.trim() || undefined,
         startCommand: form.startCommand.trim() || undefined,
         targetPort: Number(form.targetPort),
         autoDeployEnabled: form.autoDeployEnabled,
-        resourceRamMb: Number(form.ram),
-        resourceCpuMillicore: Number(form.cpu),
-        resourceBandwidthGb: Number(form.bandwidth),
+        resourceRamMb: selectedRam,
+        resourceCpuMillicore: selectedCpu,
+        resourceBandwidthGb: selectedBandwidth,
       });
 
       const createdProjectId = (response.project as { id?: string } | undefined)?.id;
@@ -457,6 +546,15 @@ export default function CreateProjectPage() {
                 />
               </label>
               <label>
+                <span className="field-label">Repository folder (optional)</span>
+                <input
+                  value={form.rootDirectory}
+                  onChange={(event) => setForm((prev) => ({ ...prev, rootDirectory: event.target.value }))}
+                  className="field-input"
+                  placeholder="/backend or apps/web"
+                />
+              </label>
+              <label>
                 <span className="field-label">Target port</span>
                 <input
                   type="number"
@@ -559,33 +657,72 @@ export default function CreateProjectPage() {
           </section>
 
           <aside className="space-y-4 rounded-2xl border border-slate-200 p-4">
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-slate-900">Location</p>
+              <label>
+                <span className="field-label">Deployment region</span>
+                <select
+                  value={form.deploymentRegion}
+                  onChange={(event) => setForm((prev) => ({ ...prev, deploymentRegion: event.target.value }))}
+                  className="field-input"
+                >
+                  <option value="fsn1">Frankfurt, Germany (fsn1)</option>
+                </select>
+              </label>
+              <p className="text-xs text-slate-600">More regions are coming soon.</p>
+            </div>
+
             <div className="space-y-3">
               <p className="text-sm font-semibold text-slate-900">Initial resource allocation</p>
+              <p className="text-xs text-slate-600">
+                {subscription
+                  ? `Subscription (${subscription.status}): up to ${resourceLimits.ram} MB RAM, ${resourceLimits.cpu} mCPU, ${resourceLimits.bandwidth} GB bandwidth`
+                  : selectedOrganizationId
+                    ? subscriptionLoading
+                      ? 'Loading subscription limits...'
+                      : `Using default limits: ${resourceLimits.ram} MB RAM, ${resourceLimits.cpu} mCPU, ${resourceLimits.bandwidth} GB bandwidth`
+                    : 'Select an organization to load subscription limits.'}
+              </p>
               <ResourceSlider
                 label="RAM"
-                min={128}
-                max={8192}
+                min={MIN_RESOURCE_LIMITS.ram}
+                max={resourceLimits.ram}
                 step={128}
                 value={form.ram}
                 unit="MB"
-                onChange={(ram) => setForm((prev) => ({ ...prev, ram }))}
+                onChange={(ram) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    ram: clamp(ram, MIN_RESOURCE_LIMITS.ram, resourceLimits.ram),
+                  }))
+                }
               />
               <ResourceSlider
                 label="CPU"
-                min={100}
-                max={8000}
+                min={MIN_RESOURCE_LIMITS.cpu}
+                max={resourceLimits.cpu}
                 step={100}
                 value={form.cpu}
                 unit="mCPU"
-                onChange={(cpu) => setForm((prev) => ({ ...prev, cpu }))}
+                onChange={(cpu) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    cpu: clamp(cpu, MIN_RESOURCE_LIMITS.cpu, resourceLimits.cpu),
+                  }))
+                }
               />
               <ResourceSlider
                 label="Bandwidth"
-                min={1}
-                max={2000}
+                min={MIN_RESOURCE_LIMITS.bandwidth}
+                max={resourceLimits.bandwidth}
                 value={form.bandwidth}
                 unit="GB"
-                onChange={(bandwidth) => setForm((prev) => ({ ...prev, bandwidth }))}
+                onChange={(bandwidth) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    bandwidth: clamp(bandwidth, MIN_RESOURCE_LIMITS.bandwidth, resourceLimits.bandwidth),
+                  }))
+                }
               />
             </div>
 
