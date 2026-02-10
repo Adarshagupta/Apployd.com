@@ -8,6 +8,7 @@ import websocket from '@fastify/websocket';
 import { env } from './config/env.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { billingRoutes } from './modules/billing/routes.js';
+import { containerRoutes } from './modules/containers/routes.js';
 import { deploymentRoutes } from './modules/deployments/routes.js';
 import { domainRoutes } from './modules/domains/routes.js';
 import { healthRoutes } from './modules/health/routes.js';
@@ -26,6 +27,7 @@ import { usageRoutes } from './modules/usage/routes.js';
 import { instrumentHttpRequest } from './lib/observability.js';
 import authenticatePlugin from './plugins/authenticate.js';
 import { deploymentWebsocketRoutes } from './websocket/deployment-events.js';
+import { containerLogsWebsocketRoutes } from './websocket/container-logs.js';
 
 export const buildApp = () => {
   const app = Fastify({
@@ -99,6 +101,7 @@ export const buildApp = () => {
     api.register(projectRoutes);
     api.register(secretRoutes);
     api.register(deploymentRoutes);
+    api.register(containerRoutes);
     api.register(domainRoutes);
     api.register(usageRoutes);
     api.register(logRoutes);
@@ -110,6 +113,7 @@ export const buildApp = () => {
   }, { prefix: '/api/v1' });
 
   app.register(deploymentWebsocketRoutes);
+  app.register(containerLogsWebsocketRoutes);
 
   return app;
 };

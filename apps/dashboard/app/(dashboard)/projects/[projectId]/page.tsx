@@ -5,9 +5,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 import { DeployForm } from '../../../../components/deploy-form';
-import { LogsTable } from '../../../../components/logs-table';
+import { ContainerLogViewer } from '../../../../components/container-log-viewer';
 import { ResourceSlider } from '../../../../components/resource-slider';
 import { apiClient } from '../../../../lib/api';
+import { useContainerLogs } from '../../../../lib/use-container-logs';
 import { useWorkspaceContext } from '../../../../components/workspace-provider';
 
 /* ---------- types ---------- */
@@ -88,7 +89,7 @@ interface ProjectUsageDetails {
   };
 }
 
-type Tab = 'deployments' | 'settings' | 'domains' | 'environment' | 'usage' | 'logs' | 'deploy';
+type Tab = 'deployments' | 'settings' | 'domains' | 'environment' | 'usage' | 'realtime-logs';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'deployments', label: 'Deployments' },
@@ -96,8 +97,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'domains', label: 'Domains' },
   { key: 'environment', label: 'Environment Variables' },
   { key: 'usage', label: 'Usage' },
-  { key: 'logs', label: 'Logs' },
-  { key: 'deploy', label: 'Deploy' },
+  { key: 'realtime-logs', label: 'Realtime Logs' },
 ];
 
 function SkeletonBlock({ className }: { className: string }) {
@@ -129,16 +129,30 @@ export default function ProjectDetailPage() {
   const [usageDetails, setUsageDetails] = useState<ProjectUsageDetails | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
 
-  /* ---- Logs state ---- */
-  interface LogRow {
-    timestamp: string;
-    level: string;
-    message: string;
-    source: string;
+  /* ---- Realtime logs / Container state ---- */
+  interface Container {
+    id: string;
+    dockerContainerId: string;
+    status: string;
+    imageTag?: string | null;
+    ports?: string | null;
+    createdAt: string;
   }
-  const [logs, setLogs] = useState<LogRow[]>([]);
-  const [logsLoading, setLogsLoading] = useState(false);
-  const [autoRefreshLogs, setAutoRefreshLogs] = useState(true);
+  const [containers, setContainers] = useState<Container[]>([]);
+  const [containersLoading, setContainersLoading] = useState(false);
+  const [selectedContainerId, setSelectedContainerId] = useState<string | null>(null);
+
+  // Use WebSocket hook for realtime logs
+  const { 
+    logs: realtimeLogs, 
+    isConnected: logsConnected, 
+    error: logsError,
+    clearLogs: clearRealtimeLogs,
+    reconnect: reconnectLogs 
+  } = useContainerLogs({ 
+    containerId: selectedContainerId,
+    enabled: activeTab === 'realtime-logs' && !!selectedContainerId
+  });
 
   const loadDeployments = useCallback(async (options?: { silent?: boolean }) => {
     if (!projectId) return;
@@ -179,29 +193,35 @@ export default function ProjectDetailPage() {
     }
   }, [projectId]);
 
-  const loadLogs = useCallback(async (options?: { silent?: boolean }) => {
+  const loadContainers = useCallback(async (options?: { silent?: boolean }) => {
     if (!projectId) {
-      setLogs([]);
+      setContainers([]);
       return;
     }
 
     const silent = options?.silent ?? false;
     try {
       if (!silent) {
-        setLogsLoading(true);
+        setContainersLoading(true);
       }
-      const data = (await apiClient.get(`/logs?projectId=${projectId}&limit=200`)) as { logs?: LogRow[] };
-      setLogs(data.logs ?? []);
+      const data = (await apiClient.get(`/containers?projectId=${projectId}`)) as { containers?: Container[] };
+      const fetchedContainers = data.containers ?? [];
+      setContainers(fetchedContainers);
+      
+      // Auto-select first container if none selected
+      if (!selectedContainerId && fetchedContainers.length > 0) {
+        setSelectedContainerId(fetchedContainers[0].id);
+      }
     } catch {
       if (!silent) {
-        setLogs([]);
+        setContainers([]);
       }
     } finally {
       if (!silent) {
-        setLogsLoading(false);
+        setContainersLoading(false);
       }
     }
-  }, [projectId]);
+  }, [projectId, selectedContainerId]);
 
   useEffect(() => {
     loadDeployments().catch(() => undefined);
@@ -214,23 +234,24 @@ export default function ProjectDetailPage() {
     loadUsage().catch(() => undefined);
   }, [activeTab, loadUsage]);
 
+  // Load containers when on realtime-logs tab
   useEffect(() => {
-    if (activeTab !== 'logs') {
+    if (activeTab !== 'realtime-logs') {
       return;
     }
-    loadLogs().catch(() => undefined);
-  }, [activeTab, loadLogs]);
+    loadContainers().catch(() => undefined);
+  }, [activeTab, loadContainers]);
 
-  // Auto-refresh logs every 3 seconds when on logs tab with auto-refresh enabled
+  // Refresh containers list every 10 seconds when on realtime-logs tab
   useEffect(() => {
-    if (activeTab !== 'logs' || !autoRefreshLogs) {
+    if (activeTab !== 'realtime-logs') {
       return;
     }
     const interval = setInterval(() => {
-      loadLogs({ silent: true }).catch(() => undefined);
-    }, 3000);
+      loadContainers({ silent: true }).catch(() => undefined);
+    }, 10000);
     return () => clearInterval(interval);
-  }, [activeTab, autoRefreshLogs, loadLogs]);
+  }, [activeTab, loadContainers]);
 
   /** Find the most recent in-progress deployment (queued | building | deploying). */
   const inProgressDeployment = useMemo(
@@ -626,9 +647,9 @@ export default function ProjectDetailPage() {
             <button
               type="button"
               className="ml-auto text-xs font-medium text-slate-900 hover:underline"
-              onClick={() => setActiveTab('deploy')}
+              onClick={() => setActiveTab('realtime-logs')}
             >
-              View logs →
+              View logs
             </button>
           </div>
         )}
@@ -647,7 +668,7 @@ export default function ProjectDetailPage() {
               }`}
             >
               {tab.label}
-              {tab.key === 'deploy' && inProgressDeployment && (
+              {tab.key === 'deployments' && inProgressDeployment && (
                 <span className="ml-1.5 inline-flex h-2 w-2 rounded-full bg-slate-900 animate-pulse" />
               )}
               {activeTab === tab.key && (
@@ -836,12 +857,41 @@ export default function ProjectDetailPage() {
                 <button
                   type="button"
                   className="mt-3 text-sm font-medium text-slate-900 hover:underline"
-                  onClick={() => setActiveTab('deploy')}
+                  onClick={() => {
+                    document.getElementById('new-deployment-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
                 >
-                  Create your first deployment →
+                  Create your first deployment
                 </button>
               </div>
             )}
+
+            <div id="new-deployment-form" className="mt-6 border-t border-slate-200 pt-6">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">New Deployment</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Trigger a manual deployment with optional overrides.
+                  Deployments run server-side - you can close the browser and come back anytime.
+                </p>
+              </div>
+              <div className="mt-4">
+                <DeployForm
+                  projectId={project.id}
+                  defaults={{
+                    gitUrl: project.repoUrl,
+                    branch: project.branch,
+                    rootDirectory: project.rootDirectory,
+                    buildCommand: project.buildCommand,
+                    startCommand: project.startCommand,
+                    port: project.targetPort,
+                    serviceType: project.serviceType,
+                    outputDirectory: project.outputDirectory,
+                  }}
+                  activeDeploymentId={inProgressDeployment?.id ?? null}
+                  onDeploymentComplete={handleDeploymentComplete}
+                />
+              </div>
+            </div>
           </div>
         )}
 
@@ -1428,87 +1478,80 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
-        {/* ===== LOGS TAB ===== */}
-        {activeTab === 'logs' && (
+        {/* ===== REALTIME LOGS TAB ===== */}
+        {activeTab === 'realtime-logs' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold text-slate-900">Project Logs</h3>
+                <h3 className="text-base font-semibold text-slate-900">Realtime Container Logs</h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  Realtime logs from deployments and running containers for this project.
+                  Live stream from active containers for this project.
                 </p>
               </div>
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 text-sm text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={autoRefreshLogs}
-                    onChange={(e) => setAutoRefreshLogs(e.target.checked)}
-                    className="rounded border-slate-300"
-                  />
-                  Auto-refresh (3s)
-                </label>
-                <button
-                  onClick={() => loadLogs()}
-                  disabled={logsLoading}
-                  className="btn-secondary"
-                >
-                  {logsLoading ? 'Loading...' : 'Refresh'}
-                </button>
-              </div>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => loadContainers()}
+                disabled={containersLoading}
+              >
+                {containersLoading ? 'Refreshing...' : 'Refresh containers'}
+              </button>
             </div>
 
-            {logsLoading && !logs.length ? (
+            {containersLoading && !containers.length ? (
               <div className="rounded-xl border border-slate-200 p-8 text-center">
-                <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-cyan-500 border-r-transparent"></div>
-                <p className="mt-3 text-sm text-slate-600">Loading logs...</p>
+                <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-cyan-500 border-r-transparent" />
+                <p className="mt-3 text-sm text-slate-600">Loading containers...</p>
               </div>
-            ) : logs.length > 0 ? (
-              <div>
-                <p className="mb-2 text-xs text-slate-500">
-                  Showing last {logs.length} log entries • {autoRefreshLogs ? 'Auto-refreshing every 3 seconds' : 'Paused'}
-                </p>
-                <LogsTable rows={logs} />
+            ) : containers.length ? (
+              <div className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                  <label>
+                    <span className="field-label">Container</span>
+                    <select
+                      value={selectedContainerId ?? ''}
+                      onChange={(event) => setSelectedContainerId(event.target.value || null)}
+                      className="field-input"
+                    >
+                      {containers.map((container) => (
+                        <option key={container.id} value={container.id}>
+                          {container.dockerContainerId.slice(0, 12)} | {container.status}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={clearRealtimeLogs}
+                      disabled={!realtimeLogs.length}
+                    >
+                      Clear view
+                    </button>
+                  </div>
+                </div>
+
+                <ContainerLogViewer
+                  logs={realtimeLogs}
+                  isConnected={logsConnected}
+                  error={logsError}
+                  onClear={clearRealtimeLogs}
+                  onReconnect={reconnectLogs}
+                />
               </div>
             ) : (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-8 text-center">
-                <p className="text-sm text-slate-600">No logs available yet for this project.</p>
+                <p className="text-sm text-slate-600">No active containers found for this project.</p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Logs will appear here once deployments run or containers start.
+                  Start a deployment to stream realtime logs here.
                 </p>
               </div>
             )}
-          </div>
-        )}
-
-        {/* ===== DEPLOY TAB ===== */}
-        {activeTab === 'deploy' && (
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-base font-semibold text-slate-900">New Deployment</h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Trigger a manual deployment with optional overrides.
-                Deployments run server-side — you can close the browser and come back anytime.
-              </p>
-            </div>
-            <DeployForm
-              projectId={project.id}
-              defaults={{
-                gitUrl: project.repoUrl,
-                branch: project.branch,
-                rootDirectory: project.rootDirectory,
-                buildCommand: project.buildCommand,
-                startCommand: project.startCommand,
-                port: project.targetPort,
-                serviceType: project.serviceType,
-                outputDirectory: project.outputDirectory,
-              }}
-              activeDeploymentId={inProgressDeployment?.id ?? null}
-              onDeploymentComplete={handleDeploymentComplete}
-            />
           </div>
         )}
       </div>
     </div>
   );
 }
+
