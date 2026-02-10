@@ -136,6 +136,20 @@ class ApploydClient {
     });
   }
 
+  async verifyEmail(email, code) {
+    return this.request('/auth/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ email, code }),
+    });
+  }
+
+  async resendVerificationCode(email) {
+    return this.request('/auth/resend-verification-code', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
   async me() {
     return this.request('/auth/me');
   }
@@ -751,7 +765,58 @@ async function activate(context) {
         },
         async () => {
           const loginResult = await client.login(email, password);
-          await client.setToken(loginResult.token);
+          let token = loginResult?.token || null;
+          let loginEmail = loginResult?.email || email;
+
+          if (!token && loginResult?.verificationRequired) {
+            vscode.window.showInformationMessage(
+              loginResult.message || `Verification code sent to ${loginEmail}.`,
+            );
+
+            let verified = false;
+            while (!verified) {
+              const code = await vscode.window.showInputBox({
+                title: 'Apployd Verification',
+                prompt: `Enter the 6-digit code sent to ${loginEmail}`,
+                ignoreFocusOut: true,
+                validateInput: (value) =>
+                  /^\d{6}$/.test(value.trim()) ? null : 'Enter a valid 6-digit code.',
+              });
+
+              if (!code) {
+                const choice = await vscode.window.showQuickPick(
+                  [
+                    { label: 'Resend Code', value: 'resend' },
+                    { label: 'Cancel Sign In', value: 'cancel' },
+                  ],
+                  {
+                    title: 'Verification required',
+                    placeHolder: 'No code entered',
+                  },
+                );
+
+                if (choice?.value !== 'resend') {
+                  throw new Error('Sign in cancelled.');
+                }
+
+                const resendResult = await client.resendVerificationCode(loginEmail);
+                vscode.window.showInformationMessage(
+                  resendResult.message || `Verification code resent to ${loginEmail}.`,
+                );
+                continue;
+              }
+
+              const verifyResult = await client.verifyEmail(loginEmail, code.trim());
+              token = verifyResult?.token || null;
+              verified = Boolean(token);
+            }
+          }
+
+          if (!token) {
+            throw new Error('Unable to complete sign in.');
+          }
+
+          await client.setToken(token);
           await refreshWorkspace(false);
           const emailLabel = model.userEmail || email;
           vscode.window.showInformationMessage(`Apployd: Signed in as ${emailLabel}.`);

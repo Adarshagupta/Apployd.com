@@ -34,6 +34,6 @@ Set these in VS Code settings:
 
 ## Notes
 
-- Authentication uses `/auth/login` and stores the JWT in VS Code `SecretStorage`.
+- Authentication uses `/auth/login` plus email verification code via `/auth/verify-email`, then stores the JWT in VS Code `SecretStorage`.
 - The project view reads organizations from `/organizations` and projects from `/projects`.
 - This is an MVP. It can be extended with create/update project flows, env/secret management, and realtime deployment/log websockets.

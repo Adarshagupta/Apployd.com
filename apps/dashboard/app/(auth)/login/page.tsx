@@ -54,19 +54,26 @@ export default function LoginPage() {
 
     try {
       const data = await apiClient.post('/auth/login', { email, password });
-      window.localStorage.setItem('apployd_token', data.token);
-      const nextRaw = searchParams?.get('next') ?? null;
-      const nextPath =
-        nextRaw && nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : '/overview';
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      router.push(nextPath as any);
-    } catch (err) {
-      const message = (err as Error).message;
-      setError(message);
-      if (message.toLowerCase().includes('verify your email')) {
-        setShowVerification(true);
-        setVerificationMessage('Your email is not verified yet. Enter the code we sent to continue.');
+      if (data.token) {
+        window.localStorage.setItem('apployd_token', data.token);
+        const nextRaw = searchParams?.get('next') ?? null;
+        const nextPath =
+          nextRaw && nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : '/overview';
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        router.push(nextPath as any);
+        return;
       }
+
+      if (data.verificationRequired) {
+        setShowVerification(true);
+        setVerificationMessage(data.message ?? 'Enter the verification code sent to your email.');
+        setDevCode(typeof data.devCode === 'string' ? data.devCode : '');
+        return;
+      }
+
+      throw new Error('Unexpected login response. Please try again.');
+    } catch (err) {
+      setError((err as Error).message);
     } finally {
       setSubmitting(false);
     }

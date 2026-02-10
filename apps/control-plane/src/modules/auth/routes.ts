@@ -202,36 +202,37 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       return reply.unauthorized('Invalid email or password');
     }
 
-    if (!user.emailVerifiedAt) {
-      try {
-        await emailVerification.sendCode({
-          userId: user.id,
-          email: user.email,
-          name: user.name,
-        });
-      } catch (error) {
-        if (!(error instanceof EmailVerificationError)) {
-          app.log.warn({ error }, 'Failed to auto-send verification code on login');
-        }
-      }
-
-      return reply.code(403).send({
-        message: 'Please verify your email before signing in.',
-        verificationRequired: true,
-        email: user.email,
-      });
-    }
-
-    const token = app.jwt.sign({ userId: user.id, email: user.email });
-
-    return {
-      token,
-      user: {
-        id: user.id,
+    try {
+      const dispatch = await emailVerification.sendCode({
+        userId: user.id,
         email: user.email,
         name: user.name,
-      },
-    };
+      });
+
+      return reply.code(202).send({
+        verificationRequired: true,
+        email: user.email,
+        message: user.emailVerifiedAt
+          ? 'We sent a login verification code to your email.'
+          : 'Please verify your email to complete sign in. We sent a verification code.',
+        expiresInMinutes: dispatch.expiresInMinutes,
+        ...(dispatch.devCode ? { devCode: dispatch.devCode } : {}),
+      });
+    } catch (error) {
+      if (error instanceof EmailVerificationError) {
+        // Cooldown still means a valid recent code exists for this user.
+        if (error.statusCode === 429) {
+          return reply.code(202).send({
+            verificationRequired: true,
+            email: user.email,
+            message: error.message,
+          });
+        }
+
+        return reply.code(error.statusCode).send({ message: error.message });
+      }
+      throw error;
+    }
   });
 
   app.post('/auth/verify-email', async (request, reply) => {
@@ -250,19 +251,19 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       return reply.unauthorized('Invalid or expired verification code.');
     }
 
-    if (!user.emailVerifiedAt) {
-      try {
-        const valid = await emailVerification.verifyCode(user.id, body.code);
-        if (!valid) {
-          return reply.unauthorized('Invalid or expired verification code.');
-        }
-      } catch (error) {
-        if (error instanceof EmailVerificationError) {
-          return reply.code(error.statusCode).send({ message: error.message });
-        }
-        throw error;
+    try {
+      const valid = await emailVerification.verifyCode(user.id, body.code);
+      if (!valid) {
+        return reply.unauthorized('Invalid or expired verification code.');
       }
+    } catch (error) {
+      if (error instanceof EmailVerificationError) {
+        return reply.code(error.statusCode).send({ message: error.message });
+      }
+      throw error;
+    }
 
+    if (!user.emailVerifiedAt) {
       await prisma.user.update({
         where: { id: user.id },
         data: { emailVerifiedAt: new Date() },
@@ -300,13 +301,6 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       };
     }
 
-    if (user.emailVerifiedAt) {
-      return {
-        success: true,
-        message: 'Email is already verified.',
-      };
-    }
-
     try {
       const resend = await emailVerification.sendCode({
         userId: user.id,
@@ -315,7 +309,9 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       });
       return {
         success: true,
-        message: 'Verification code sent.',
+        message: user.emailVerifiedAt
+          ? 'Login verification code sent.'
+          : 'Verification code sent.',
         expiresInMinutes: resend.expiresInMinutes,
         ...(resend.devCode ? { devCode: resend.devCode } : {}),
       };
