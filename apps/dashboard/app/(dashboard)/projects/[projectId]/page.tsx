@@ -697,6 +697,33 @@ export default function ProjectDetailPage() {
         {/* ===== DEPLOYMENTS TAB ===== */}
         {activeTab === 'deployments' && (
           <div className="space-y-4">
+            <div id="new-deployment-form" className="border-b border-slate-200 pb-6">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">New Deployment</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Trigger a manual deployment with optional overrides.
+                  Deployments run server-side - you can close the browser and come back anytime.
+                </p>
+              </div>
+              <div className="mt-4">
+                <DeployForm
+                  projectId={project.id}
+                  defaults={{
+                    gitUrl: project.repoUrl,
+                    branch: project.branch,
+                    rootDirectory: project.rootDirectory,
+                    buildCommand: project.buildCommand,
+                    startCommand: project.startCommand,
+                    port: project.targetPort,
+                    serviceType: project.serviceType,
+                    outputDirectory: project.outputDirectory,
+                  }}
+                  activeDeploymentId={inProgressDeployment?.id ?? null}
+                  onDeploymentComplete={handleDeploymentComplete}
+                />
+              </div>
+            </div>
+
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-900">Deployment History</h3>
               <button
@@ -866,32 +893,6 @@ export default function ProjectDetailPage() {
               </div>
             )}
 
-            <div id="new-deployment-form" className="mt-6 border-t border-slate-200 pt-6">
-              <div>
-                <h3 className="text-base font-semibold text-slate-900">New Deployment</h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Trigger a manual deployment with optional overrides.
-                  Deployments run server-side - you can close the browser and come back anytime.
-                </p>
-              </div>
-              <div className="mt-4">
-                <DeployForm
-                  projectId={project.id}
-                  defaults={{
-                    gitUrl: project.repoUrl,
-                    branch: project.branch,
-                    rootDirectory: project.rootDirectory,
-                    buildCommand: project.buildCommand,
-                    startCommand: project.startCommand,
-                    port: project.targetPort,
-                    serviceType: project.serviceType,
-                    outputDirectory: project.outputDirectory,
-                  }}
-                  activeDeploymentId={inProgressDeployment?.id ?? null}
-                  onDeploymentComplete={handleDeploymentComplete}
-                />
-              </div>
-            </div>
           </div>
         )}
 
