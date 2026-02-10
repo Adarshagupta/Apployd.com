@@ -53,6 +53,10 @@ interface UtilizationMetric {
   percent: number;
 }
 
+function SkeletonBlock({ className }: { className: string }) {
+  return <div aria-hidden="true" className={`skeleton ${className}`} />;
+}
+
 const safeNumber = (value: string | number | null | undefined): number => {
   const parsed = Number(value ?? 0);
   if (!Number.isFinite(parsed) || parsed < 0) {
@@ -318,6 +322,14 @@ export default function OverviewPage() {
     },
   ] as const;
 
+  const isOverviewLoading =
+    loading ||
+    (Boolean(selectedOrganizationId) &&
+      refreshing &&
+      !summary &&
+      !subscription &&
+      recentDeployments.length === 0);
+
   return (
     <div className="space-y-4">
       <SectionCard title="Mission Control" subtitle="Live operational posture for the selected organization.">
@@ -325,52 +337,77 @@ export default function OverviewPage() {
           <article className="workspace-card md:p-6">
             <div className="pointer-events-none absolute -right-20 -top-16 h-44 w-44 rounded-full opacity-30 blur-3xl" style={{ background: 'radial-gradient(circle, var(--accent-alt), transparent)' }} />
 
-            <div className="relative flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="workspace-label">Workspace</p>
-                <h3 className="workspace-title">
-                  {selectedOrganization?.name ?? 'No organization selected'}
-                </h3>
-                <p className="workspace-subtitle">
-                  {subscription?.plan?.displayName ?? 'No active plan'} • {subscription?.status ?? 'inactive'}
-                </p>
-                <p className="workspace-meta">
-                  {formatBillingWindow(subscription?.currentPeriodStart, subscription?.currentPeriodEnd)}
-                </p>
-              </div>
+            {isOverviewLoading ? (
+              <>
+                <div className="relative flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-2">
+                    <SkeletonBlock className="h-3 w-20 rounded" />
+                    <SkeletonBlock className="h-8 w-64 max-w-[70vw] rounded-xl" />
+                    <SkeletonBlock className="h-4 w-52 max-w-[60vw] rounded" />
+                    <SkeletonBlock className="h-3 w-44 max-w-[50vw] rounded" />
+                  </div>
+                  <SkeletonBlock className="h-10 w-24 rounded-xl" />
+                </div>
 
-              <button
-                type="button"
-                className="btn-secondary px-4 py-2"
-                onClick={() => {
-                  void loadOverview();
-                }}
-                disabled={refreshing}
-              >
-                {refreshing ? 'Refreshing...' : 'Refresh'}
-              </button>
-            </div>
+                <div className="relative mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {[0, 1, 2, 3].map((placeholder) => (
+                    <div key={placeholder} className="stat-card-overview">
+                      <SkeletonBlock className="h-3 w-20 rounded" />
+                      <SkeletonBlock className="mt-2 h-6 w-24 rounded-lg" />
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="relative flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="workspace-label">Workspace</p>
+                    <h3 className="workspace-title">
+                      {selectedOrganization?.name ?? 'No organization selected'}
+                    </h3>
+                    <p className="workspace-subtitle">
+                      {subscription?.plan?.displayName ?? 'No active plan'} • {subscription?.status ?? 'inactive'}
+                    </p>
+                    <p className="workspace-meta">
+                      {formatBillingWindow(subscription?.currentPeriodStart, subscription?.currentPeriodEnd)}
+                    </p>
+                  </div>
 
-            <div className="relative mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="stat-card-overview">
-                <p className="stat-label">Projects</p>
-                <p className="stat-value">{formatInteger(projects.length)}</p>
-              </div>
-              <div className="stat-card-overview">
-                <p className="stat-label">Deployments</p>
-                <p className="stat-value">{formatInteger(recentDeployments.length)}</p>
-              </div>
-              <div className="stat-card-overview">
-                <p className="stat-label">Overall Load</p>
-                <p className="stat-value">{overallLoadPercent.toFixed(1)}%</p>
-              </div>
-              <div className="stat-card-overview">
-                <p className="stat-label">Last Sync</p>
-                <p className="stat-value-sm">
-                  {lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString() : '--'}
-                </p>
-              </div>
-            </div>
+                  <button
+                    type="button"
+                    className="btn-secondary px-4 py-2"
+                    onClick={() => {
+                      void loadOverview();
+                    }}
+                    disabled={refreshing}
+                  >
+                    {refreshing ? 'Refreshing...' : 'Refresh'}
+                  </button>
+                </div>
+
+                <div className="relative mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="stat-card-overview">
+                    <p className="stat-label">Projects</p>
+                    <p className="stat-value">{formatInteger(projects.length)}</p>
+                  </div>
+                  <div className="stat-card-overview">
+                    <p className="stat-label">Deployments</p>
+                    <p className="stat-value">{formatInteger(recentDeployments.length)}</p>
+                  </div>
+                  <div className="stat-card-overview">
+                    <p className="stat-label">Overall Load</p>
+                    <p className="stat-value">{overallLoadPercent.toFixed(1)}%</p>
+                  </div>
+                  <div className="stat-card-overview">
+                    <p className="stat-label">Last Sync</p>
+                    <p className="stat-value-sm">
+                      {lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString() : '--'}
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
           </article>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
@@ -394,8 +431,35 @@ export default function OverviewPage() {
       </SectionCard>
 
       <SectionCard title="Capacity Radar" subtitle="Resource pressure across pooled limits for the current billing window.">
-        {!selectedOrganizationId ? (
+        {isOverviewLoading ? (
+          <div className="grid gap-4 lg:grid-cols-3">
+            {[0, 1, 2].map((placeholder) => (
+              <article key={placeholder} className="capacity-card">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-2">
+                    <SkeletonBlock className="h-3 w-24 rounded" />
+                    <SkeletonBlock className="h-6 w-28 rounded-lg" />
+                  </div>
+                  <SkeletonBlock className="h-6 w-20 rounded-full" />
+                </div>
+
+                <div className="mt-4">
+                  <SkeletonBlock className="h-2 w-full rounded-full" />
+                </div>
+
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <SkeletonBlock className="h-3 w-24 rounded" />
+                  <SkeletonBlock className="h-3 w-32 rounded" />
+                </div>
+
+                <SkeletonBlock className="mt-2 h-3 w-36 rounded" />
+              </article>
+            ))}
+          </div>
+        ) : !selectedOrganizationId ? (
           <p className="empty-state-text">Select an organization to load capacity metrics.</p>
+        ) : !summary ? (
+          <p className="empty-state-text">Capacity metrics are unavailable right now.</p>
         ) : (
           <div className="grid gap-4 lg:grid-cols-3">
             {utilizationMetrics.map((metric) => {
@@ -436,8 +500,29 @@ export default function OverviewPage() {
       </SectionCard>
 
       <SectionCard title="Deployment Feed" subtitle="Latest deployment transitions across this organization.">
-        {loading && !recentDeployments.length ? (
-          <p className="empty-state-text">Loading deployments...</p>
+        {isOverviewLoading ? (
+          <div className="space-y-2">
+            {[0, 1, 2].map((placeholder) => (
+              <article key={placeholder} className="deployment-card">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-2">
+                    <SkeletonBlock className="h-4 w-44 rounded" />
+                    <SkeletonBlock className="h-3 w-28 rounded" />
+                  </div>
+                  <SkeletonBlock className="h-6 w-20 rounded-full" />
+                </div>
+
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  {[0, 1, 2].map((field) => (
+                    <div key={field}>
+                      <SkeletonBlock className="h-3 w-16 rounded" />
+                      <SkeletonBlock className="mt-2 h-3 w-20 rounded" />
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
         ) : recentDeployments.length ? (
           <div className="space-y-2">
             {recentDeployments.map((deployment) => (
@@ -489,4 +574,3 @@ export default function OverviewPage() {
     </div>
   );
 }
-

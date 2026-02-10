@@ -12,9 +12,14 @@ export const dynamic = 'force-dynamic';
 type ProjectViewMode = 'grid' | 'list';
 type ProjectStatusFilter = 'all' | 'deployed' | 'notDeployed';
 
+function SkeletonBlock({ className }: { className: string }) {
+  return <div aria-hidden="true" className={`skeleton ${className}`} />;
+}
+
 export default function ProjectsPage() {
   const {
     projects,
+    loading,
     error: workspaceError,
   } = useWorkspaceContext();
 
@@ -256,7 +261,7 @@ export default function ProjectsPage() {
             </button>
 
             {addMenuOpen && (
-              <div className="absolute right-0 top-[calc(100%+0.5rem)] z-20 w-52 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+              <div className="absolute right-0 top-[calc(100%+0.5rem)] z-20 w-52 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-1 shadow-lg sm:right-0 sm:w-52">
                 <Link
                   href="/projects/new"
                   className="block rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
@@ -276,7 +281,35 @@ export default function ProjectsPage() {
           </div>
         </div>
 
-        {projects.length ? (
+        {loading ? (
+          <div className={viewMode === 'grid' ? 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3' : 'space-y-3'}>
+            {[0, 1, 2, 3, 4, 5].map((placeholder) => (
+              <article
+                key={placeholder}
+                className="group flex flex-col justify-between rounded-xl border border-slate-200 p-5"
+              >
+                <div>
+                  <SkeletonBlock className="h-5 w-36 rounded-lg" />
+                  <SkeletonBlock className="mt-2 h-3 w-24 rounded" />
+                </div>
+
+                <div className="mt-4 grid grid-cols-3 gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                  {[0, 1, 2].map((metric) => (
+                    <div key={metric}>
+                      <SkeletonBlock className="h-3 w-10 rounded" />
+                      <SkeletonBlock className="mt-1.5 h-3 w-12 rounded" />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <SkeletonBlock className="h-5 w-24 rounded-full" />
+                  <SkeletonBlock className="h-5 w-16 rounded-full" />
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : projects.length ? (
           filteredProjects.length ? (
             viewMode === 'grid' ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

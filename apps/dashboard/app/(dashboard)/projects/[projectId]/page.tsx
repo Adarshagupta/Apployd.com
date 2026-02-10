@@ -98,13 +98,17 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'deploy', label: 'Deploy' },
 ];
 
+function SkeletonBlock({ className }: { className: string }) {
+  return <div aria-hidden="true" className={`skeleton ${className}`} />;
+}
+
 /* ================================================================== */
 
 export default function ProjectDetailPage() {
   const params = useParams<{ projectId: string }>();
   const { projectId } = params ?? { projectId: '' };
   const router = useRouter();
-  const { projects, refresh } = useWorkspaceContext();
+  const { projects, refresh, loading: workspaceLoading } = useWorkspaceContext();
 
   const project = useMemo(
     () => projects.find((p) => p.id === projectId) ?? null,
@@ -472,6 +476,41 @@ export default function ProjectDetailPage() {
 
   /* ---- Loading / 404 ---- */
   if (!project) {
+    if (workspaceLoading) {
+      return (
+        <div className="space-y-0">
+          <div className="section-band !pb-0">
+            <SkeletonBlock className="h-3 w-24 rounded" />
+            <div className="mt-4">
+              <SkeletonBlock className="h-8 w-56 rounded-xl" />
+              <SkeletonBlock className="mt-2 h-3 w-32 rounded" />
+            </div>
+            <div className="mt-5 flex gap-2 border-b border-slate-200 pb-2">
+              {[0, 1, 2, 3, 4, 5].map((placeholder) => (
+                <SkeletonBlock key={placeholder} className="h-9 w-24 rounded-lg" />
+              ))}
+            </div>
+          </div>
+
+          <div className="section-band">
+            <div className="space-y-2">
+              {[0, 1, 2].map((placeholder) => (
+                <article key={placeholder} className="rounded-xl border border-slate-200 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="space-y-2">
+                      <SkeletonBlock className="h-4 w-56 rounded" />
+                      <SkeletonBlock className="h-3 w-32 rounded" />
+                    </div>
+                    <SkeletonBlock className="h-8 w-20 rounded-lg" />
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="section-band">
         <p className="text-sm text-slate-600">Project not found or still loading…</p>
@@ -594,7 +633,23 @@ export default function ProjectDetailPage() {
             </div>
 
             {deploymentsLoading ? (
-              <p className="text-sm text-slate-600">Loading deployments…</p>
+              <div className="space-y-2">
+                {[0, 1, 2].map((placeholder) => (
+                  <article key={placeholder} className="rounded-xl border border-slate-200 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <SkeletonBlock className="h-5 w-14 rounded-full" />
+                        <SkeletonBlock className="h-5 w-20 rounded-full" />
+                        <SkeletonBlock className="h-4 w-44 rounded" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <SkeletonBlock className="h-8 w-20 rounded-lg" />
+                        <SkeletonBlock className="h-8 w-20 rounded-lg" />
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
             ) : deployments.length ? (
               <div className="space-y-2">
                 {deployments.map((dep) => {
@@ -985,7 +1040,20 @@ export default function ProjectDetailPage() {
 
             {/* Domain list */}
             {domainsLoading ? (
-              <p className="text-sm text-slate-600">Loading domains…</p>
+              <div className="space-y-2">
+                {[0, 1, 2].map((placeholder) => (
+                  <article key={placeholder} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4">
+                    <div className="space-y-2 min-w-0">
+                      <SkeletonBlock className="h-4 w-44 rounded" />
+                      <SkeletonBlock className="h-3 w-64 rounded" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <SkeletonBlock className="h-8 w-24 rounded-lg" />
+                      <SkeletonBlock className="h-8 w-20 rounded-lg" />
+                    </div>
+                  </article>
+                ))}
+              </div>
             ) : customDomains.length ? (
               <div className="space-y-2">
                 {customDomains.map((d) => (
@@ -1117,7 +1185,17 @@ export default function ProjectDetailPage() {
             </div>
 
             {envLoading ? (
-              <p className="text-sm text-slate-600">Loading…</p>
+              <div className="space-y-2">
+                {[0, 1, 2].map((placeholder) => (
+                  <article key={placeholder} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3">
+                    <div className="space-y-2">
+                      <SkeletonBlock className="h-4 w-28 rounded" />
+                      <SkeletonBlock className="h-3 w-52 rounded" />
+                    </div>
+                    <SkeletonBlock className="h-9 w-20 rounded-xl" />
+                  </article>
+                ))}
+              </div>
             ) : projectSecrets.length ? (
               <div className="space-y-2">
                 {projectSecrets.map((secret) => (
@@ -1172,7 +1250,27 @@ export default function ProjectDetailPage() {
             </div>
 
             {usageLoading ? (
-              <p className="text-sm text-slate-600">Loading usage data…</p>
+              <>
+                <div className="grid gap-3 md:grid-cols-4">
+                  {[0, 1, 2, 3].map((placeholder) => (
+                    <div key={placeholder} className="metric-card">
+                      <SkeletonBlock className="h-3 w-16 rounded" />
+                      <SkeletonBlock className="mt-2 h-7 w-24 rounded-lg" />
+                      <SkeletonBlock className="mt-1 h-3 w-20 rounded" />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rounded-xl border border-slate-200 p-4 space-y-3">
+                  {[0, 1, 2, 3, 4].map((placeholder) => (
+                    <div key={placeholder} className="grid gap-3 md:grid-cols-5">
+                      {[0, 1, 2, 3, 4].map((cell) => (
+                        <SkeletonBlock key={cell} className="h-4 w-full rounded" />
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </>
             ) : usageDetails ? (
               <>
                 <div className="grid gap-3 md:grid-cols-4">

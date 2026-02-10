@@ -46,6 +46,10 @@ interface ProjectUsageRow {
   } | null;
 }
 
+function SkeletonBlock({ className }: { className: string }) {
+  return <div aria-hidden="true" className={`skeleton ${className}`} />;
+}
+
 export default function UsagePage() {
   const { selectedOrganizationId } = useWorkspaceContext();
   const [summary, setSummary] = useState<{
@@ -55,6 +59,7 @@ export default function UsagePage() {
   const [cpuData, setCpuData] = useState<Array<{ label: string; value: number }>>([]);
   const [ramData, setRamData] = useState<Array<{ label: string; value: number }>>([]);
   const [projectUsage, setProjectUsage] = useState<ProjectUsageRow[]>([]);
+  const [loading, setLoading] = useState(Boolean(selectedOrganizationId));
   const [message, setMessage] = useState('');
 
   const mapPoints = (points: DailyPoint[]) =>
@@ -69,9 +74,11 @@ export default function UsagePage() {
       setCpuData([]);
       setRamData([]);
       setProjectUsage([]);
+      setLoading(false);
       return;
     }
 
+    setLoading(true);
     try {
       const summaryData = await apiClient.get(`/usage/summary?organizationId=${selectedOrganizationId}`);
       setSummary(summaryData);
@@ -92,6 +99,8 @@ export default function UsagePage() {
       setMessage('');
     } catch (error) {
       setMessage((error as Error).message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -142,7 +151,17 @@ export default function UsagePage() {
     <div className="space-y-4">
       <SectionCard title="Usage Summary" subtitle="Live metering against the active subscription pool.">
 
-        {summary ? (
+        {loading && !summary ? (
+          <div className="grid gap-3 md:grid-cols-3">
+            {[0, 1, 2].map((placeholder) => (
+              <div key={placeholder} className="metric-card">
+                <SkeletonBlock className="h-3 w-16 rounded" />
+                <SkeletonBlock className="mt-2 h-7 w-32 rounded-lg" />
+                <SkeletonBlock className="mt-1 h-3 w-24 rounded" />
+              </div>
+            ))}
+          </div>
+        ) : summary ? (
           <div className="grid gap-3 md:grid-cols-3">
             <div className="metric-card">
               <p className="text-xs uppercase tracking-[0.12em] text-slate-500">CPU</p>
@@ -173,10 +192,24 @@ export default function UsagePage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionCard title="CPU Trend" subtitle="Last 14 days of recorded CPU metric">
-          <UsageChart title="cpu_millicore_seconds" data={cpuData} />
+          {loading && !cpuData.length ? (
+            <div className="rounded-xl border border-slate-200 p-4">
+              <SkeletonBlock className="h-4 w-40 rounded" />
+              <SkeletonBlock className="mt-4 h-48 w-full rounded-xl" />
+            </div>
+          ) : (
+            <UsageChart title="cpu_millicore_seconds" data={cpuData} />
+          )}
         </SectionCard>
         <SectionCard title="RAM Trend" subtitle="Last 14 days of recorded RAM metric">
-          <UsageChart title="ram_mb_seconds" data={ramData} />
+          {loading && !ramData.length ? (
+            <div className="rounded-xl border border-slate-200 p-4">
+              <SkeletonBlock className="h-4 w-40 rounded" />
+              <SkeletonBlock className="mt-4 h-48 w-full rounded-xl" />
+            </div>
+          ) : (
+            <UsageChart title="ram_mb_seconds" data={ramData} />
+          )}
         </SectionCard>
       </div>
 
@@ -184,7 +217,19 @@ export default function UsagePage() {
         title="Project Usage Breakdown"
         subtitle="Detailed usage and utilization by project for the active billing window."
       >
-        {projectUsage.length ? (
+        {loading && !projectUsage.length ? (
+          <div className="space-y-2">
+            {[0, 1, 2, 3].map((placeholder) => (
+              <div key={placeholder} className="rounded-xl border border-slate-200 p-3">
+                <div className="grid gap-3 md:grid-cols-6">
+                  {[0, 1, 2, 3, 4, 5].map((cell) => (
+                    <SkeletonBlock key={cell} className="h-4 w-full rounded" />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : projectUsage.length ? (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="text-left text-xs uppercase tracking-[0.12em] text-slate-500">

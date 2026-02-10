@@ -12,6 +12,10 @@ const THEME_STORAGE_KEY = 'apployd_dashboard_theme';
 const THEME_UPDATED_EVENT = 'apployd:dashboard-theme-updated';
 const AUTH_STORAGE_KEY = 'apployd_token';
 
+function SkeletonBlock({ className }: { className: string }) {
+  return <div aria-hidden="true" className={`skeleton ${className}`} />;
+}
+
 export default function SettingsPage() {
   const { selectedOrganizationId } = useWorkspaceContext();
   const [me, setMe] = useState<{ id: string; email: string; name: string | null; createdAt?: string } | null>(null);
@@ -20,11 +24,13 @@ export default function SettingsPage() {
     currentPeriodEnd: string;
     plan: { code: string; displayName: string } | null;
   } | null>(null);
+  const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<DashboardTheme>('dark');
   const [githubConnected, setGithubConnected] = useState(false);
   const [message, setMessage] = useState('');
 
   const load = async () => {
+    setLoading(true);
     try {
       const [meData, githubStatus] = await Promise.all([
         apiClient.get('/auth/me'),
@@ -44,6 +50,8 @@ export default function SettingsPage() {
       setMessage('');
     } catch (error) {
       setMessage((error as Error).message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -91,70 +99,102 @@ export default function SettingsPage() {
   return (
     <div className="space-y-4">
       <SectionCard title="Workspace Settings" subtitle="Account profile and subscription context for current workspace.">
-        <div className="grid gap-3 md:grid-cols-[320px_1fr]">
-          <div className="panel-muted p-3">
-            <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Security posture</p>
-            <p className="mt-1 text-sm text-slate-700">
-              GitHub integration: <span className="font-medium">{githubConnected ? 'Connected' : 'Not connected'}</span>
-            </p>
-            <p className="text-sm text-slate-700">
-              Auth type: <span className="font-medium">JWT session</span>
-            </p>
+        {loading ? (
+          <div className="grid gap-3 md:grid-cols-[320px_1fr]">
+            {[0, 1].map((placeholder) => (
+              <div key={placeholder} className="panel-muted p-3">
+                <SkeletonBlock className="h-3 w-28 rounded" />
+                <SkeletonBlock className="mt-2 h-4 w-44 rounded" />
+                <SkeletonBlock className="mt-1 h-4 w-36 rounded" />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <SkeletonBlock className="h-10 w-36 rounded-xl" />
+                  <SkeletonBlock className="h-10 w-24 rounded-xl" />
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="panel-muted p-3">
-            <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Session controls</p>
-            <p className="mt-1 text-sm text-slate-700">
-              Theme: <span className="font-medium">{theme === 'dark' ? 'Dark mode' : 'Light mode'}</span>
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button className="btn-secondary" onClick={toggleTheme} type="button" aria-label="Toggle color mode">
-                {theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-              </button>
-              <button className="btn-secondary" onClick={signOut} type="button">
-                Sign out
-              </button>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-[320px_1fr]">
+            <div className="panel-muted p-3">
+              <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Security posture</p>
+              <p className="mt-1 text-sm text-slate-700">
+                GitHub integration: <span className="font-medium">{githubConnected ? 'Connected' : 'Not connected'}</span>
+              </p>
+              <p className="text-sm text-slate-700">
+                Auth type: <span className="font-medium">JWT session</span>
+              </p>
+            </div>
+            <div className="panel-muted p-3">
+              <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Session controls</p>
+              <p className="mt-1 text-sm text-slate-700">
+                Theme: <span className="font-medium">{theme === 'dark' ? 'Dark mode' : 'Light mode'}</span>
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button className="btn-secondary" onClick={toggleTheme} type="button" aria-label="Toggle color mode">
+                  {theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                </button>
+                <button className="btn-secondary" onClick={signOut} type="button">
+                  Sign out
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </SectionCard>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionCard title="User Profile">
-          <div className="space-y-1 text-sm text-slate-700">
-            <p>
-              Name: <span className="font-medium text-slate-900">{me?.name ?? '-'}</span>
-            </p>
-            <p>
-              Email: <span className="font-medium text-slate-900">{me?.email ?? '-'}</span>
-            </p>
-            <p>
-              User ID: <span className="mono text-xs">{me?.id ?? '-'}</span>
-            </p>
-          </div>
+          {loading ? (
+            <div className="space-y-2">
+              <SkeletonBlock className="h-4 w-44 rounded" />
+              <SkeletonBlock className="h-4 w-52 rounded" />
+              <SkeletonBlock className="h-4 w-40 rounded" />
+            </div>
+          ) : (
+            <div className="space-y-1 text-sm text-slate-700">
+              <p>
+                Name: <span className="font-medium text-slate-900">{me?.name ?? '-'}</span>
+              </p>
+              <p>
+                Email: <span className="font-medium text-slate-900">{me?.email ?? '-'}</span>
+              </p>
+              <p>
+                User ID: <span className="mono text-xs">{me?.id ?? '-'}</span>
+              </p>
+            </div>
+          )}
         </SectionCard>
 
         <SectionCard title="Subscription">
-          <div className="space-y-1 text-sm text-slate-700">
-            <p>
-              Plan:{' '}
-              <span className="font-medium text-slate-900">
-                {subscription?.plan
-                  ? `${subscription.plan.displayName} (${subscription.plan.code})`
-                  : 'No active subscription'}
-              </span>
-            </p>
-            <p>
-              Status: <span className="font-medium text-slate-900">{subscription?.status ?? '-'}</span>
-            </p>
-            <p>
-              Period end:{' '}
-              <span className="font-medium text-slate-900">
-                {subscription?.currentPeriodEnd
-                  ? new Date(subscription.currentPeriodEnd).toLocaleDateString()
-                  : '-'}
-              </span>
-            </p>
-          </div>
+          {loading ? (
+            <div className="space-y-2">
+              <SkeletonBlock className="h-4 w-48 rounded" />
+              <SkeletonBlock className="h-4 w-36 rounded" />
+              <SkeletonBlock className="h-4 w-40 rounded" />
+            </div>
+          ) : (
+            <div className="space-y-1 text-sm text-slate-700">
+              <p>
+                Plan:{' '}
+                <span className="font-medium text-slate-900">
+                  {subscription?.plan
+                    ? `${subscription.plan.displayName} (${subscription.plan.code})`
+                    : 'No active subscription'}
+                </span>
+              </p>
+              <p>
+                Status: <span className="font-medium text-slate-900">{subscription?.status ?? '-'}</span>
+              </p>
+              <p>
+                Period end:{' '}
+                <span className="font-medium text-slate-900">
+                  {subscription?.currentPeriodEnd
+                    ? new Date(subscription.currentPeriodEnd).toLocaleDateString()
+                    : '-'}
+                </span>
+              </p>
+            </div>
+          )}
         </SectionCard>
       </div>
 

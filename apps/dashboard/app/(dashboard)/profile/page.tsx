@@ -13,6 +13,10 @@ interface UserProfile {
   createdAt?: string;
 }
 
+function SkeletonBlock({ className }: { className: string }) {
+  return <div aria-hidden="true" className={`skeleton ${className}`} />;
+}
+
 const formatDate = (value?: string): string => {
   if (!value) {
     return '-';
@@ -76,7 +80,20 @@ export default function ProfilePage() {
     <div className="space-y-4">
       <SectionCard title="Account Identity" subtitle="Personal profile and session-level account metadata.">
         {loading ? (
-          <p className="text-sm text-slate-600">Loading profile...</p>
+          <div className="grid gap-4 lg:grid-cols-[160px_minmax(0,1fr)]">
+            <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 p-6">
+              <SkeletonBlock className="h-12 w-12 rounded-full" />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[0, 1, 2, 3].map((placeholder) => (
+                <article key={placeholder} className="metric-card">
+                  <SkeletonBlock className="h-3 w-24 rounded" />
+                  <SkeletonBlock className="mt-2 h-5 w-36 rounded-lg" />
+                </article>
+              ))}
+            </div>
+          </div>
         ) : (
           <div className="grid gap-4 lg:grid-cols-[160px_minmax(0,1fr)]">
             <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 p-6">

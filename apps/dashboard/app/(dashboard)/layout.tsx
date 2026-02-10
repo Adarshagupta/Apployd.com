@@ -167,7 +167,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     return (
       <main className={shellClassName}>
         <div className="grid min-h-screen place-items-center px-4">
-          <p className="text-sm text-slate-600">Checking session...</p>
+          <div className="space-y-3">
+            <div className="skeleton h-4 w-36 rounded" />
+            <div className="skeleton h-3 w-28 rounded" />
+          </div>
         </div>
       </main>
     );

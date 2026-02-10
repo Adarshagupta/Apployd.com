@@ -16,24 +16,33 @@ interface Member {
   };
 }
 
+function SkeletonBlock({ className }: { className: string }) {
+  return <div aria-hidden="true" className={`skeleton ${className}`} />;
+}
+
 export default function TeamPage() {
   const { selectedOrganizationId } = useWorkspaceContext();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('developer');
   const [members, setMembers] = useState<Member[]>([]);
+  const [loading, setLoading] = useState(Boolean(selectedOrganizationId));
   const [message, setMessage] = useState('Manage organization RBAC.');
 
   const loadMembers = async () => {
     if (!selectedOrganizationId) {
       setMembers([]);
+      setLoading(false);
       return;
     }
+    setLoading(true);
     try {
       const data = await apiClient.get(`/teams/${selectedOrganizationId}/members`);
       setMembers(data.members ?? []);
       setMessage(`Loaded ${data.members?.length ?? 0} members`);
     } catch (error) {
       setMessage((error as Error).message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -66,7 +75,7 @@ export default function TeamPage() {
     <div className="space-y-4">
       <SectionCard title="Team & RBAC" subtitle="Role levels: owner, admin, developer, viewer.">
         <div className="flex items-end gap-3">
-          <button onClick={loadMembers} className="btn-secondary">
+          <button onClick={loadMembers} className="btn-secondary" disabled={loading}>
             Refresh
           </button>
         </div>
@@ -98,7 +107,19 @@ export default function TeamPage() {
       </SectionCard>
 
       <SectionCard title="Members">
-        {members.length ? (
+        {loading ? (
+          <ul className="space-y-2">
+            {[0, 1, 2].map((placeholder) => (
+              <li key={placeholder} className="panel-muted flex items-center justify-between p-3">
+                <div className="space-y-2">
+                  <SkeletonBlock className="h-4 w-40 rounded" />
+                  <SkeletonBlock className="h-3 w-56 rounded" />
+                </div>
+                <SkeletonBlock className="h-5 w-16 rounded-full" />
+              </li>
+            ))}
+          </ul>
+        ) : members.length ? (
           <ul className="space-y-2">
             {members.map((member) => (
               <li key={member.id} className="panel-muted flex items-center justify-between p-3">

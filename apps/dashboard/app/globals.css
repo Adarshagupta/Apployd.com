@@ -326,6 +326,24 @@ a {
     color: var(--text-muted);
   }
 
+  .skeleton {
+    @apply relative overflow-hidden;
+    background: var(--bg-2);
+  }
+
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.55) 50%, transparent 100%);
+    animation: skeleton-wave 1.2s ease-in-out infinite;
+  }
+
+  .app-shell.theme-dark .skeleton::after {
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.12) 50%, transparent 100%);
+  }
+
   .nav-shell {
     @apply flex h-screen flex-col border-r;
     border-color: var(--line);
@@ -449,6 +467,7 @@ a {
     .nav-shell {
       @apply sticky top-0 h-auto flex-row border-b border-r-0;
       z-index: 50;
+      overflow-x: auto;
     }
 
     .nav-header {
@@ -461,11 +480,13 @@ a {
 
     .nav-content {
       @apply flex-row gap-2 overflow-x-auto overflow-y-visible px-3 py-3;
+      flex: 1;
     }
 
     .nav-footer {
       @apply flex-none border-l border-t-0 px-3 py-3;
       border-color: var(--line);
+      position: relative;
     }
 
     .nav-section {
@@ -949,6 +970,15 @@ a {
   100% {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes skeleton-wave {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
   }
 }
 

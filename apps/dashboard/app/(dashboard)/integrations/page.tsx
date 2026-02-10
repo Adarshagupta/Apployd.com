@@ -31,6 +31,10 @@ interface GitHubStatus {
   } | null;
 }
 
+function SkeletonBlock({ className }: { className: string }) {
+  return <div aria-hidden="true" className={`skeleton ${className}`} />;
+}
+
 export default function IntegrationsPage() {
   const searchParams = useSearchParams();
   const {
@@ -44,6 +48,7 @@ export default function IntegrationsPage() {
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [message, setMessage] = useState('');
   const [loadingRepos, setLoadingRepos] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState(true);
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
@@ -74,11 +79,14 @@ export default function IntegrationsPage() {
   }, [searchParams]);
 
   const loadStatus = async () => {
+    setLoadingStatus(true);
     try {
       const data = await apiClient.get('/integrations/github/status');
       setStatus(data);
     } catch (error) {
       setMessage((error as Error).message);
+    } finally {
+      setLoadingStatus(false);
     }
   };
 
@@ -177,17 +185,23 @@ export default function IntegrationsPage() {
         <div className="panel-muted flex flex-wrap items-center justify-between gap-3 p-4">
           <div>
             <p className="text-sm font-semibold text-slate-900">Connection status</p>
-            <p className="text-sm text-slate-600">
-              {!status?.configured
-                ? 'GitHub OAuth not configured on server'
-                : status.connected
-                  ? `Connected as @${status.connection?.username}`
-                  : 'Not connected'}
-            </p>
+            {loadingStatus ? (
+              <div className="mt-1">
+                <SkeletonBlock className="h-4 w-56 rounded" />
+              </div>
+            ) : (
+              <p className="text-sm text-slate-600">
+                {!status?.configured
+                  ? 'GitHub OAuth not configured on server'
+                  : status.connected
+                    ? `Connected as @${status.connection?.username}`
+                    : 'Not connected'}
+              </p>
+            )}
           </div>
           <div className="flex gap-2">
             {!status?.connected ? (
-              <button className="btn-primary" onClick={connectGitHub} disabled={!status?.configured}>
+              <button className="btn-primary" onClick={connectGitHub} disabled={loadingStatus || !status?.configured}>
                 Connect GitHub
               </button>
             ) : (
@@ -214,8 +228,26 @@ export default function IntegrationsPage() {
             {loadingRepos ? 'Loading...' : 'Search'}
           </button>
         </form>
-        {!status?.connected ? (
+        {loadingStatus ? (
+          <div className="grid gap-2 rounded-xl border border-slate-200 p-2">
+            {[0, 1, 2].map((placeholder) => (
+              <article key={placeholder} className="rounded-xl border border-slate-200 p-3">
+                <SkeletonBlock className="h-4 w-44 rounded" />
+                <SkeletonBlock className="mt-2 h-3 w-52 rounded" />
+              </article>
+            ))}
+          </div>
+        ) : !status?.connected ? (
           <p className="text-sm text-slate-600">Connect GitHub to import repositories.</p>
+        ) : loadingRepos && !repos.length ? (
+          <div className="grid gap-2 rounded-xl border border-slate-200 p-2">
+            {[0, 1, 2].map((placeholder) => (
+              <article key={placeholder} className="rounded-xl border border-slate-200 p-3">
+                <SkeletonBlock className="h-4 w-44 rounded" />
+                <SkeletonBlock className="mt-2 h-3 w-52 rounded" />
+              </article>
+            ))}
+          </div>
         ) : repos.length ? (
           <div className="grid gap-2 max-h-72 overflow-auto rounded-xl border border-slate-200 p-2">
             {repos.map((repo) => (

@@ -70,6 +70,10 @@ function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 
+function SkeletonBlock({ className }: { className: string }) {
+  return <div aria-hidden="true" className={`skeleton ${className}`} />;
+}
+
 /* ================================================================== */
 export default function DeploymentDetailPage() {
   const params = useParams<{ projectId: string; deploymentId: string }>();
@@ -79,16 +83,21 @@ export default function DeploymentDetailPage() {
   const [error, setError] = useState('');
   const [logsTab, setLogsTab] = useState<'build' | 'deploy' | 'error'>('build');
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
       const data = (await apiClient.get(`/deployments/${deploymentId}`)) as DeploymentDetail;
       setDeployment(data);
       setError('');
     } catch (err) {
       setError((err as Error).message);
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, [deploymentId]);
 
@@ -101,11 +110,54 @@ export default function DeploymentDetailPage() {
     if (!deployment) return;
     if (!['queued', 'building', 'deploying'].includes(deployment.status)) return;
     const interval = setInterval(() => {
-      load().catch(() => undefined);
+      load({ silent: true }).catch(() => undefined);
     }, 4000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deployment?.status, load]);
+
+  if (loading && !deployment) {
+    return (
+      <div className="space-y-0">
+        <div className="section-band !pb-0">
+          <div className="flex items-center gap-1.5">
+            <SkeletonBlock className="h-3 w-12 rounded" />
+            <SkeletonBlock className="h-3 w-3 rounded" />
+            <SkeletonBlock className="h-3 w-24 rounded" />
+            <SkeletonBlock className="h-3 w-3 rounded" />
+            <SkeletonBlock className="h-3 w-20 rounded" />
+          </div>
+        </div>
+
+        <div className="section-band">
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_380px]">
+            <div className="space-y-5">
+              <div className="rounded-xl border border-slate-200 p-4">
+                <SkeletonBlock className="h-[320px] w-full rounded-xl" />
+              </div>
+              <div className="rounded-xl border border-slate-200 p-4">
+                <div className="flex gap-2">
+                  <SkeletonBlock className="h-8 w-24 rounded-lg" />
+                  <SkeletonBlock className="h-8 w-24 rounded-lg" />
+                  <SkeletonBlock className="h-8 w-24 rounded-lg" />
+                </div>
+                <SkeletonBlock className="mt-4 h-56 w-full rounded-xl" />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {[0, 1, 2, 3, 4].map((placeholder) => (
+                <div key={placeholder} className="rounded-xl border border-slate-200 p-4">
+                  <SkeletonBlock className="h-3 w-24 rounded" />
+                  <SkeletonBlock className="mt-2 h-4 w-40 rounded" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
