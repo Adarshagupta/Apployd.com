@@ -484,9 +484,7 @@ a {
     }
 
     .nav-footer {
-      @apply flex-none border-l border-t-0 px-3 py-3;
-      border-color: var(--line);
-      position: relative;
+      display: none;
     }
 
     .nav-section {
@@ -507,6 +505,12 @@ a {
 
     .nav-link-label {
       @apply block;
+    }
+
+    /* Prevent dropdowns from overflowing on mobile */
+    .ws-dropdown {
+      min-width: 0;
+      max-width: calc(100vw - 2rem);
     }
   }
 

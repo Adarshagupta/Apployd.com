@@ -261,7 +261,7 @@ export default function ProjectsPage() {
             </button>
 
             {addMenuOpen && (
-              <div className="absolute right-0 top-[calc(100%+0.5rem)] z-20 w-52 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-1 shadow-lg sm:right-0 sm:w-52">
+              <div className="absolute left-0 top-[calc(100%+0.5rem)] z-20 w-full max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-1 shadow-lg sm:right-0 sm:left-auto sm:w-52">
                 <Link
                   href="/projects/new"
                   className="block rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-50"
