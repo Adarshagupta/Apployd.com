@@ -10,7 +10,7 @@ type IconProps = {
 
 function Glyph({
   children,
-  size = 16,
+  size = 17,
   className,
   title,
 }: IconProps & { children: ReactNode }) {

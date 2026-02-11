@@ -680,8 +680,13 @@ a {
   }
 
   .nav-link-icon {
-    @apply flex h-4 w-4 items-center justify-center;
+    @apply flex h-5 w-5 items-center justify-center;
     opacity: 0.9;
+  }
+
+  .nav-link-icon svg {
+    width: 17px;
+    height: 17px;
   }
 
   .nav-link-label {

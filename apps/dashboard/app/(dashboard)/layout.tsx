@@ -194,7 +194,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             <div className="dashboard-topbar-inner">
               <div className="dashboard-topbar-slot dashboard-topbar-left">
                 <Link href="/projects" className="dashboard-topbar-chip" aria-label="Open all projects">
-                  <IconProjects size={14} />
+                  <IconProjects size={16} />
                   <span>All Projects</span>
                   <span className="dashboard-topbar-chevron" aria-hidden="true">
                     v
@@ -206,15 +206,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               </div>
               <div className="dashboard-topbar-slot dashboard-topbar-right">
                 <Link href="/billing" className="dashboard-topbar-upgrade" aria-label="Upgrade subscription">
-                  <IconBilling size={14} />
+                  <IconBilling size={16} />
                   <span className="dashboard-topbar-upgrade-label">Upgrade</span>
                 </Link>
                 <Link href="/profile" className="dashboard-topbar-profile" aria-label="Open profile">
-                  <IconProfile size={15} />
+                  <IconProfile size={17} />
                   <span className="dashboard-topbar-profile-label">Profile</span>
                 </Link>
                 <Link href="/settings" className="dashboard-topbar-icon" aria-label="Open settings">
-                  <IconSettings size={14} />
+                  <IconSettings size={16} />
                 </Link>
               </div>
             </div>
