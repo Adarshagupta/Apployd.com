@@ -6,6 +6,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
 import { DashboardNav } from '../../components/dashboard-nav';
+import {
+  IconBilling,
+  IconProfile,
+  IconProjects,
+  IconSettings,
+} from '../../components/dashboard-icons';
 import { WorkspaceProvider } from '../../components/workspace-provider';
 import { apiClient, UnauthorizedError } from '../../lib/api';
 
@@ -188,6 +194,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             <div className="dashboard-topbar-inner">
               <div className="dashboard-topbar-slot dashboard-topbar-left">
                 <Link href="/projects" className="dashboard-topbar-chip" aria-label="Open all projects">
+                  <IconProjects size={14} />
                   <span>All Projects</span>
                   <span className="dashboard-topbar-chevron" aria-hidden="true">
                     v
@@ -198,8 +205,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 <h1 className="dashboard-topbar-title">{topbarTitle}</h1>
               </div>
               <div className="dashboard-topbar-slot dashboard-topbar-right">
-                <Link href="/settings" className="dashboard-topbar-icon" aria-label="Open page actions">
-                  ...
+                <Link href="/billing" className="dashboard-topbar-upgrade" aria-label="Upgrade subscription">
+                  <IconBilling size={14} />
+                  <span className="dashboard-topbar-upgrade-label">Upgrade</span>
+                </Link>
+                <Link href="/profile" className="dashboard-topbar-profile" aria-label="Open profile">
+                  <IconProfile size={15} />
+                  <span className="dashboard-topbar-profile-label">Profile</span>
+                </Link>
+                <Link href="/settings" className="dashboard-topbar-icon" aria-label="Open settings">
+                  <IconSettings size={14} />
                 </Link>
               </div>
             </div>

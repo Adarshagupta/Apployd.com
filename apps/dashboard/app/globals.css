@@ -133,6 +133,7 @@ a {
 
   .dashboard-topbar-right {
     justify-content: flex-end;
+    gap: 0.35rem;
   }
 
   .dashboard-topbar-title {
@@ -172,6 +173,39 @@ a {
     border-color: var(--line);
     background: var(--bg-1);
     color: var(--text);
+  }
+
+  .dashboard-topbar-upgrade {
+    @apply inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold uppercase tracking-[0.08em];
+    border: 1px solid var(--line-strong);
+    color: var(--text);
+    background: color-mix(in srgb, var(--bg-1) 92%, transparent);
+    transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+  }
+
+  .dashboard-topbar-upgrade:hover {
+    border-color: var(--text-muted);
+    background: color-mix(in srgb, var(--bg-2) 92%, transparent);
+    transform: translateY(-1px);
+  }
+
+  .dashboard-topbar-profile {
+    @apply inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium;
+    border: 1px solid transparent;
+    color: var(--text-soft);
+    background: transparent;
+    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .dashboard-topbar-profile:hover {
+    border-color: var(--line);
+    background: var(--bg-1);
+    color: var(--text);
+  }
+
+  .dashboard-topbar-profile-label,
+  .dashboard-topbar-upgrade-label {
+    line-height: 1;
   }
 
   .panel-muted {
@@ -722,6 +756,16 @@ a {
 
     .dashboard-topbar-title {
       @apply text-sm;
+    }
+
+    .dashboard-topbar-profile-label,
+    .dashboard-topbar-upgrade-label {
+      display: none;
+    }
+
+    .dashboard-topbar-upgrade,
+    .dashboard-topbar-profile {
+      @apply w-8 justify-center px-0;
     }
   }
 
