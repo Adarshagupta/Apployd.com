@@ -1,7 +1,8 @@
 .page {
   position: relative;
-  min-height: 100vh;
-  overflow: clip;
+  min-height: 100dvh;
+  overflow-x: clip;
+  overflow-y: auto;
   color: #f2f5fc;
   background: #03050a;
 }
@@ -31,7 +32,7 @@
 .shell {
   position: relative;
   z-index: 3;
-  min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(420px, 0.9fr);
 }
@@ -320,23 +321,117 @@
 @media (max-width: 1080px) {
   .shell {
     grid-template-columns: 1fr;
+    min-height: auto;
   }
 
   .heroColumn {
-    min-height: 42vh;
+    min-height: auto;
+    padding: 1.3rem 1.1rem 0.4rem;
+    align-items: flex-start;
+  }
+
+  .heroInner {
+    max-width: none;
+  }
+
+  .title {
+    margin-top: 0.7rem;
+    font-size: clamp(1.8rem, 6.8vw, 2.8rem);
+  }
+
+  .subtitle {
+    margin-top: 0.65rem;
+    font-size: 0.92rem;
+    max-width: none;
+  }
+
+  .heroMetrics {
+    margin-top: 0.9rem;
+  }
+
+  .formColumn {
+    align-items: flex-start;
+    padding: 0.8rem 1.1rem 1.2rem;
   }
 
   .panel {
     width: min(620px, 100%);
+    border-radius: 18px;
   }
 }
 
 @media (max-width: 700px) {
+  .shellCanvas {
+    opacity: 0.24;
+  }
+
+  .heroColumn {
+    padding: 1rem 0.9rem 0.2rem;
+  }
+
+  .meta {
+    padding: 0.32rem 0.56rem;
+    font-size: 0.65rem;
+  }
+
+  .title {
+    margin-top: 0.55rem;
+    font-size: clamp(1.45rem, 7.8vw, 2.15rem);
+    line-height: 1.08;
+  }
+
+  .subtitle {
+    display: none;
+  }
+
   .formGridTwo {
     grid-template-columns: 1fr;
   }
 
   .heroMetrics {
-    grid-template-columns: 1fr;
+    display: none;
+  }
+
+  .formColumn {
+    padding: 0.72rem 0.75rem 1rem;
+  }
+
+  .panel {
+    border-radius: 14px;
+    padding: 0.9rem 0.82rem;
+  }
+
+  .panelHeader h2 {
+    font-size: 1.5rem;
+  }
+
+  .panelHeader span {
+    font-size: 0.84rem;
+  }
+
+  .input {
+    padding: 0.66rem 0.76rem;
+    font-size: 0.9rem;
+  }
+
+  .submit,
+  .githubButton {
+    padding: 0.7rem 0.92rem;
+    font-size: 0.79rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .panel {
+    border-radius: 12px;
+    padding: 0.78rem 0.7rem;
+  }
+
+  .panelHeader h2 {
+    font-size: 1.35rem;
+  }
+
+  .switchText {
+    font-size: 0.84rem;
   }
 }
