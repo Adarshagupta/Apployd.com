@@ -539,16 +539,6 @@ export default function OverviewPage() {
 
                 <button
                   type="button"
-                  className="mission-side-cta mission-side-cta-primary"
-                  onClick={() => {
-                    void loadOverview();
-                  }}
-                  disabled={refreshing}
-                >
-                  {refreshing ? 'Refreshing...' : 'Refresh telemetry'}
-                </button>
-                <button
-                  type="button"
                   className="mission-side-cta mission-side-cta-secondary"
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   onClick={() => router.push('/projects/new' as any)}
