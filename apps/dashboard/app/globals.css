@@ -103,6 +103,77 @@ a {
     box-shadow: none;
   }
 
+  .dashboard-topbar {
+    @apply px-3 md:px-4;
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    backdrop-filter: blur(14px);
+  }
+
+  .dashboard-topbar-inner {
+    min-height: 54px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .dashboard-topbar-slot {
+    @apply flex min-w-0 items-center;
+  }
+
+  .dashboard-topbar-left {
+    justify-content: flex-start;
+  }
+
+  .dashboard-topbar-center {
+    justify-content: center;
+  }
+
+  .dashboard-topbar-right {
+    justify-content: flex-end;
+  }
+
+  .dashboard-topbar-title {
+    @apply truncate text-base font-semibold;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+
+  .dashboard-topbar-chip {
+    @apply inline-flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm font-medium;
+    color: var(--text-soft);
+    border: 1px solid transparent;
+    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .dashboard-topbar-chip:hover {
+    border-color: var(--line);
+    background: var(--bg-1);
+    color: var(--text);
+  }
+
+  .dashboard-topbar-chevron {
+    @apply text-[11px];
+    color: var(--text-muted);
+    line-height: 1;
+  }
+
+  .dashboard-topbar-icon {
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-md text-sm font-semibold;
+    border: 1px solid transparent;
+    color: var(--text-soft);
+    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+    letter-spacing: 1px;
+  }
+
+  .dashboard-topbar-icon:hover {
+    border-color: var(--line);
+    background: var(--bg-1);
+    color: var(--text);
+  }
+
   .panel-muted {
     @apply rounded-3xl border backdrop-blur-md;
     background: var(--card);
@@ -632,6 +703,25 @@ a {
     .ws-dropdown {
       min-width: 0;
       max-width: calc(100vw - 2rem);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .dashboard-topbar-inner {
+      min-height: 48px;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .dashboard-topbar-left {
+      display: none;
+    }
+
+    .dashboard-topbar-center {
+      justify-content: flex-start;
+    }
+
+    .dashboard-topbar-title {
+      @apply text-sm;
     }
   }
 

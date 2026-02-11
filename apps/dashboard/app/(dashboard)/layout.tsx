@@ -73,6 +73,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     subtitle: 'Deploy and operate backend services.',
   };
   const isProjectDetail = PROJECT_DETAIL_RE.test(pathname);
+  const topbarTitle = isProjectDetail ? 'Project' : copy.title;
   const shellClassName = useMemo(
     () => `app-shell ${theme === 'dark' ? 'theme-dark' : 'theme-light'}`,
     [theme],
@@ -183,26 +184,22 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <DashboardNav />
 
         <section className="min-w-0">
-          <header className="panel px-4 py-5 md:px-6 md:py-6">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              {!isProjectDetail && (
-                <div>
-                  <p className="status-pill">Live Platform</p>
-                  <h1 className="title-gradient mt-3 text-3xl font-semibold md:text-4xl">{copy.title}</h1>
-                  <p className="mt-2 text-sm text-slate-700 md:text-base">{copy.subtitle}</p>
-                </div>
-              )}
-              {isProjectDetail && (
-                <div>
-                  <p className="status-pill">Live Platform</p>
-                </div>
-              )}
-              <div className="flex flex-wrap items-center gap-2">
-                <Link href="/billing" className="btn-secondary text-center">
-                  Upgrade
+          <header className="panel dashboard-topbar">
+            <div className="dashboard-topbar-inner">
+              <div className="dashboard-topbar-slot dashboard-topbar-left">
+                <Link href="/projects" className="dashboard-topbar-chip" aria-label="Open all projects">
+                  <span>All Projects</span>
+                  <span className="dashboard-topbar-chevron" aria-hidden="true">
+                    v
+                  </span>
                 </Link>
-                <Link href="/projects/new" className="btn-primary text-center">
-                  New
+              </div>
+              <div className="dashboard-topbar-slot dashboard-topbar-center">
+                <h1 className="dashboard-topbar-title">{topbarTitle}</h1>
+              </div>
+              <div className="dashboard-topbar-slot dashboard-topbar-right">
+                <Link href="/settings" className="dashboard-topbar-icon" aria-label="Open page actions">
+                  ...
                 </Link>
               </div>
             </div>
