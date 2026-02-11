@@ -2,35 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { IconCheck, IconChevronSwap, IconPlus } from './dashboard-icons';
 import { useWorkspaceContext } from './workspace-provider';
 
 /* ── Icons ──────────────────────────────────────────────── */
-
-function ChevronUpDown() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m7 15 5 5 5-5" />
-      <path d="m7 9 5-5 5 5" />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="12" y1="5" x2="12" y2="19" />
-      <line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  );
-}
 
 /* ── Create-workspace inline form ────────────────────────── */
 
@@ -190,7 +165,7 @@ export function WorkspaceSwitcher() {
           <span className="ws-trigger-role">{selectedOrganization?.role ?? ''}</span>
         </span>
         <span className="ws-trigger-chevron">
-          <ChevronUpDown />
+          <IconChevronSwap />
         </span>
       </button>
 
@@ -214,7 +189,7 @@ export function WorkspaceSwitcher() {
                     </span>
                     {org.id === selectedOrganizationId && (
                       <span className="ws-dropdown-check">
-                        <CheckIcon />
+                        <IconCheck />
                       </span>
                     )}
                   </button>
@@ -222,7 +197,7 @@ export function WorkspaceSwitcher() {
               </div>
               <div className="ws-dropdown-footer">
                 <button type="button" className="ws-dropdown-create" onClick={() => setShowCreate(true)}>
-                  <PlusIcon />
+                  <IconPlus />
                   <span>Create Workspace</span>
                 </button>
               </div>
@@ -235,3 +210,4 @@ export function WorkspaceSwitcher() {
     </div>
   );
 }
+

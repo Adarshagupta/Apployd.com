@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+import { IconInfo } from '../../../components/dashboard-icons';
 import { SectionCard } from '../../../components/section-card';
 import { apiClient } from '../../../lib/api';
 import { useWorkspaceContext } from '../../../components/workspace-provider';
@@ -60,7 +61,7 @@ function SkeletonBlock({ className }: { className: string }) {
 function InfoIcon({ label }: { label: string }) {
   return (
     <span className="info-icon" title={label} aria-label={label}>
-      i
+      <IconInfo size={13} />
     </span>
   );
 }
