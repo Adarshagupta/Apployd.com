@@ -299,6 +299,18 @@ export default function OverviewPage() {
     return total / utilizationMetrics.length;
   }, [utilizationMetrics]);
 
+  const peakPressure = useMemo(() => {
+    if (!utilizationMetrics.length) {
+      return { label: 'No data', percent: 0 };
+    }
+
+    const hottest = utilizationMetrics.reduce((max, metric) =>
+      metric.percent > max.percent ? metric : max,
+    );
+
+    return { label: hottest.label, percent: hottest.percent };
+  }, [utilizationMetrics]);
+
   const quickActions = [
     {
       title: 'Provision Project',
@@ -333,7 +345,7 @@ export default function OverviewPage() {
   return (
     <div className="space-y-4">
       <SectionCard title="Mission Control" subtitle="Live operational posture for the selected organization.">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
           <article className="workspace-card md:p-6">
             <div className="pointer-events-none absolute -right-20 -top-16 h-44 w-44 rounded-full opacity-30 blur-3xl" style={{ background: 'radial-gradient(circle, var(--accent-alt), transparent)' }} />
 
@@ -354,29 +366,35 @@ export default function OverviewPage() {
                     <div key={placeholder} className="stat-card-overview">
                       <SkeletonBlock className="h-3 w-20 rounded" />
                       <SkeletonBlock className="mt-2 h-6 w-24 rounded-lg" />
+                      <SkeletonBlock className="mt-3 h-2 w-full rounded-full" />
                     </div>
                   ))}
                 </div>
               </>
             ) : (
               <>
-                <div className="relative flex flex-wrap items-start justify-between gap-3">
+                <div className="relative flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <p className="workspace-label">Workspace</p>
                     <h3 className="workspace-title">
                       {selectedOrganization?.name ?? 'No organization selected'}
                     </h3>
-                    <p className="workspace-subtitle">
-                      {subscription?.plan?.displayName ?? 'No active plan'} • {subscription?.status ?? 'inactive'}
-                    </p>
+                    <div className="workspace-chip-row">
+                      <span className="workspace-chip">{subscription?.plan?.displayName ?? 'No active plan'}</span>
+                      <span className="workspace-chip workspace-chip-muted">{subscription?.status ?? 'inactive'}</span>
+                      <span className="workspace-chip workspace-chip-muted">{formatInteger(projects.length)} projects</span>
+                    </div>
                     <p className="workspace-meta">
                       {formatBillingWindow(subscription?.currentPeriodStart, subscription?.currentPeriodEnd)}
+                    </p>
+                    <p className="workspace-meta">
+                      Last sync {lastSyncedAt ? formatRelativeTime(lastSyncedAt) : 'not available'}
                     </p>
                   </div>
 
                   <button
                     type="button"
-                    className="btn-secondary px-4 py-2"
+                    className="btn-secondary workspace-refresh-btn"
                     onClick={() => {
                       void loadOverview();
                     }}
@@ -390,28 +408,32 @@ export default function OverviewPage() {
                   <div className="stat-card-overview">
                     <p className="stat-label">Projects</p>
                     <p className="stat-value">{formatInteger(projects.length)}</p>
+                    <p className="stat-detail">Total active services in workspace</p>
                   </div>
                   <div className="stat-card-overview">
                     <p className="stat-label">Deployments</p>
                     <p className="stat-value">{formatInteger(recentDeployments.length)}</p>
+                    <p className="stat-detail">Latest delivery records fetched</p>
                   </div>
                   <div className="stat-card-overview">
                     <p className="stat-label">Overall Load</p>
                     <p className="stat-value">{overallLoadPercent.toFixed(1)}%</p>
+                    <div className="stat-trend-track">
+                      <span className="stat-trend-fill" style={{ width: `${Math.max(6, Math.min(100, overallLoadPercent)).toFixed(1)}%` }} />
+                    </div>
                   </div>
                   <div className="stat-card-overview">
-                    <p className="stat-label">Last Sync</p>
-                    <p className="stat-value-sm">
-                      {lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString() : '--'}
-                    </p>
+                    <p className="stat-label">Peak Pressure</p>
+                    <p className="stat-value-sm">{peakPressure.label}</p>
+                    <p className="stat-detail">{peakPressure.percent.toFixed(1)}% of pool</p>
                   </div>
                 </div>
               </>
             )}
           </article>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-            {quickActions.map((action) => (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+            {quickActions.map((action, index) => (
               <button
                 key={action.href}
                 type="button"
@@ -419,10 +441,14 @@ export default function OverviewPage() {
                 onClick={() => router.push(action.href as any)}
                 className="action-card"
               >
+                <div className="action-card-head">
+                  <span className="action-card-index">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="action-card-arrow">↗</span>
+                </div>
                 <p className="action-card-title">{action.title}</p>
                 <p className="action-card-description">{action.description}</p>
                 <p className="action-card-cta">
-                  Open {'>'}
+                  Open workspace
                 </p>
               </button>
             ))}
