@@ -314,12 +314,12 @@ a {
   }
 
   .action-card {
-    @apply rounded-2xl border p-4 text-left transition-all duration-200;
+    @apply rounded-2xl border p-3 text-left transition-all duration-200;
     border-color: var(--line);
     background:
       radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent-alt) 10%, transparent), transparent 42%),
       color-mix(in srgb, var(--bg-0) 92%, transparent);
-    min-height: 136px;
+    min-height: 114px;
   }
 
   .action-card:hover {
@@ -345,7 +345,7 @@ a {
   }
 
   .action-card-head {
-    @apply mb-3 flex items-center justify-between;
+    @apply mb-2 flex items-center justify-between;
   }
 
   .action-card-index {
@@ -369,13 +369,13 @@ a {
   }
 
   .action-card-description {
-    @apply mt-2 text-sm;
+    @apply mt-1 text-xs;
     color: var(--text-muted);
-    line-height: 1.45;
+    line-height: 1.35;
   }
 
   .action-card-cta {
-    @apply mt-4 text-xs font-semibold uppercase tracking-[0.12em];
+    @apply mt-2 text-xs font-semibold uppercase tracking-[0.12em];
     color: var(--text-soft);
   }
 
