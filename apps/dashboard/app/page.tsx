@@ -5,6 +5,7 @@ import { LandingParallaxController } from '../components/landing-parallax-contro
 import { ProductStepTracker } from '../components/product-step-tracker';
 import { SectionThreeBackground } from '../components/landing-section-three';
 import { LandingThreeBackground } from '../components/landing-three-background';
+import { LandingThemeToggle } from '../components/landing-theme-toggle';
 
 import styles from './landing.module.css';
 
@@ -435,9 +436,12 @@ export default function HomePage() {
               </a>
             ))}
           </nav>
-          <a href="/login" className={styles.navButton}>
-            Sign In
-          </a>
+          <div className={styles.navActions}>
+            <LandingThemeToggle className={styles.themeToggle} />
+            <a href="/login" className={styles.navButton}>
+              Sign In
+            </a>
+          </div>
         </div>
       </header>
 
@@ -701,67 +705,43 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer
-        style={{
-          position: 'relative',
-          zIndex: 4,
-          borderTop: '1px solid rgba(161,178,216,0.14)',
-          padding: '3rem 0 2rem',
-        }}
-      >
+      <footer className={styles.footer}>
         <div className={styles.container}>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-              gap: '2rem 3rem',
-            }}
-          >
+          <div className={styles.footerGrid}>
             <div>
-              <p style={{ margin: 0, fontWeight: 600, fontSize: '1rem' }}>APployd</p>
-              <p style={{ margin: '0.5rem 0 0', fontSize: '0.82rem', color: 'rgba(200,210,240,0.6)' }}>
+              <p className={styles.footerBrand}>APployd</p>
+              <p className={styles.footerCopy}>
                 Self-hosted deployment platform for backend teams.
               </p>
             </div>
             <div>
-              <p style={{ margin: 0, fontWeight: 600, fontSize: '0.82rem', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'rgba(200,210,240,0.5)' }}>Product</p>
-              <ul style={{ listStyle: 'none', margin: '0.6rem 0 0', padding: 0, display: 'grid', gap: '0.4rem' }}>
-                <li><a href="#product" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Features</a></li>
-                <li><a href="/pricing" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Pricing</a></li>
-                <li><a href="/docs" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Docs</a></li>
-                <li><a href="/security" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Security</a></li>
+              <p className={styles.footerHeading}>Product</p>
+              <ul className={styles.footerList}>
+                <li><a href="#product" className={styles.footerLink}>Features</a></li>
+                <li><a href="/pricing" className={styles.footerLink}>Pricing</a></li>
+                <li><a href="/docs" className={styles.footerLink}>Docs</a></li>
+                <li><a href="/security" className={styles.footerLink}>Security</a></li>
               </ul>
             </div>
             <div>
-              <p style={{ margin: 0, fontWeight: 600, fontSize: '0.82rem', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'rgba(200,210,240,0.5)' }}>Company</p>
-              <ul style={{ listStyle: 'none', margin: '0.6rem 0 0', padding: 0, display: 'grid', gap: '0.4rem' }}>
-                <li><a href="/about" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>About</a></li>
-                <li><a href="/blog" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Blog</a></li>
-                <li><a href="/help" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Help</a></li>
-                <li><a href="/contact" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Contact</a></li>
+              <p className={styles.footerHeading}>Company</p>
+              <ul className={styles.footerList}>
+                <li><a href="/about" className={styles.footerLink}>About</a></li>
+                <li><a href="/blog" className={styles.footerLink}>Blog</a></li>
+                <li><a href="/help" className={styles.footerLink}>Help</a></li>
+                <li><a href="/contact" className={styles.footerLink}>Contact</a></li>
               </ul>
             </div>
             <div>
-              <p style={{ margin: 0, fontWeight: 600, fontSize: '0.82rem', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'rgba(200,210,240,0.5)' }}>Legal</p>
-              <ul style={{ listStyle: 'none', margin: '0.6rem 0 0', padding: 0, display: 'grid', gap: '0.4rem' }}>
-                <li><a href="/privacy" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Privacy</a></li>
-                <li><a href="/terms" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Terms</a></li>
-                <li><a href="/legal/compliance" style={{ fontSize: '0.85rem', color: 'rgba(220,228,248,0.7)' }}>Compliance</a></li>
+              <p className={styles.footerHeading}>Legal</p>
+              <ul className={styles.footerList}>
+                <li><a href="/privacy" className={styles.footerLink}>Privacy</a></li>
+                <li><a href="/terms" className={styles.footerLink}>Terms</a></li>
+                <li><a href="/legal/compliance" className={styles.footerLink}>Compliance</a></li>
               </ul>
             </div>
           </div>
-          <div
-            style={{
-              marginTop: '2.5rem',
-              paddingTop: '1.2rem',
-              borderTop: '1px solid rgba(161,178,216,0.1)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              fontSize: '0.78rem',
-              color: 'rgba(200,210,240,0.4)',
-            }}
-          >
+          <div className={styles.footerBottom}>
             <span>&copy; 2026 Apployd. All rights reserved.</span>
             <span>Built for developers, by developers.</span>
           </div>

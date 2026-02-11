@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 
 import { Space_Grotesk, IBM_Plex_Mono } from 'next/font/google';
 
+import { LandingThemeSync } from '../components/landing-theme-sync';
+
 import './globals.css';
 
 const heading = Space_Grotesk({
@@ -24,6 +26,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${heading.variable} ${mono.variable}`} suppressHydrationWarning>
       <body className="font-[var(--font-heading)]" suppressHydrationWarning>
+        <LandingThemeSync />
         {children}
       </body>
     </html>

@@ -7,6 +7,44 @@
   background: #03050a;
 }
 
+.themeDock {
+  position: fixed;
+  top: 0.9rem;
+  right: 0.9rem;
+  z-index: 60;
+}
+
+.themeToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid rgba(214, 222, 243, 0.28);
+  background: rgba(8, 10, 14, 0.84);
+  color: rgba(227, 233, 248, 0.88);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.53rem 0.72rem;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.themeToggle strong {
+  border-radius: 999px;
+  border: 1px solid rgba(47, 141, 255, 0.55);
+  background: rgba(42, 141, 255, 0.2);
+  color: #9ed0ff;
+  padding: 0.14rem 0.34rem;
+  font-size: 0.62rem;
+  line-height: 1;
+}
+
+.themeToggle:hover {
+  border-color: rgba(214, 222, 243, 0.46);
+  transform: translateY(-1px);
+}
+
 .globalCanvas {
   position: fixed;
   inset: 0;
@@ -307,6 +345,103 @@
   font-weight: 600;
 }
 
+:global(html[data-landing-theme='light']) .page {
+  color: #0f172a;
+  background: #f5f8ff;
+}
+
+:global(html[data-landing-theme='light']) .globalCanvas {
+  opacity: 0.18;
+}
+
+:global(html[data-landing-theme='light']) .vignette {
+  background:
+    radial-gradient(circle at 20% 12%, rgba(126, 157, 214, 0.2), transparent 38%),
+    radial-gradient(circle at 82% 88%, rgba(132, 156, 212, 0.18), transparent 42%),
+    linear-gradient(180deg, rgba(243, 247, 255, 0.07), rgba(240, 245, 255, 0.5));
+}
+
+:global(html[data-landing-theme='light']) .meta {
+  border-color: rgba(110, 139, 190, 0.35);
+  color: rgba(25, 41, 67, 0.86);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+:global(html[data-landing-theme='light']) .subtitle,
+:global(html[data-landing-theme='light']) .metricCard p,
+:global(html[data-landing-theme='light']) .panelHeader p,
+:global(html[data-landing-theme='light']) .panelHeader span,
+:global(html[data-landing-theme='light']) .labelText,
+:global(html[data-landing-theme='light']) .switchText {
+  color: rgba(39, 56, 84, 0.74);
+}
+
+:global(html[data-landing-theme='light']) .metricCard {
+  border-color: rgba(110, 139, 190, 0.24);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+:global(html[data-landing-theme='light']) .panel {
+  border-color: rgba(110, 139, 190, 0.24);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 251, 255, 0.95));
+}
+
+:global(html[data-landing-theme='light']) .input {
+  border-color: rgba(108, 137, 190, 0.34);
+  background: rgba(255, 255, 255, 0.9);
+  color: #0f172a;
+}
+
+:global(html[data-landing-theme='light']) .input:focus {
+  border-color: rgba(42, 141, 255, 0.82);
+  box-shadow: 0 0 0 3px rgba(42, 141, 255, 0.16);
+}
+
+:global(html[data-landing-theme='light']) .submit {
+  border-color: rgba(93, 123, 181, 0.45);
+  background: #0f172a;
+  color: #f7faff;
+}
+
+:global(html[data-landing-theme='light']) .submit:hover:not(:disabled) {
+  border-color: rgba(93, 123, 181, 0.72);
+}
+
+:global(html[data-landing-theme='light']) .githubButton {
+  border-color: rgba(108, 137, 190, 0.35);
+  background: rgba(255, 255, 255, 0.86);
+  color: #0f172a;
+}
+
+:global(html[data-landing-theme='light']) .githubButton:hover:not(:disabled) {
+  border-color: rgba(93, 123, 181, 0.6);
+}
+
+:global(html[data-landing-theme='light']) .divider::before {
+  border-top-color: rgba(112, 141, 192, 0.26);
+}
+
+:global(html[data-landing-theme='light']) .divider span {
+  background: rgba(248, 252, 255, 0.95);
+  color: rgba(41, 58, 86, 0.78);
+}
+
+:global(html[data-landing-theme='light']) .switchText a {
+  color: #0b4aa8;
+}
+
+:global(html[data-landing-theme='light']) .themeToggle {
+  border-color: rgba(96, 126, 182, 0.32);
+  background: rgba(255, 255, 255, 0.9);
+  color: rgba(24, 37, 63, 0.9);
+}
+
+:global(html[data-landing-theme='light']) .themeToggle strong {
+  border-color: rgba(12, 90, 206, 0.48);
+  background: rgba(42, 141, 255, 0.16);
+  color: #0b4aa8;
+}
+
 @keyframes rise {
   from {
     opacity: 0;
@@ -361,6 +496,16 @@
 }
 
 @media (max-width: 700px) {
+  .themeDock {
+    top: 0.72rem;
+    right: 0.72rem;
+  }
+
+  .themeToggle {
+    padding: 0.44rem 0.58rem;
+    font-size: 0.6rem;
+  }
+
   .shellCanvas {
     opacity: 0.24;
   }

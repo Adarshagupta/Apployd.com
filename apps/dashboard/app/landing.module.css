@@ -230,6 +230,43 @@
   transition: transform 0.2s ease;
 }
 
+.navActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.themeToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid rgba(214, 222, 243, 0.28);
+  background: rgba(8, 10, 14, 0.84);
+  color: rgba(227, 233, 248, 0.88);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.53rem 0.72rem;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.themeToggle strong {
+  border-radius: 999px;
+  border: 1px solid rgba(47, 141, 255, 0.55);
+  background: rgba(42, 141, 255, 0.2);
+  color: #9ed0ff;
+  padding: 0.14rem 0.34rem;
+  font-size: 0.62rem;
+  line-height: 1;
+}
+
+.themeToggle:hover {
+  border-color: rgba(214, 222, 243, 0.46);
+  transform: translateY(-1px);
+}
+
 .navButton:hover {
   transform: translateY(-1px);
 }
@@ -1027,6 +1064,70 @@
   text-align: center;
 }
 
+.marketingContent {
+  position: relative;
+  z-index: 4;
+}
+
+.footer {
+  position: relative;
+  z-index: 4;
+  border-top: 1px solid rgba(161, 178, 216, 0.14);
+  padding: 3rem 0 2rem;
+}
+
+.footerGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 2rem 3rem;
+}
+
+.footerBrand {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.footerCopy {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  color: rgba(200, 210, 240, 0.6);
+}
+
+.footerHeading {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(200, 210, 240, 0.5);
+}
+
+.footerList {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.footerLink {
+  font-size: 0.85rem;
+  color: rgba(220, 228, 248, 0.7);
+}
+
+.footerBottom {
+  margin-top: 2.5rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid rgba(161, 178, 216, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.78rem;
+  color: rgba(200, 210, 240, 0.4);
+}
+
 .parallaxSlow {
   transform: translate3d(0, calc(var(--landing-scroll-soft, 0) * -0.18px), 0);
 }
@@ -1083,6 +1184,242 @@
   }
 }
 
+:global(html[data-landing-theme='light']) .page {
+  color: #0f172a;
+  background: #f5f8ff;
+}
+
+:global(html[data-landing-theme='light']) .page::before {
+  opacity: 0.24;
+  background-image:
+    linear-gradient(rgba(118, 144, 194, 0.28) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(118, 144, 194, 0.26) 1px, transparent 1px);
+}
+
+:global(html[data-landing-theme='light']) .page::after {
+  background: radial-gradient(circle at center, transparent 36%, rgba(241, 245, 255, 0.58) 88%);
+}
+
+:global(html[data-landing-theme='light']) .threeCanvas {
+  opacity: 0.2;
+}
+
+:global(html[data-landing-theme='light']) .pageVignette {
+  background:
+    radial-gradient(circle at 18% 8%, rgba(126, 157, 214, 0.18), transparent 38%),
+    radial-gradient(circle at 86% 92%, rgba(132, 156, 212, 0.16), transparent 44%),
+    linear-gradient(180deg, rgba(243, 247, 255, 0.05), rgba(240, 245, 255, 0.48));
+}
+
+:global(html[data-landing-theme='light']) .section {
+  border-top-color: rgba(118, 145, 192, 0.24);
+}
+
+:global(html[data-landing-theme='light']) .navShell {
+  border-color: rgba(116, 143, 191, 0.32);
+  background: rgba(244, 248, 255, 0.9);
+}
+
+:global(html[data-landing-theme='light']) .brand {
+  border-color: rgba(96, 127, 186, 0.3);
+  background: rgba(255, 255, 255, 0.88);
+  color: #0f172a;
+}
+
+:global(html[data-landing-theme='light']) .navLink {
+  color: rgba(39, 55, 82, 0.78);
+}
+
+:global(html[data-landing-theme='light']) .navLink:hover {
+  color: #0f172a;
+  border-color: rgba(93, 123, 181, 0.34);
+}
+
+:global(html[data-landing-theme='light']) .themeToggle {
+  border-color: rgba(96, 126, 182, 0.32);
+  background: rgba(255, 255, 255, 0.9);
+  color: rgba(24, 37, 63, 0.9);
+}
+
+:global(html[data-landing-theme='light']) .themeToggle strong {
+  border-color: rgba(12, 90, 206, 0.48);
+  background: rgba(42, 141, 255, 0.16);
+  color: #0b4aa8;
+}
+
+:global(html[data-landing-theme='light']) .navButton {
+  border-color: rgba(86, 116, 170, 0.4);
+  background: #ffffff;
+  color: #0f172a;
+}
+
+:global(html[data-landing-theme='light']) .heroMeta span,
+:global(html[data-landing-theme='light']) .heroSignalRow span {
+  color: rgba(27, 43, 69, 0.82);
+  border-color: rgba(103, 131, 183, 0.33);
+  background: rgba(252, 254, 255, 0.76);
+}
+
+:global(html[data-landing-theme='light']) .heroCopy,
+:global(html[data-landing-theme='light']) .heroPanel p,
+:global(html[data-landing-theme='light']) .heroPanel span,
+:global(html[data-landing-theme='light']) .heroTerminal code,
+:global(html[data-landing-theme='light']) .heroStatCard p,
+:global(html[data-landing-theme='light']) .sectionLabel,
+:global(html[data-landing-theme='light']) .cardSubtitle,
+:global(html[data-landing-theme='light']) .cardMeta span,
+:global(html[data-landing-theme='light']) .featureCard p,
+:global(html[data-landing-theme='light']) .labCardTall p,
+:global(html[data-landing-theme='light']) .labCard p,
+:global(html[data-landing-theme='light']) .efficiencyRow span,
+:global(html[data-landing-theme='light']) .workflowStep p {
+  color: rgba(37, 54, 82, 0.76);
+}
+
+:global(html[data-landing-theme='light']) .heroPanel,
+:global(html[data-landing-theme='light']) .heroPanel div,
+:global(html[data-landing-theme='light']) .heroTerminal,
+:global(html[data-landing-theme='light']) .platformCard,
+:global(html[data-landing-theme='light']) .featureCard,
+:global(html[data-landing-theme='light']) .labCardTall,
+:global(html[data-landing-theme='light']) .labCard,
+:global(html[data-landing-theme='light']) .ctaCard {
+  border-top-color: rgba(116, 143, 191, 0.28);
+}
+
+:global(html[data-landing-theme='light']) .stepRail::before {
+  background: rgba(111, 140, 189, 0.34);
+}
+
+:global(html[data-landing-theme='light']) .stepDot {
+  border-color: rgba(102, 129, 181, 0.28);
+  color: rgba(20, 36, 62, 0.42);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+:global(html[data-landing-theme='light']) .stepDot[data-active='true'] {
+  color: rgba(22, 39, 67, 0.9);
+  border-color: rgba(102, 129, 181, 0.45);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+:global(html[data-landing-theme='light']) .stepDot[data-current='true'] {
+  border-color: rgba(42, 141, 255, 0.55);
+  color: #11418f;
+  box-shadow:
+    0 0 20px rgba(47, 141, 255, 0.22),
+    0 0 40px rgba(47, 141, 255, 0.1);
+}
+
+:global(html[data-landing-theme='light']) .primaryButton {
+  background: #0f172a;
+  color: #f8fbff;
+}
+
+:global(html[data-landing-theme='light']) .secondaryButton {
+  background: rgba(255, 255, 255, 0.84);
+  color: #0f172a;
+}
+
+:global(html[data-landing-theme='light']) .statusRows b {
+  border-color: rgba(11, 110, 214, 0.64);
+  background: rgba(27, 118, 220, 0.14);
+  color: #105ebf;
+}
+
+:global(html[data-landing-theme='light']) .workflowBadge,
+:global(html[data-landing-theme='light']) .workflowStep > span,
+:global(html[data-landing-theme='light']) .efficiencyRow span,
+:global(html[data-landing-theme='light']) .integrationPill {
+  border-color: rgba(104, 132, 185, 0.33);
+  color: rgba(29, 45, 72, 0.85);
+}
+
+:global(html[data-landing-theme='light']) .marquee {
+  border-color: rgba(104, 132, 185, 0.3);
+  background: rgba(252, 254, 255, 0.75);
+}
+
+:global(html[data-landing-theme='light']) .integrationPill {
+  background: rgba(255, 255, 255, 0.88);
+}
+
+:global(html[data-landing-theme='light']) .footer {
+  border-top-color: rgba(109, 137, 188, 0.26);
+}
+
+:global(html[data-landing-theme='light']) .footerCopy,
+:global(html[data-landing-theme='light']) .footerHeading,
+:global(html[data-landing-theme='light']) .footerLink,
+:global(html[data-landing-theme='light']) .footerBottom {
+  color: rgba(36, 53, 80, 0.72);
+}
+
+:global(html[data-landing-theme='light']) .footerBottom {
+  border-top-color: rgba(109, 137, 188, 0.24);
+}
+
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(8, 10, 16']) {
+  background: rgba(255, 255, 255, 0.84) !important;
+}
+
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(8,10,16']) {
+  background: rgba(255, 255, 255, 0.84) !important;
+}
+
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(6, 10, 18']) {
+  background: rgba(255, 255, 255, 0.86) !important;
+}
+
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(6,10,18']) {
+  background: rgba(255, 255, 255, 0.86) !important;
+}
+
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(161, 178, 216']) {
+  border-color: rgba(109, 137, 188, 0.28) !important;
+}
+
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(161,178,216']) {
+  border-color: rgba(109, 137, 188, 0.28) !important;
+}
+
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(150, 170, 220']) {
+  border-color: rgba(109, 137, 188, 0.24) !important;
+}
+
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(150,170,220']) {
+  border-color: rgba(109, 137, 188, 0.24) !important;
+}
+
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(212, 221, 244']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(212,221,244']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(220, 228, 248']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(220,228,248']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(210, 223, 249']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(210,223,249']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(214, 224, 248']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(214,224,248']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(238, 243, 255']) {
+  color: rgba(33, 50, 78, 0.82) !important;
+}
+
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(200, 210, 240']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(200,210,240']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(197, 211, 244']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(197,211,244']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(199, 214, 245']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(199,214,245']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(202, 214, 243']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(202,214,243']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(190, 205, 236']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(190,205,236']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(164, 184, 224']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(164,184,224']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(160, 178, 216']),
+:global(html[data-landing-theme='light']) .marketingContent :global([style*='rgba(160,178,216']) {
+  color: rgba(41, 58, 86, 0.72) !important;
+}
+
 @media (max-width: 1120px) {
   .heroLayout {
     grid-template-columns: 1fr;
@@ -1132,11 +1469,15 @@
 @media (max-width: 860px) {
   .navShell {
     width: calc(100% - 1.2rem);
-    grid-template-columns: auto auto;
+    grid-template-columns: auto 1fr;
   }
 
   .navLinks {
     display: none;
+  }
+
+  .navActions {
+    justify-self: end;
   }
 
   .section {
@@ -1180,6 +1521,11 @@
     font-size: clamp(1.6rem, 8vw, 2.8rem);
     flex-wrap: wrap;
     justify-content: center;
+  }
+
+  .footerBottom {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 
