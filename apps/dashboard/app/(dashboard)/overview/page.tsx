@@ -311,28 +311,11 @@ export default function OverviewPage() {
     return { label: hottest.label, percent: hottest.percent };
   }, [utilizationMetrics]);
 
-  const quickActions = [
-    {
-      title: 'Provision Project',
-      description: 'Create a new project and assign strict resource boundaries.',
-      href: '/projects/new',
-    },
-    {
-      title: 'Inspect Usage',
-      description: 'Review pooled consumption and project-level utilization.',
-      href: '/usage',
-    },
-    {
-      title: 'Open Logs',
-      description: 'Stream runtime and deployment logs from active services.',
-      href: '/logs',
-    },
-    {
-      title: 'Review Billing',
-      description: 'Check current plan state and invoice history.',
-      href: '/billing',
-    },
-  ] as const;
+  const latestProjects = useMemo(() => projects.slice(0, 4), [projects]);
+  const projectSlots = useMemo(
+    () => Array.from({ length: 4 }, (_, index) => latestProjects[index] ?? null),
+    [latestProjects],
+  );
 
   const isOverviewLoading =
     loading ||
@@ -433,25 +416,58 @@ export default function OverviewPage() {
           </article>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
-            {quickActions.map((action, index) => (
-              <button
-                key={action.href}
-                type="button"
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                onClick={() => router.push(action.href as any)}
-                className="action-card"
-              >
-                <div className="action-card-head">
-                  <span className="action-card-index">{String(index + 1).padStart(2, '0')}</span>
-                  <span className="action-card-arrow">↗</span>
-                </div>
-                <p className="action-card-title">{action.title}</p>
-                <p className="action-card-description">{action.description}</p>
-                <p className="action-card-cta">
-                  Open workspace
-                </p>
-              </button>
-            ))}
+            {isOverviewLoading
+              ? Array.from({ length: 4 }, (_, index) => (
+                  <article key={`project-slot-loading-${index}`} className="action-card">
+                    <div className="action-card-head">
+                      <SkeletonBlock className="h-5 w-10 rounded-full" />
+                      <SkeletonBlock className="h-6 w-6 rounded-full" />
+                    </div>
+                    <SkeletonBlock className="h-5 w-40 rounded" />
+                    <SkeletonBlock className="mt-2 h-4 w-28 rounded" />
+                    <SkeletonBlock className="mt-2 h-4 w-36 rounded" />
+                    <SkeletonBlock className="mt-4 h-4 w-24 rounded" />
+                  </article>
+                ))
+              : projectSlots.map((project, index) =>
+                  project ? (
+                    <button
+                      key={project.id}
+                      type="button"
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      onClick={() => router.push(`/projects/${project.id}` as any)}
+                      className="action-card"
+                    >
+                      <div className="action-card-head">
+                        <span className="action-card-index">{String(index + 1).padStart(2, '0')}</span>
+                        <span className="action-card-arrow">↗</span>
+                      </div>
+                      <p className="action-card-title">{project.name}</p>
+                      <p className="action-card-description mono">{project.slug}</p>
+                      <p className="action-card-description">
+                        {project.runtime.toUpperCase()} • {project.resourceCpuMillicore}m CPU • {project.resourceRamMb} MB
+                      </p>
+                      <p className="action-card-cta">Open project</p>
+                    </button>
+                  ) : (
+                    <button
+                      key={`create-project-slot-${index}`}
+                      type="button"
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      onClick={() => router.push('/projects/new' as any)}
+                      className="action-card action-card-create"
+                    >
+                      <div className="action-card-head">
+                        <span className="action-card-index">NEW</span>
+                        <span className="action-card-arrow">+</span>
+                      </div>
+                      <p className="action-card-title">Create New Project</p>
+                      <p className="action-card-description">No project in this slot yet.</p>
+                      <p className="action-card-description">Provision a new service and assign resources.</p>
+                      <p className="action-card-cta">Open provision form</p>
+                    </button>
+                  ),
+                )}
           </div>
         </div>
       </SectionCard>

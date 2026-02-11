@@ -330,6 +330,20 @@ a {
     transform: translateY(-2px);
   }
 
+  .action-card-create {
+    border-style: dashed;
+    background:
+      radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent-alt) 8%, transparent), transparent 52%),
+      color-mix(in srgb, var(--bg-0) 96%, transparent);
+  }
+
+  .action-card-create:hover {
+    border-color: color-mix(in srgb, var(--line-strong) 88%, transparent);
+    background:
+      radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent-alt) 14%, transparent), transparent 54%),
+      color-mix(in srgb, var(--bg-1) 96%, transparent);
+  }
+
   .action-card-head {
     @apply mb-3 flex items-center justify-between;
   }
