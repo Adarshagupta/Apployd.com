@@ -11,7 +11,7 @@ const LANDING_THEME_UPDATED_EVENT = 'apployd:landing-theme-updated';
 const DASHBOARD_THEME_UPDATED_EVENT = 'apployd:dashboard-theme-updated';
 
 type LandingThemeToggleProps = {
-  className?: string;
+  className?: string | undefined;
 };
 
 function applyLandingTheme(theme: LandingTheme) {
