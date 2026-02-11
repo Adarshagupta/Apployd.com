@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { IconInfo } from '../../../components/dashboard-icons';
@@ -153,6 +153,41 @@ const formatBillingWindow = (start?: string, end?: string): string => {
   }
 
   return `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
+};
+
+const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
+
+const buildSparkPath = (percent: number, seed: number): string => {
+  const normalized = clampPercent(percent);
+  const points = Array.from({ length: 7 }, (_, index) => {
+    const x = (index / 6) * 100;
+    const wave = Math.sin((index + seed * 0.33) * 1.05) * 7;
+    const trend = (index - 2.8) * 1.4;
+    const magnitude = normalized * 0.44;
+    const y = 86 - magnitude - wave - trend;
+    return [x, Math.min(90, Math.max(10, y))] as const;
+  });
+
+  return points
+    .map(([x, y], index) => `${index === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`)
+    .join(' ');
+};
+
+const missionSignalTone = (status: string): string => {
+  const normalized = status.toLowerCase();
+  if (normalized === 'ready') {
+    return 'ready';
+  }
+  if (normalized === 'failed') {
+    return 'failed';
+  }
+  if (normalized === 'building' || normalized === 'deploying') {
+    return 'active';
+  }
+  if (normalized === 'queued') {
+    return 'queued';
+  }
+  return 'idle';
 };
 
 const deploymentTone = (status: string): string => {
@@ -321,10 +356,21 @@ export default function OverviewPage() {
   }, [utilizationMetrics]);
 
   const latestProjects = useMemo(() => projects.slice(0, 4), [projects]);
-  const projectSlots = useMemo(
-    () => Array.from({ length: 4 }, (_, index) => latestProjects[index] ?? null),
-    [latestProjects],
+  const featuredProjects = useMemo(() => latestProjects.slice(0, 3), [latestProjects]);
+  const featuredProjectSlots = useMemo(
+    () => Array.from({ length: 3 }, (_, index) => featuredProjects[index] ?? null),
+    [featuredProjects],
   );
+
+  const latestDeploymentByProject = useMemo(() => {
+    const map = new Map<string, RecentDeployment>();
+    for (const deployment of recentDeployments) {
+      if (!map.has(deployment.project.id)) {
+        map.set(deployment.project.id, deployment);
+      }
+    }
+    return map;
+  }, [recentDeployments]);
 
   const isOverviewLoading =
     loading ||
@@ -337,160 +383,188 @@ export default function OverviewPage() {
   return (
     <div className="space-y-4">
       <SectionCard title="Mission Control">
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-          <article className="workspace-card md:p-6">
-            <div className="pointer-events-none absolute -right-20 -top-16 h-44 w-44 rounded-full opacity-30 blur-3xl" style={{ background: 'radial-gradient(circle, var(--accent-alt), transparent)' }} />
+        <div className="mission-shell">
+          <article className="mission-main">
+            <div className="mission-head">
+              <div className="mission-overline-row">
+                <p className="mission-overline">Service signals for active cycle</p>
+                <span className="mission-pill">{formatInteger(featuredProjects.length)} assets</span>
+              </div>
+              <div className="mission-filter-row">
+                <span className="mission-filter-chip">24h</span>
+                <span className="mission-filter-chip">{subscription?.plan?.displayName ?? 'No Plan'}</span>
+                <span className="mission-filter-chip">{formatInteger(projects.length)} projects</span>
+              </div>
+            </div>
+
+            <h3 className="mission-title">{selectedOrganization?.name ?? 'No organization selected'}</h3>
 
             {isOverviewLoading ? (
-              <>
-                <div className="relative flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-2">
-                    <SkeletonBlock className="h-3 w-20 rounded" />
-                    <SkeletonBlock className="h-8 w-64 max-w-[70vw] rounded-xl" />
-                    <SkeletonBlock className="h-4 w-52 max-w-[60vw] rounded" />
-                    <SkeletonBlock className="h-3 w-44 max-w-[50vw] rounded" />
-                  </div>
-                  <SkeletonBlock className="h-10 w-24 rounded-xl" />
-                </div>
-
-                <div className="relative mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {[0, 1, 2, 3].map((placeholder) => (
-                    <div key={placeholder} className="stat-card-overview">
-                      <SkeletonBlock className="h-3 w-20 rounded" />
-                      <SkeletonBlock className="mt-2 h-6 w-24 rounded-lg" />
-                      <SkeletonBlock className="mt-3 h-2 w-full rounded-full" />
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="relative flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <p className="workspace-label">WS</p>
-                    <h3 className="workspace-title">
-                      {selectedOrganization?.name ?? 'No organization selected'}
-                    </h3>
-                    <div className="workspace-chip-row">
-                      <span className="workspace-chip">{subscription?.plan?.displayName ?? 'No active plan'}</span>
-                      <span className="workspace-chip workspace-chip-muted">{subscription?.status ?? 'inactive'}</span>
-                      <span className="workspace-chip workspace-chip-muted">{formatInteger(projects.length)} projects</span>
-                    </div>
-                    <p className="workspace-meta">
-                      <InfoIcon label="Billing window" /> {formatBillingWindow(subscription?.currentPeriodStart, subscription?.currentPeriodEnd)}
-                    </p>
-                    <p className="workspace-meta">
-                      <InfoIcon label="Last sync" /> {lastSyncedAt ? formatRelativeTime(lastSyncedAt) : '--'}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="btn-secondary workspace-refresh-btn"
-                    onClick={() => {
-                      void loadOverview();
-                    }}
-                    disabled={refreshing}
-                  >
-                    {refreshing ? 'Refreshing...' : 'Refresh'}
-                  </button>
-                </div>
-
-                <div className="relative mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <div className="stat-card-overview">
-                    <p className="stat-label">Projects</p>
-                    <p className="stat-value">{formatInteger(projects.length)}</p>
-                    <p className="stat-detail"><InfoIcon label="Total active services in workspace" /></p>
-                  </div>
-                  <div className="stat-card-overview">
-                    <p className="stat-label">Deployments</p>
-                    <p className="stat-value">{formatInteger(recentDeployments.length)}</p>
-                    <p className="stat-detail"><InfoIcon label="Latest deployment records fetched" /></p>
-                  </div>
-                  <div className="stat-card-overview">
-                    <p className="stat-label">Overall Load</p>
-                    <p className="stat-value">{overallLoadPercent.toFixed(1)}%</p>
-                    <div className="stat-trend-track">
-                      <span className="stat-trend-fill" style={{ width: `${Math.max(6, Math.min(100, overallLoadPercent)).toFixed(1)}%` }} />
-                    </div>
-                  </div>
-                  <div className="stat-card-overview">
-                    <p className="stat-label">Peak Pressure</p>
-                    <p className="stat-value-sm">{peakPressure.label}</p>
-                    <p className="stat-detail"><InfoIcon label="Peak pressure across pools" /> {peakPressure.percent.toFixed(1)}%</p>
-                  </div>
-                </div>
-              </>
-            )}
-          </article>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
-            {isOverviewLoading ? (
-              Array.from({ length: 4 }, (_, index) => (
-                <article key={`project-slot-loading-${index}`} className="action-card">
-                  <div className="action-card-head">
-                    <SkeletonBlock className="h-5 w-10 rounded-full" />
-                    <SkeletonBlock className="h-6 w-6 rounded-full" />
-                  </div>
-                  <SkeletonBlock className="h-5 w-40 rounded" />
-                  <SkeletonBlock className="mt-2 h-4 w-28 rounded" />
-                  <SkeletonBlock className="mt-2 h-4 w-36 rounded" />
-                  <SkeletonBlock className="mt-4 h-4 w-24 rounded" />
-                </article>
-              ))
-            ) : latestProjects.length === 0 ? (
+              <div className="mission-grid">
+                {Array.from({ length: 3 }, (_, index) => (
+                  <article key={`mission-loading-${index}`} className="mission-card">
+                    <SkeletonBlock className="h-4 w-24 rounded" />
+                    <SkeletonBlock className="mt-3 h-6 w-40 rounded" />
+                    <SkeletonBlock className="mt-2 h-4 w-24 rounded" />
+                    <SkeletonBlock className="mt-5 h-8 w-28 rounded" />
+                    <SkeletonBlock className="mt-3 h-16 w-full rounded-xl" />
+                  </article>
+                ))}
+              </div>
+            ) : featuredProjects.length === 0 ? (
               <button
                 type="button"
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 onClick={() => router.push('/projects/new' as any)}
-                className="action-card action-card-empty sm:col-span-2 xl:col-span-2"
+                className="mission-empty"
               >
-                <div className="action-card-head">
-                  <span className="action-card-index">NEW</span>
-                  <span className="action-card-arrow">+</span>
-                </div>
-                <p className="action-card-title">Create your first project</p>
-                <p className="action-card-description">Start deployment setup.</p>
-                <p className="action-card-cta">Open provision form</p>
+                <span className="mission-empty-mark">+</span>
+                <span className="mission-empty-text">Create project</span>
               </button>
             ) : (
-              projectSlots.map((project, index) =>
-                project ? (
-                  <button
-                    key={project.id}
-                    type="button"
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    onClick={() => router.push(`/projects/${project.id}` as any)}
-                    className="action-card"
-                  >
-                    <div className="action-card-head">
-                      <span className="action-card-index">{String(index + 1).padStart(2, '0')}</span>
-                      <span className="action-card-arrow">↗</span>
-                    </div>
-                    <p className="action-card-title">{project.name}</p>
-                    <p className="action-card-description mono">{project.slug}</p>
-                    <p className="action-card-description">{project.runtime.toUpperCase()} • {project.resourceCpuMillicore}m • {project.resourceRamMb}MB</p>
-                    <p className="action-card-cta">Open project</p>
-                  </button>
-                ) : (
-                  <button
-                    key={`create-project-slot-${index}`}
-                    type="button"
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    onClick={() => router.push('/projects/new' as any)}
-                    className="action-card action-card-create"
-                  >
-                    <div className="action-card-head">
-                      <span className="action-card-index">NEW</span>
-                      <span className="action-card-arrow">+</span>
-                    </div>
-                    <p className="action-card-title">Create New Project</p>
-                    <p className="action-card-cta">Open provision form</p>
-                  </button>
-                ),
-              )
+              <div className="mission-grid">
+                {featuredProjectSlots.map((project, index) => {
+                  if (!project) {
+                    return (
+                      <button
+                        key={`mission-create-${index}`}
+                        type="button"
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        onClick={() => router.push('/projects/new' as any)}
+                        className="mission-card mission-card-create"
+                      >
+                        <p className="mission-card-runtime">Open slot</p>
+                        <p className="mission-card-name">Create Project</p>
+                        <p className="mission-card-meta">Provision a new backend service.</p>
+                      </button>
+                    );
+                  }
+
+                  const deployment = latestDeploymentByProject.get(project.id);
+                  const status = deployment?.status ?? 'idle';
+                  const tone = missionSignalTone(status);
+                  const percentSignals = [
+                    safeNumber(project.usage?.utilization.cpuPercentOfAllocation),
+                    safeNumber(project.usage?.utilization.ramPercentOfAllocation),
+                    safeNumber(project.usage?.utilization.bandwidthPercentOfAllocation),
+                  ].filter((value) => value > 0);
+                  const poolSignals = [
+                    summary?.pools.cpuMillicores
+                      ? (project.resourceCpuMillicore / safeNumber(summary.pools.cpuMillicores)) * 100
+                      : 0,
+                    summary?.pools.ramMb ? (project.resourceRamMb / safeNumber(summary.pools.ramMb)) * 100 : 0,
+                    summary?.pools.bandwidthGb
+                      ? (project.resourceBandwidthGb / safeNumber(summary.pools.bandwidthGb)) * 100
+                      : 0,
+                  ].filter((value) => Number.isFinite(value) && value > 0);
+
+                  const loadValue = percentSignals.length
+                    ? percentSignals.reduce((total, value) => total + value, 0) / percentSignals.length
+                    : poolSignals.length
+                      ? poolSignals.reduce((total, value) => total + value, 0) / poolSignals.length
+                      : 0;
+                  const loadPercent = clampPercent(loadValue);
+                  const accentColor = ['#8ea2ff', '#9f7cff', '#f67b7b'][index % 3];
+
+                  return (
+                    <button
+                      key={project.id}
+                      type="button"
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      onClick={() => router.push(`/projects/${project.id}` as any)}
+                      className="mission-card"
+                      style={{ '--mission-accent': accentColor } as CSSProperties}
+                    >
+                      <div className="mission-card-top">
+                        <p className="mission-card-runtime">{project.runtime.toUpperCase()}</p>
+                        <span className={`mission-card-status mission-card-status-${tone}`}>{status}</span>
+                      </div>
+                      <p className="mission-card-name">{project.name}</p>
+                      <p className="mission-card-meta mono">{project.slug}</p>
+                      <p className="mission-card-value">{loadPercent.toFixed(1)}%</p>
+                      <p className="mission-card-trend">
+                        {deployment ? formatRelativeTime(deployment.createdAt) : 'No deployments'}
+                      </p>
+                      <div className="mission-card-chart">
+                        <svg viewBox="0 0 100 36" preserveAspectRatio="none" aria-hidden="true">
+                          <path d={buildSparkPath(loadPercent, index + project.name.length)} className="mission-card-chart-line" />
+                        </svg>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             )}
-          </div>
+          </article>
+
+          <aside className="mission-side">
+            {isOverviewLoading ? (
+              <div className="space-y-3">
+                <SkeletonBlock className="h-4 w-24 rounded" />
+                <SkeletonBlock className="h-7 w-52 rounded-xl" />
+                <SkeletonBlock className="h-4 w-64 max-w-full rounded" />
+                <SkeletonBlock className="h-24 w-full rounded-2xl" />
+                <SkeletonBlock className="h-11 w-full rounded-xl" />
+                <SkeletonBlock className="h-10 w-full rounded-xl" />
+              </div>
+            ) : (
+              <>
+                <div className="mission-side-head">
+                  <p className="mission-side-label">Apployd Mission</p>
+                  <span className="mission-side-chip">{subscription?.status ?? 'inactive'}</span>
+                </div>
+                <h4 className="mission-side-title">Deployment Portfolio</h4>
+                <p className="mission-side-description">
+                  Monitor pooled capacity and launch services from one control surface.
+                </p>
+
+                <div className="mission-side-stats">
+                  <div className="mission-side-stat-row">
+                    <span>Plan</span>
+                    <strong>{subscription?.plan?.displayName ?? 'No active plan'}</strong>
+                  </div>
+                  <div className="mission-side-stat-row">
+                    <span>Deployments</span>
+                    <strong>{formatInteger(recentDeployments.length)}</strong>
+                  </div>
+                  <div className="mission-side-stat-row">
+                    <span>Load</span>
+                    <strong>{overallLoadPercent.toFixed(1)}%</strong>
+                  </div>
+                  <div className="mission-side-stat-row">
+                    <span>Peak</span>
+                    <strong>{peakPressure.label} {peakPressure.percent.toFixed(1)}%</strong>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="mission-side-cta mission-side-cta-primary"
+                  onClick={() => {
+                    void loadOverview();
+                  }}
+                  disabled={refreshing}
+                >
+                  {refreshing ? 'Refreshing...' : 'Refresh telemetry'}
+                </button>
+                <button
+                  type="button"
+                  className="mission-side-cta mission-side-cta-secondary"
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  onClick={() => router.push('/projects/new' as any)}
+                >
+                  Create project
+                </button>
+
+                <p className="mission-side-foot">
+                  <InfoIcon label="Billing window" /> {formatBillingWindow(subscription?.currentPeriodStart, subscription?.currentPeriodEnd)}
+                </p>
+                <p className="mission-side-foot">
+                  <InfoIcon label="Last sync" /> {lastSyncedAt ? formatRelativeTime(lastSyncedAt) : '--'}
+                </p>
+              </>
+            )}
+          </aside>
         </div>
       </SectionCard>
 
