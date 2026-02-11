@@ -57,6 +57,14 @@ function SkeletonBlock({ className }: { className: string }) {
   return <div aria-hidden="true" className={`skeleton ${className}`} />;
 }
 
+function InfoIcon({ label }: { label: string }) {
+  return (
+    <span className="info-icon" title={label} aria-label={label}>
+      i
+    </span>
+  );
+}
+
 const safeNumber = (value: string | number | null | undefined): number => {
   const parsed = Number(value ?? 0);
   if (!Number.isFinite(parsed) || parsed < 0) {
@@ -327,7 +335,7 @@ export default function OverviewPage() {
 
   return (
     <div className="space-y-4">
-      <SectionCard title="Mission Control" subtitle="Live operational posture for the selected organization.">
+      <SectionCard title="Mission Control">
         <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
           <article className="workspace-card md:p-6">
             <div className="pointer-events-none absolute -right-20 -top-16 h-44 w-44 rounded-full opacity-30 blur-3xl" style={{ background: 'radial-gradient(circle, var(--accent-alt), transparent)' }} />
@@ -358,7 +366,7 @@ export default function OverviewPage() {
               <>
                 <div className="relative flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <p className="workspace-label">Workspace</p>
+                    <p className="workspace-label">WS</p>
                     <h3 className="workspace-title">
                       {selectedOrganization?.name ?? 'No organization selected'}
                     </h3>
@@ -368,10 +376,10 @@ export default function OverviewPage() {
                       <span className="workspace-chip workspace-chip-muted">{formatInteger(projects.length)} projects</span>
                     </div>
                     <p className="workspace-meta">
-                      {formatBillingWindow(subscription?.currentPeriodStart, subscription?.currentPeriodEnd)}
+                      <InfoIcon label="Billing window" /> {formatBillingWindow(subscription?.currentPeriodStart, subscription?.currentPeriodEnd)}
                     </p>
                     <p className="workspace-meta">
-                      Last sync {lastSyncedAt ? formatRelativeTime(lastSyncedAt) : 'not available'}
+                      <InfoIcon label="Last sync" /> {lastSyncedAt ? formatRelativeTime(lastSyncedAt) : '--'}
                     </p>
                   </div>
 
@@ -391,12 +399,12 @@ export default function OverviewPage() {
                   <div className="stat-card-overview">
                     <p className="stat-label">Projects</p>
                     <p className="stat-value">{formatInteger(projects.length)}</p>
-                    <p className="stat-detail">Total active services in workspace</p>
+                    <p className="stat-detail"><InfoIcon label="Total active services in workspace" /></p>
                   </div>
                   <div className="stat-card-overview">
                     <p className="stat-label">Deployments</p>
                     <p className="stat-value">{formatInteger(recentDeployments.length)}</p>
-                    <p className="stat-detail">Latest delivery records fetched</p>
+                    <p className="stat-detail"><InfoIcon label="Latest deployment records fetched" /></p>
                   </div>
                   <div className="stat-card-overview">
                     <p className="stat-label">Overall Load</p>
@@ -408,7 +416,7 @@ export default function OverviewPage() {
                   <div className="stat-card-overview">
                     <p className="stat-label">Peak Pressure</p>
                     <p className="stat-value-sm">{peakPressure.label}</p>
-                    <p className="stat-detail">{peakPressure.percent.toFixed(1)}% of pool</p>
+                    <p className="stat-detail"><InfoIcon label="Peak pressure across pools" /> {peakPressure.percent.toFixed(1)}%</p>
                   </div>
                 </div>
               </>
@@ -460,9 +468,7 @@ export default function OverviewPage() {
                     </div>
                     <p className="action-card-title">{project.name}</p>
                     <p className="action-card-description mono">{project.slug}</p>
-                    <p className="action-card-description">
-                      {project.runtime.toUpperCase()} • {project.resourceCpuMillicore}m CPU • {project.resourceRamMb} MB
-                    </p>
+                    <p className="action-card-description">{project.runtime.toUpperCase()} • {project.resourceCpuMillicore}m • {project.resourceRamMb}MB</p>
                     <p className="action-card-cta">Open project</p>
                   </button>
                 ) : (
@@ -478,7 +484,6 @@ export default function OverviewPage() {
                       <span className="action-card-arrow">+</span>
                     </div>
                     <p className="action-card-title">Create New Project</p>
-                    <p className="action-card-description">Empty slot.</p>
                     <p className="action-card-cta">Open provision form</p>
                   </button>
                 ),
@@ -488,7 +493,7 @@ export default function OverviewPage() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Capacity Radar" subtitle="Resource pressure across pooled limits for the current billing window.">
+      <SectionCard title="Capacity Radar">
         {isOverviewLoading ? (
           <div className="grid gap-4 lg:grid-cols-3">
             {[0, 1, 2].map((placeholder) => (
@@ -545,11 +550,13 @@ export default function OverviewPage() {
                   </div>
 
                   <div className="mt-3 flex items-center justify-between gap-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-                    <span>{metric.percent.toFixed(1)}% of pool</span>
-                    <span>Capacity: {metric.capacityLabel}</span>
+                    <span>{metric.percent.toFixed(1)}%</span>
+                    <span>{metric.capacityLabel}</span>
                   </div>
 
-                  <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>Headroom: {formatCompact(Math.max(0, metric.capacity - metric.used))}</p>
+                  <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    <InfoIcon label="Headroom" /> {formatCompact(Math.max(0, metric.capacity - metric.used))}
+                  </p>
                 </article>
               );
             })}
@@ -557,7 +564,7 @@ export default function OverviewPage() {
         )}
       </SectionCard>
 
-      <SectionCard title="Deployment Feed" subtitle="Latest deployment transitions across this organization.">
+      <SectionCard title="Deployment Feed">
         {isOverviewLoading ? (
           <div className="space-y-2">
             {[0, 1, 2].map((placeholder) => (

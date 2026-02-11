@@ -267,6 +267,14 @@ a {
     border-radius: 999px;
   }
 
+  .info-icon {
+    @apply inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-semibold align-middle;
+    border: 1px solid var(--line-strong);
+    color: var(--text-muted);
+    background: color-mix(in srgb, var(--bg-1) 96%, transparent);
+    margin-right: 0.3rem;
+  }
+
   .stat-card-overview {
     @apply rounded-2xl border p-3;
     border-color: var(--line);
@@ -297,7 +305,7 @@ a {
   }
 
   .stat-detail {
-    @apply mt-1 text-xs;
+    @apply mt-1 text-xs inline-flex items-center;
     color: var(--text-muted);
   }
 
