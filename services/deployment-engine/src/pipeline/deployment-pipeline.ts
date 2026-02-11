@@ -90,12 +90,19 @@ export class DeploymentPipeline {
       const onLog = (line: string) => {
         this.publishEvent(payload.deploymentId, 'log', line, deployment.projectId);
       };
+      let deploymentCommit = payload.request.commitSha?.trim() || deployment.commitSha?.trim() || '';
+      if (deploymentCommit) {
+        onLog(`Deploy request commit: ${deploymentCommit}`);
+      } else {
+        const branchLabel = payload.request.branch?.trim() || 'default branch';
+        onLog(`Deploy request branch: ${branchLabel} (commit resolved in build logs)`);
+      }
 
       // If we already have an imageTag (rollback), skip the build
       let imageTag = deployment.imageTag ?? null;
 
       if (!imageTag) {
-        imageTag = await withRetry(
+        const buildResult = await withRetry(
           () =>
             this.docker.buildImage(
               {
@@ -103,7 +110,7 @@ export class DeploymentPipeline {
                 projectId: deployment.projectId,
                 gitUrl: payload.request.gitUrl,
                 branch: payload.request.branch ?? '',
-                commitSha: payload.request.commitSha ?? '',
+                commitSha: deploymentCommit,
                 ...(payload.request.rootDirectory && { rootDirectory: payload.request.rootDirectory }),
                 ...(payload.request.buildCommand && { buildCommand: payload.request.buildCommand }),
                 ...(payload.request.startCommand && { startCommand: payload.request.startCommand }),
@@ -115,10 +122,18 @@ export class DeploymentPipeline {
             ),
           { retries: 2, delayMs: 2000 },
         );
+        imageTag = buildResult.imageTag;
+        if (!deploymentCommit && buildResult.sourceCommitSha) {
+          deploymentCommit = buildResult.sourceCommitSha;
+          onLog(`Deploy resolved commit: ${deploymentCommit}`);
+        }
 
         await prisma.deployment.update({
           where: { id: payload.deploymentId },
-          data: { imageTag },
+          data: {
+            imageTag,
+            ...(deploymentCommit ? { commitSha: deploymentCommit } : {}),
+          },
         });
       } else {
         onLog('Reusing existing image (rollback) — skipping build');
@@ -323,10 +338,11 @@ export class DeploymentPipeline {
       }
 
       const envLabel = isPreview ? '🔀 Preview' : '🚀 Production';
+      const commitSuffix = deploymentCommit ? ` @ ${deploymentCommit.slice(0, 12)}` : '';
       await this.publishEvent(
         payload.deploymentId,
         'ready',
-        `${envLabel} deployment ready at ${this.resolvePublicUrl(domain)}`,
+        `${envLabel} deployment${commitSuffix} ready at ${this.resolvePublicUrl(domain)}`,
         deployment.projectId,
       );
 

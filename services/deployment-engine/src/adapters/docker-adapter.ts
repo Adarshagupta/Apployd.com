@@ -79,9 +79,12 @@ function pythonDockerfile(projectId: string): string {
     'ARG GIT_URL',
     'ARG GIT_BRANCH=""',
     'ARG GIT_SHA=""',
+    'ARG SOURCE_REFRESH_TOKEN=""',
     'WORKDIR /repo',
-    'RUN if [ -n "${GIT_BRANCH}" ]; then git clone --depth=1 --branch "${GIT_BRANCH}" "${GIT_URL}" .; else git clone --depth=1 "${GIT_URL}" .; fi && \\',
-    '    if [ -n "${GIT_SHA}" ]; then git fetch --depth=1 origin "${GIT_SHA}" && git checkout "${GIT_SHA}"; fi',
+    'RUN echo ">>> Source refresh token: ${SOURCE_REFRESH_TOKEN}" && \\',
+    '    if [ -n "${GIT_BRANCH}" ]; then git clone --depth=1 --branch "${GIT_BRANCH}" "${GIT_URL}" .; else git clone --depth=1 "${GIT_URL}" .; fi && \\',
+    '    if [ -n "${GIT_SHA}" ]; then git fetch --depth=1 origin "${GIT_SHA}" && git checkout "${GIT_SHA}"; else git pull --ff-only; fi && \\',
+    '    echo ">>> Source commit: $(git rev-parse HEAD)"',
     '',
     '# ---- Stage 2: Build Python application ----',
     'FROM python:3.11-slim',
@@ -215,9 +218,12 @@ function webServiceDockerfile(projectId: string): string {
     'ARG GIT_URL',
     'ARG GIT_BRANCH=""',
     'ARG GIT_SHA=""',
+    'ARG SOURCE_REFRESH_TOKEN=""',
     'WORKDIR /repo',
-    'RUN if [ -n "${GIT_BRANCH}" ]; then git clone --depth=1 --branch "${GIT_BRANCH}" "${GIT_URL}" .; else git clone --depth=1 "${GIT_URL}" .; fi && \\',
-    '    if [ -n "${GIT_SHA}" ]; then git fetch --depth=1 origin "${GIT_SHA}" && git checkout "${GIT_SHA}"; fi',
+    'RUN echo ">>> Source refresh token: ${SOURCE_REFRESH_TOKEN}" && \\',
+    '    if [ -n "${GIT_BRANCH}" ]; then git clone --depth=1 --branch "${GIT_BRANCH}" "${GIT_URL}" .; else git clone --depth=1 "${GIT_URL}" .; fi && \\',
+    '    if [ -n "${GIT_SHA}" ]; then git fetch --depth=1 origin "${GIT_SHA}" && git checkout "${GIT_SHA}"; else git pull --ff-only; fi && \\',
+    '    echo ">>> Source commit: $(git rev-parse HEAD)"',
     '',
     '# ---- Stage 2: Build application ----',
     'FROM node:20-bookworm-slim',
@@ -380,9 +386,12 @@ function staticSiteDockerfile(projectId: string): string {
     'ARG GIT_URL',
     'ARG GIT_BRANCH=""',
     'ARG GIT_SHA=""',
+    'ARG SOURCE_REFRESH_TOKEN=""',
     'WORKDIR /repo',
-    'RUN if [ -n "${GIT_BRANCH}" ]; then git clone --depth=1 --branch "${GIT_BRANCH}" "${GIT_URL}" .; else git clone --depth=1 "${GIT_URL}" .; fi && \\',
-    '    if [ -n "${GIT_SHA}" ]; then git fetch --depth=1 origin "${GIT_SHA}" && git checkout "${GIT_SHA}"; fi',
+    'RUN echo ">>> Source refresh token: ${SOURCE_REFRESH_TOKEN}" && \\',
+    '    if [ -n "${GIT_BRANCH}" ]; then git clone --depth=1 --branch "${GIT_BRANCH}" "${GIT_URL}" .; else git clone --depth=1 "${GIT_URL}" .; fi && \\',
+    '    if [ -n "${GIT_SHA}" ]; then git fetch --depth=1 origin "${GIT_SHA}" && git checkout "${GIT_SHA}"; else git pull --ff-only; fi && \\',
+    '    echo ">>> Source commit: $(git rev-parse HEAD)"',
     '',
     '# ---- Stage 2: Install & Build ----',
     'FROM node:20-bookworm-slim AS builder',
@@ -518,6 +527,11 @@ interface RunContainerInput {
   deploymentId: string;
 }
 
+interface BuildImageResult {
+  imageTag: string;
+  sourceCommitSha: string | null;
+}
+
 export class DockerAdapter {
   /**
    * Build a Docker image entirely inside Docker — git clone, dependency
@@ -525,12 +539,21 @@ export class DockerAdapter {
    * thing written to the host is a tiny temp directory with the generated
    * Dockerfile (no repo checkout on the host).
    */
-  async buildImage(input: BuildImageInput, onLog?: LogCallback): Promise<string> {
+  async buildImage(input: BuildImageInput, onLog?: LogCallback): Promise<BuildImageResult> {
     const imageTag = `apployd/${input.deploymentId}:latest`;
+    let sourceCommitSha: string | null = null;
+    const sourceCommitPattern = />>> Source commit:\s*([0-9a-f]{7,40})/i;
 
     // Wrap log callback to sanitize sensitive data
     const safeLog: LogCallback | undefined = onLog
-      ? (msg) => onLog(sanitizeLog(msg))
+      ? (msg) => {
+          const sanitized = sanitizeLog(msg);
+          const match = sanitized.match(sourceCommitPattern);
+          if (match) {
+            sourceCommitSha = match[1] ?? null;
+          }
+          onLog(sanitized);
+        }
       : undefined;
 
     // Minimal build-context: just our generated Dockerfile
@@ -558,6 +581,8 @@ export class DockerAdapter {
         `--build-arg GIT_BRANCH=${shellEscape(input.branch)}`,
         `--build-arg APP_PORT=${input.port}`,
       ];
+      const sourceRefreshToken = `${input.deploymentId}-${Date.now()}`;
+      args.push(`--build-arg SOURCE_REFRESH_TOKEN=${shellEscape(sourceRefreshToken)}`);
       if (input.commitSha) args.push(`--build-arg GIT_SHA=${shellEscape(input.commitSha)}`);
       if (input.rootDirectory) args.push(`--build-arg ROOT_DIR=${shellEscape(input.rootDirectory)}`);
       if (input.buildCommand) args.push(`--build-arg BUILD_CMD=${shellEscape(input.buildCommand)}`);
@@ -570,16 +595,20 @@ export class DockerAdapter {
       }
       if (isStatic && input.outputDirectory) args.push(`--build-arg OUTPUT_DIR=${shellEscape(input.outputDirectory)}`);
 
-      safeLog?.(`Building ${isStatic ? 'static site' : 'web service'} image from ${sanitizedGitUrl} (${input.branch})...`);
+      const sourceRef = input.commitSha ? `${input.branch}@${input.commitSha.slice(0, 12)}` : input.branch;
+      safeLog?.(`Building ${isStatic ? 'static site' : 'web service'} image from ${sanitizedGitUrl} (${sourceRef})...`);
       // Use BuildKit for cache mounts — dramatically speeds up rebuilds
       // DOCKER_BUILDKIT=1 enables BuildKit; --progress=plain streams full logs
       await runCommandStreaming(
         `DOCKER_BUILDKIT=1 docker build --progress=plain ${args.join(' ')} -t ${shellEscape(imageTag)} ${shellEscape(ctxDir)}`,
         safeLog,
       );
+      if (sourceCommitSha) {
+        safeLog?.(`Resolved source commit: ${sourceCommitSha}`);
+      }
       safeLog?.('Docker image built successfully');
 
-      return imageTag;
+      return { imageTag, sourceCommitSha };
     } finally {
       await rm(ctxDir, { recursive: true, force: true }).catch(() => undefined);
     }
