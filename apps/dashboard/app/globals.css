@@ -344,6 +344,19 @@ a {
       color-mix(in srgb, var(--bg-1) 96%, transparent);
   }
 
+  .action-card-empty {
+    min-height: 148px;
+    align-content: center;
+    border-style: dashed;
+    background:
+      radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent-alt) 16%, transparent), transparent 56%),
+      color-mix(in srgb, var(--bg-0) 96%, transparent);
+  }
+
+  .action-card-empty .action-card-title {
+    @apply text-lg;
+  }
+
   .action-card-head {
     @apply mb-2 flex items-center justify-between;
   }
