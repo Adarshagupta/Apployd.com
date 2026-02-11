@@ -58,8 +58,9 @@ export function DeployForm({
   const [events, setEvents] = useState<DeploymentEvent[]>([]);
   const [liveUrl, setLiveUrl] = useState<string>('');
   const [envRows, setEnvRows] = useState<EnvRow[]>([{ key: '', value: '' }]);
+  const [followEvents, setFollowEvents] = useState(true);
   const socketRef = useRef<WebSocket | null>(null);
-  const logEndRef = useRef<HTMLDivElement | null>(null);
+  const logContainerRef = useRef<HTMLDivElement | null>(null);
   const onCompleteRef = useRef(onDeploymentComplete);
   onCompleteRef.current = onDeploymentComplete;
 
@@ -95,6 +96,7 @@ export function DeployForm({
         setDeploying(true);
         setStatus(`Reconnected — ${dep.status}`);
         setEvents([]);
+        setFollowEvents(true);
 
         if (dep.websocket) {
           connectDeploymentStream(dep.websocket);
@@ -123,8 +125,34 @@ export function DeployForm({
   };
 
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [events]);
+    if (!followEvents) {
+      return;
+    }
+    const logContainer = logContainerRef.current;
+    if (!logContainer) {
+      return;
+    }
+    logContainer.scrollTop = logContainer.scrollHeight;
+  }, [events, followEvents]);
+
+  const handleEventScroll = () => {
+    const logContainer = logContainerRef.current;
+    if (!logContainer) {
+      return;
+    }
+    const distanceFromBottom = logContainer.scrollHeight - logContainer.scrollTop - logContainer.clientHeight;
+    const shouldFollow = distanceFromBottom < 24;
+    setFollowEvents((previous) => (previous === shouldFollow ? previous : shouldFollow));
+  };
+
+  const jumpToLatestEvents = () => {
+    const logContainer = logContainerRef.current;
+    if (!logContainer) {
+      return;
+    }
+    logContainer.scrollTop = logContainer.scrollHeight;
+    setFollowEvents(true);
+  };
 
   const connectDeploymentStream = (socketUrl: string) => {
     closeSocket();
@@ -186,6 +214,7 @@ export function DeployForm({
     setDeploying(true);
     setStatus('Deploying...');
     setEvents([]);
+    setFollowEvents(true);
     setLiveUrl('');
 
     const envPayload: Record<string, string> = {};
@@ -544,7 +573,24 @@ export function DeployForm({
         </p>
       ) : null}
 
-      <div className="max-h-56 space-y-1 overflow-auto rounded-xl border border-slate-200 p-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-slate-500">Deployment events</p>
+        {!followEvents && events.length > 0 ? (
+          <button
+            type="button"
+            className="text-xs text-slate-500 hover:text-slate-800 underline"
+            onClick={jumpToLatestEvents}
+          >
+            Jump to latest
+          </button>
+        ) : null}
+      </div>
+
+      <div
+        ref={logContainerRef}
+        onScroll={handleEventScroll}
+        className="max-h-56 space-y-1 overflow-auto rounded-xl border border-slate-200 p-3"
+      >
         {events.length ? (
           events.map((item, index) => (
             <p
@@ -559,7 +605,6 @@ export function DeployForm({
         ) : (
           <p className="text-xs text-slate-500">Deployment events appear here in real time.</p>
         )}
-        <div ref={logEndRef} />
       </div>
     </form>
   );

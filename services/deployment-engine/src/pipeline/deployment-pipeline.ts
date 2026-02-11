@@ -187,7 +187,7 @@ export class DeploymentPipeline {
         );
         const hint = errorLine
           ? `Container crashed: ${errorLine.trim().slice(0, 200)}`
-          : `Health check failed — app did not respond on port ${payload.request.port} within 30 s.`;
+          : `Health check failed — app did not respond on port ${payload.request.port} within ${env.ENGINE_HEALTHCHECK_TIMEOUT_SECONDS} s.`;
 
         throw new Error(
           `${hint} Check the container logs above for startup errors.`,
