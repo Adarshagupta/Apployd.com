@@ -5,6 +5,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 
 import { runCommand, runCommandStreaming, type LogCallback } from '../core/run-command.js';
+import { env } from '../core/env.js';
 
 const shellEscape = (value: string) =>
   process.platform === 'win32' ? `"${value.replace(/"/g, '\\"')}"` : `'${value.replace(/'/g, `'\"'\"'`)}'`;
@@ -79,9 +80,9 @@ function pythonDockerfile(projectId: string): string {
     'ARG GIT_URL',
     'ARG GIT_BRANCH=""',
     'ARG GIT_SHA=""',
-    'ARG SOURCE_REFRESH_TOKEN=""',
+    'ARG SOURCE_REFRESH_NONCE=""',
     'WORKDIR /repo',
-    'RUN echo ">>> Source refresh token: ${SOURCE_REFRESH_TOKEN}" && \\',
+    'RUN echo ">>> Source refresh nonce: ${SOURCE_REFRESH_NONCE}" && \\',
     '    if [ -n "${GIT_BRANCH}" ]; then git clone --depth=1 --branch "${GIT_BRANCH}" "${GIT_URL}" .; else git clone --depth=1 "${GIT_URL}" .; fi && \\',
     '    if [ -n "${GIT_SHA}" ]; then git fetch --depth=1 origin "${GIT_SHA}" && git checkout "${GIT_SHA}"; else git pull --ff-only; fi && \\',
     '    echo ">>> Source commit: $(git rev-parse HEAD)"',
@@ -218,9 +219,9 @@ function webServiceDockerfile(projectId: string): string {
     'ARG GIT_URL',
     'ARG GIT_BRANCH=""',
     'ARG GIT_SHA=""',
-    'ARG SOURCE_REFRESH_TOKEN=""',
+    'ARG SOURCE_REFRESH_NONCE=""',
     'WORKDIR /repo',
-    'RUN echo ">>> Source refresh token: ${SOURCE_REFRESH_TOKEN}" && \\',
+    'RUN echo ">>> Source refresh nonce: ${SOURCE_REFRESH_NONCE}" && \\',
     '    if [ -n "${GIT_BRANCH}" ]; then git clone --depth=1 --branch "${GIT_BRANCH}" "${GIT_URL}" .; else git clone --depth=1 "${GIT_URL}" .; fi && \\',
     '    if [ -n "${GIT_SHA}" ]; then git fetch --depth=1 origin "${GIT_SHA}" && git checkout "${GIT_SHA}"; else git pull --ff-only; fi && \\',
     '    echo ">>> Source commit: $(git rev-parse HEAD)"',
@@ -386,9 +387,9 @@ function staticSiteDockerfile(projectId: string): string {
     'ARG GIT_URL',
     'ARG GIT_BRANCH=""',
     'ARG GIT_SHA=""',
-    'ARG SOURCE_REFRESH_TOKEN=""',
+    'ARG SOURCE_REFRESH_NONCE=""',
     'WORKDIR /repo',
-    'RUN echo ">>> Source refresh token: ${SOURCE_REFRESH_TOKEN}" && \\',
+    'RUN echo ">>> Source refresh nonce: ${SOURCE_REFRESH_NONCE}" && \\',
     '    if [ -n "${GIT_BRANCH}" ]; then git clone --depth=1 --branch "${GIT_BRANCH}" "${GIT_URL}" .; else git clone --depth=1 "${GIT_URL}" .; fi && \\',
     '    if [ -n "${GIT_SHA}" ]; then git fetch --depth=1 origin "${GIT_SHA}" && git checkout "${GIT_SHA}"; else git pull --ff-only; fi && \\',
     '    echo ">>> Source commit: $(git rev-parse HEAD)"',
@@ -581,8 +582,8 @@ export class DockerAdapter {
         `--build-arg GIT_BRANCH=${shellEscape(input.branch)}`,
         `--build-arg APP_PORT=${input.port}`,
       ];
-      const sourceRefreshToken = `${input.deploymentId}-${Date.now()}`;
-      args.push(`--build-arg SOURCE_REFRESH_TOKEN=${shellEscape(sourceRefreshToken)}`);
+      const sourceRefreshNonce = `${input.deploymentId}-${Date.now()}`;
+      args.push(`--build-arg SOURCE_REFRESH_NONCE=${shellEscape(sourceRefreshNonce)}`);
       if (input.commitSha) args.push(`--build-arg GIT_SHA=${shellEscape(input.commitSha)}`);
       if (input.rootDirectory) args.push(`--build-arg ROOT_DIR=${shellEscape(input.rootDirectory)}`);
       if (input.buildCommand) args.push(`--build-arg BUILD_CMD=${shellEscape(input.buildCommand)}`);
@@ -698,7 +699,7 @@ export class DockerAdapter {
 
   /**
    * Polls the container's mapped port until it responds (HTTP or raw TCP).
-   * Max 30 seconds.  Detects early container exits and streams progress.
+   * Detects early container exits and streams progress.
    */
   async healthCheck(
     hostPort: number,
@@ -706,8 +707,9 @@ export class DockerAdapter {
     containerId?: string,
     onLog?: LogCallback,
   ): Promise<boolean> {
-    const maxAttempts = 30;
-    const delayMs = 1000;
+    const delayMs = env.ENGINE_HEALTHCHECK_DELAY_MS;
+    const timeoutMs = env.ENGINE_HEALTHCHECK_TIMEOUT_SECONDS * 1000;
+    const maxAttempts = Math.max(1, Math.ceil(timeoutMs / delayMs));
 
     for (let i = 0; i < maxAttempts; i++) {
       // ── Early exit: check if container is still running ──
@@ -769,14 +771,15 @@ export class DockerAdapter {
       await new Promise((r) => setTimeout(r, delayMs));
     }
 
-    onLog?.('Health check: timed out after 30 seconds');
+    onLog?.(`Health check: timed out after ${env.ENGINE_HEALTHCHECK_TIMEOUT_SECONDS} seconds`);
     return false;
   }
 
   private async containerProbe(containerId: string, containerPort: number): Promise<boolean> {
     const probeScript = [
       `if command -v curl >/dev/null 2>&1; then`,
-      `  curl -fsS --max-time 2 http://127.0.0.1:${containerPort}/ >/dev/null`,
+      `  status=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 2 http://127.0.0.1:${containerPort}/ || true)`,
+      `  [ "$status" != "000" ]`,
       `elif command -v wget >/dev/null 2>&1; then`,
       `  wget -q -T 2 -O /dev/null http://127.0.0.1:${containerPort}/`,
       `elif command -v busybox >/dev/null 2>&1; then`,

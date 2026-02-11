@@ -58,6 +58,8 @@ const schema = z.object({
   CERTBOT_EMAIL: z.string().email().optional(),
   ENGINE_REGION: z.string().default('fsn1'),
   ENGINE_METRICS_PORT: z.coerce.number().int().min(1).max(65535).default(9102),
+  ENGINE_HEALTHCHECK_TIMEOUT_SECONDS: z.coerce.number().int().min(5).max(300).default(60),
+  ENGINE_HEALTHCHECK_DELAY_MS: z.coerce.number().int().min(250).max(5000).default(1000),
   ENGINE_LOCAL_MODE: booleanFromEnv.optional(),
 });
 
