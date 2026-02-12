@@ -328,26 +328,26 @@ a {
     pointer-events: none;
     z-index: -1;
     background:
-      radial-gradient(circle at 12% 20%, rgba(79, 70, 229, 0.12), transparent 42%),
-      radial-gradient(circle at 86% 12%, rgba(168, 85, 247, 0.1), transparent 44%),
-      radial-gradient(circle at 74% 86%, rgba(56, 189, 248, 0.08), transparent 40%);
-    filter: blur(30px);
-    opacity: 0.46;
+      radial-gradient(circle at 12% 20%, rgba(79, 70, 229, 0.08), transparent 42%),
+      radial-gradient(circle at 86% 12%, rgba(168, 85, 247, 0.07), transparent 44%),
+      radial-gradient(circle at 74% 86%, rgba(56, 189, 248, 0.06), transparent 40%);
+    filter: blur(34px);
+    opacity: 0.28;
   }
 
   .mission-main {
     @apply rounded-3xl border p-4 md:p-5;
-    border-color: color-mix(in srgb, #8ea2ff 16%, var(--line));
+    border-color: color-mix(in srgb, #8ea2ff 10%, var(--line));
     background:
-      radial-gradient(circle at 92% -2%, rgba(104, 67, 255, 0.18), transparent 40%),
-      radial-gradient(circle at -12% 96%, rgba(56, 189, 248, 0.12), transparent 42%),
-      linear-gradient(150deg, rgba(7, 10, 24, 0.84), rgba(4, 7, 20, 0.78));
+      radial-gradient(circle at 92% -2%, rgba(104, 67, 255, 0.11), transparent 40%),
+      radial-gradient(circle at -12% 96%, rgba(56, 189, 248, 0.08), transparent 42%),
+      linear-gradient(150deg, rgba(7, 10, 24, 0.8), rgba(4, 7, 20, 0.76));
     position: relative;
     overflow: hidden;
-    backdrop-filter: blur(16px) saturate(112%);
+    backdrop-filter: blur(14px) saturate(105%);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.05),
-      0 16px 34px rgba(2, 6, 23, 0.34);
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 12px 26px rgba(2, 6, 23, 0.3);
   }
 
   .mission-main::before {
@@ -359,7 +359,7 @@ a {
       linear-gradient(transparent 95%, rgba(148, 163, 184, 0.14) 95%),
       linear-gradient(90deg, transparent 95%, rgba(148, 163, 184, 0.1) 95%);
     background-size: 100% 18px, 18px 100%;
-    opacity: 0.08;
+    opacity: 0.05;
   }
 
   .mission-main::after {
@@ -368,9 +368,9 @@ a {
     inset: 0;
     pointer-events: none;
     background:
-      linear-gradient(90deg, transparent 0%, rgba(148, 163, 184, 0.08) 48%, transparent 100%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 18%);
-    opacity: 0.26;
+      linear-gradient(90deg, transparent 0%, rgba(148, 163, 184, 0.05) 48%, transparent 100%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 18%);
+    opacity: 0.16;
   }
 
   .mission-head,
@@ -395,9 +395,9 @@ a {
 
   .mission-pill {
     @apply inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em];
-    border-color: rgba(148, 163, 184, 0.24);
-    color: #c7d2fe;
-    background: rgba(15, 23, 42, 0.32);
+    border-color: rgba(148, 163, 184, 0.18);
+    color: #b7c2d6;
+    background: rgba(15, 23, 42, 0.24);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 
@@ -407,9 +407,9 @@ a {
 
   .mission-filter-chip {
     @apply inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em];
-    border-color: rgba(148, 163, 184, 0.22);
+    border-color: rgba(148, 163, 184, 0.16);
     color: #94a3b8;
-    background: rgba(15, 23, 42, 0.28);
+    background: rgba(15, 23, 42, 0.22);
     backdrop-filter: blur(8px);
   }
 
@@ -426,15 +426,15 @@ a {
   .mission-card {
     --mission-accent: #8ea2ff;
     @apply relative overflow-hidden rounded-2xl border p-3 text-left transition-all duration-200;
-    border-color: rgba(148, 163, 184, 0.18);
+    border-color: rgba(148, 163, 184, 0.15);
     background:
-      radial-gradient(circle at 86% -10%, color-mix(in srgb, var(--mission-accent) 18%, transparent), transparent 38%),
-      linear-gradient(165deg, rgba(11, 16, 34, 0.84), rgba(6, 10, 25, 0.78));
+      radial-gradient(circle at 86% -10%, color-mix(in srgb, var(--mission-accent) 10%, transparent), transparent 38%),
+      linear-gradient(165deg, rgba(11, 16, 34, 0.8), rgba(6, 10, 25, 0.76));
     min-height: 240px;
-    backdrop-filter: blur(12px) saturate(112%);
+    backdrop-filter: blur(10px) saturate(104%);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.05),
-      0 12px 24px rgba(2, 6, 23, 0.28);
+      inset 0 1px 0 rgba(255, 255, 255, 0.035),
+      0 10px 18px rgba(2, 6, 23, 0.24);
   }
 
   .mission-card::before {
@@ -444,8 +444,8 @@ a {
     right: 0;
     top: 0;
     height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-    opacity: 0.55;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+    opacity: 0.38;
   }
 
   .mission-card::after {
@@ -456,17 +456,17 @@ a {
     bottom: 8px;
     height: 22px;
     pointer-events: none;
-    background: radial-gradient(ellipse at center, color-mix(in srgb, var(--mission-accent) 20%, transparent), transparent 72%);
-    opacity: 0.24;
+    background: radial-gradient(ellipse at center, color-mix(in srgb, var(--mission-accent) 12%, transparent), transparent 72%);
+    opacity: 0.16;
     filter: blur(9px);
   }
 
   .mission-card:hover {
-    border-color: color-mix(in srgb, var(--mission-accent) 44%, rgba(148, 163, 184, 0.22));
-    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--mission-accent) 28%, rgba(148, 163, 184, 0.2));
+    transform: translateY(-1px);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.07),
-      0 16px 28px rgba(2, 6, 23, 0.34);
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 12px 22px rgba(2, 6, 23, 0.28);
   }
 
   .mission-card-create {
@@ -487,21 +487,21 @@ a {
   }
 
   .mission-card-status-ready {
-    color: #6ee7b7;
-    border-color: rgba(52, 211, 153, 0.45);
-    background: rgba(6, 95, 70, 0.3);
+    color: #93b2a3;
+    border-color: rgba(74, 222, 128, 0.18);
+    background: rgba(22, 101, 52, 0.14);
   }
 
   .mission-card-status-failed {
-    color: #fda4af;
-    border-color: rgba(251, 113, 133, 0.46);
-    background: rgba(136, 19, 55, 0.3);
+    color: #ba9aa2;
+    border-color: rgba(251, 113, 133, 0.2);
+    background: rgba(136, 19, 55, 0.14);
   }
 
   .mission-card-status-active {
-    color: #93c5fd;
-    border-color: rgba(147, 197, 253, 0.46);
-    background: rgba(30, 64, 175, 0.3);
+    color: #9faec4;
+    border-color: rgba(147, 197, 253, 0.2);
+    background: rgba(30, 64, 175, 0.14);
   }
 
   .mission-card-status-queued,
@@ -529,18 +529,18 @@ a {
 
   .mission-card-trend {
     @apply mt-1 text-xs;
-    color: color-mix(in srgb, var(--mission-accent) 70%, var(--text-muted));
+    color: color-mix(in srgb, var(--mission-accent) 36%, var(--text-muted));
   }
 
   .mission-card-chart {
     @apply mt-3 h-16 w-full overflow-hidden rounded-xl border;
-    border-color: rgba(148, 163, 184, 0.18);
+    border-color: rgba(148, 163, 184, 0.14);
     background: linear-gradient(
       180deg,
-      color-mix(in srgb, var(--mission-accent) 12%, transparent) 0%,
+      color-mix(in srgb, var(--mission-accent) 8%, transparent) 0%,
       transparent 80%
     );
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
   .mission-card-chart svg {
@@ -555,23 +555,23 @@ a {
     stroke-width: 2;
     stroke-linecap: round;
     stroke-linejoin: round;
-    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mission-accent) 34%, transparent));
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--mission-accent) 22%, transparent));
   }
 
   .mission-empty {
     @apply mt-4 flex min-h-[244px] w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed text-center transition-all duration-200;
-    border-color: rgba(148, 163, 184, 0.24);
+    border-color: rgba(148, 163, 184, 0.18);
     background:
-      radial-gradient(circle at 80% 0%, rgba(129, 140, 248, 0.14), transparent 48%),
-      rgba(8, 12, 28, 0.62);
-    backdrop-filter: blur(10px) saturate(108%);
+      radial-gradient(circle at 80% 0%, rgba(129, 140, 248, 0.09), transparent 48%),
+      rgba(8, 12, 28, 0.56);
+    backdrop-filter: blur(9px) saturate(102%);
   }
 
   .mission-empty:hover {
-    border-color: rgba(148, 163, 184, 0.34);
+    border-color: rgba(148, 163, 184, 0.24);
     background:
-      radial-gradient(circle at 80% 0%, rgba(129, 140, 248, 0.2), transparent 52%),
-      rgba(10, 15, 34, 0.68);
+      radial-gradient(circle at 80% 0%, rgba(129, 140, 248, 0.13), transparent 52%),
+      rgba(10, 15, 34, 0.62);
   }
 
   .mission-empty-mark {
@@ -588,15 +588,15 @@ a {
 
   .mission-side {
     @apply rounded-3xl border p-4 md:p-5;
-    border-color: rgba(167, 139, 250, 0.22);
+    border-color: rgba(167, 139, 250, 0.16);
     background:
-      radial-gradient(circle at 100% -20%, rgba(167, 139, 250, 0.24), transparent 42%),
-      radial-gradient(circle at -10% 100%, rgba(129, 140, 248, 0.2), transparent 46%),
-      linear-gradient(160deg, rgba(17, 15, 40, 0.78), rgba(10, 9, 29, 0.82));
-    backdrop-filter: blur(14px) saturate(112%);
+      radial-gradient(circle at 100% -20%, rgba(167, 139, 250, 0.14), transparent 42%),
+      radial-gradient(circle at -10% 100%, rgba(129, 140, 248, 0.12), transparent 46%),
+      linear-gradient(160deg, rgba(17, 15, 40, 0.74), rgba(10, 9, 29, 0.78));
+    backdrop-filter: blur(11px) saturate(104%);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.05),
-      0 16px 30px rgba(30, 27, 75, 0.28);
+      inset 0 1px 0 rgba(255, 255, 255, 0.035),
+      0 12px 22px rgba(30, 27, 75, 0.24);
   }
 
   .mission-side-head {
@@ -610,9 +610,9 @@ a {
 
   .mission-side-chip {
     @apply inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em];
-    border-color: rgba(196, 181, 253, 0.3);
-    color: #ddd6fe;
-    background: rgba(67, 56, 202, 0.2);
+    border-color: rgba(196, 181, 253, 0.2);
+    color: #c5c2d5;
+    background: rgba(67, 56, 202, 0.12);
   }
 
   .mission-side-title {
@@ -629,10 +629,10 @@ a {
 
   .mission-side-stats {
     @apply mt-4 space-y-1.5 rounded-2xl border p-3;
-    border-color: rgba(196, 181, 253, 0.16);
-    background: rgba(15, 23, 42, 0.32);
+    border-color: rgba(196, 181, 253, 0.11);
+    background: rgba(15, 23, 42, 0.26);
     backdrop-filter: blur(10px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
   }
 
   .mission-side-stat-row {
@@ -669,15 +669,15 @@ a {
   }
 
   .mission-side-cta-secondary {
-    border-color: rgba(196, 181, 253, 0.28);
-    color: #e2e8f0;
-    background: rgba(30, 41, 59, 0.3);
+    border-color: rgba(196, 181, 253, 0.2);
+    color: #c7d0dc;
+    background: rgba(30, 41, 59, 0.24);
     backdrop-filter: blur(8px);
   }
 
   .mission-side-cta-secondary:hover {
-    border-color: rgba(196, 181, 253, 0.44);
-    background: rgba(51, 65, 85, 0.4);
+    border-color: rgba(196, 181, 253, 0.28);
+    background: rgba(51, 65, 85, 0.3);
   }
 
   .mission-side-foot {

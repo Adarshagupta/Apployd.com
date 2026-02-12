@@ -464,7 +464,7 @@ export default function OverviewPage() {
                       ? poolSignals.reduce((total, value) => total + value, 0) / poolSignals.length
                       : 0;
                   const loadPercent = clampPercent(loadValue);
-                  const accentColor = ['#8ea2ff', '#9f7cff', '#f67b7b'][index % 3];
+                  const accentColor = ['#7b879c', '#73809a', '#827b91'][index % 3];
 
                   return (
                     <button
