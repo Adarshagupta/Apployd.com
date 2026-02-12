@@ -2,15 +2,17 @@
 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
 import { DashboardNav } from '../../components/dashboard-nav';
 import {
   IconBilling,
+  IconPlus,
   IconProfile,
   IconProjects,
   IconSettings,
+  IconUsage,
 } from '../../components/dashboard-icons';
 import { WorkspaceProvider } from '../../components/workspace-provider';
 import { apiClient, UnauthorizedError } from '../../lib/api';
@@ -74,6 +76,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname() || '/overview';
   const [theme, setTheme] = useState<DashboardTheme>('dark');
   const [authChecked, setAuthChecked] = useState(false);
+  const [topbarMenuOpen, setTopbarMenuOpen] = useState(false);
+  const topbarMenuRef = useRef<HTMLDivElement | null>(null);
   const copy = pageTitles[pathname as keyof typeof pageTitles] ?? {
     title: 'Dashboard',
     subtitle: 'Deploy and operate backend services.',
@@ -98,6 +102,40 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
     setTheme('dark');
   }, []);
+
+  useEffect(() => {
+    if (!topbarMenuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+      if (!topbarMenuRef.current?.contains(target)) {
+        setTopbarMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setTopbarMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [topbarMenuOpen]);
+
+  useEffect(() => {
+    setTopbarMenuOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -193,13 +231,52 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <header className="panel dashboard-topbar">
             <div className="dashboard-topbar-inner">
               <div className="dashboard-topbar-slot dashboard-topbar-left">
-                <Link href="/projects" className="dashboard-topbar-chip" aria-label="Open all projects">
-                  <IconProjects size={16} />
-                  <span>All Projects</span>
-                  <span className="dashboard-topbar-chevron" aria-hidden="true">
-                    v
-                  </span>
-                </Link>
+                <div ref={topbarMenuRef} className="dashboard-topbar-menu">
+                  <button
+                    type="button"
+                    className={`dashboard-topbar-chip dashboard-topbar-chip-menu ${topbarMenuOpen ? 'dashboard-topbar-chip-open' : ''}`}
+                    aria-label="Open header menu"
+                    aria-expanded={topbarMenuOpen}
+                    aria-haspopup="menu"
+                    onClick={() => setTopbarMenuOpen((open) => !open)}
+                  >
+                    <IconProjects size={16} />
+                    <span>Menu</span>
+                    <span className={`dashboard-topbar-chevron ${topbarMenuOpen ? 'dashboard-topbar-chevron-open' : ''}`} aria-hidden="true">
+                      v
+                    </span>
+                  </button>
+
+                  <div className={`dashboard-topbar-dropdown ${topbarMenuOpen ? 'dashboard-topbar-dropdown-open' : ''}`} role="menu">
+                    <p className="dashboard-topbar-dropdown-title">Quick Actions</p>
+                    <div className="dashboard-topbar-dropdown-list">
+                      <Link href="/projects" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                        <IconProjects size={16} />
+                        <span>All Projects</span>
+                      </Link>
+                      <Link href="/projects/new" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                        <IconPlus size={16} />
+                        <span>Create Project</span>
+                      </Link>
+                      <Link href="/usage" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                        <IconUsage size={16} />
+                        <span>Usage</span>
+                      </Link>
+                      <Link href="/billing" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                        <IconBilling size={16} />
+                        <span>Billing</span>
+                      </Link>
+                      <Link href="/profile" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                        <IconProfile size={16} />
+                        <span>Profile</span>
+                      </Link>
+                      <Link href="/settings" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                        <IconSettings size={16} />
+                        <span>Settings</span>
+                      </Link>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div className="dashboard-topbar-slot dashboard-topbar-center">
                 <h1 className="dashboard-topbar-title">{topbarTitle}</h1>
