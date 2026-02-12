@@ -640,6 +640,7 @@ a {
     fill: none;
     stroke: var(--mission-accent);
     stroke-width: 2;
+    opacity: 0.9;
     stroke-linecap: round;
     stroke-linejoin: round;
     filter: drop-shadow(0 0 4px color-mix(in srgb, var(--mission-accent) 22%, transparent));

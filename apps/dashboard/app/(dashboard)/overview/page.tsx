@@ -158,14 +158,18 @@ const formatBillingWindow = (start?: string, end?: string): string => {
 const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
 
 const buildSparkPath = (percent: number, seed: number): string => {
+  const chartHeight = 36;
+  const topPadding = 4;
+  const bottomPadding = 3;
+  const usableHeight = chartHeight - topPadding - bottomPadding;
   const normalized = clampPercent(percent);
   const points = Array.from({ length: 7 }, (_, index) => {
     const x = (index / 6) * 100;
-    const wave = Math.sin((index + seed * 0.33) * 1.05) * 7;
-    const trend = (index - 2.8) * 1.4;
-    const magnitude = normalized * 0.44;
-    const y = 86 - magnitude - wave - trend;
-    return [x, Math.min(90, Math.max(10, y))] as const;
+    const base = chartHeight - bottomPadding - (normalized / 100) * (usableHeight * 0.62);
+    const wave = Math.sin((index + seed * 0.33) * 1.05) * 2.6;
+    const trend = (index - 3) * 0.55;
+    const y = base - wave - trend;
+    return [x, Math.min(chartHeight - bottomPadding, Math.max(topPadding, y))] as const;
   });
 
   return points
