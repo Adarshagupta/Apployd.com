@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { Metadata } from 'next';
 
 import { Space_Grotesk, IBM_Plex_Mono } from 'next/font/google';
 
@@ -17,9 +18,14 @@ const mono = IBM_Plex_Mono({
   weight: ['400', '500'],
 });
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Apployd Dashboard',
   description: 'Deploy and manage backend apps with pooled resources.',
+  icons: {
+    icon: '/icon.png',
+    shortcut: '/icon.png',
+    apple: '/icon.png',
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
