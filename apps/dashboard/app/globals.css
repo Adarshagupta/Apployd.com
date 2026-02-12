@@ -177,6 +177,14 @@ a {
     display: none;
   }
 
+  .app-shell.theme-light .theme-logo-light {
+    display: block;
+  }
+
+  .app-shell.theme-light .theme-logo-dark {
+    display: none;
+  }
+
   .app-shell.theme-dark .theme-logo-light {
     display: none;
   }
@@ -830,6 +838,188 @@ a {
   .mission-side-foot {
     @apply mt-2 text-xs;
     color: var(--text-muted);
+  }
+
+  .app-shell.theme-light .mission-shell::before {
+    background:
+      radial-gradient(circle at 12% 20%, rgba(99, 102, 241, 0.1), transparent 42%),
+      radial-gradient(circle at 86% 12%, rgba(168, 85, 247, 0.08), transparent 44%),
+      radial-gradient(circle at 74% 86%, rgba(56, 189, 248, 0.06), transparent 40%);
+    opacity: 0.24;
+    filter: blur(30px);
+  }
+
+  .app-shell.theme-light .mission-main {
+    border-color: #d8ddec;
+    background:
+      radial-gradient(circle at 92% -2%, rgba(99, 102, 241, 0.1), transparent 40%),
+      radial-gradient(circle at -12% 96%, rgba(14, 165, 233, 0.08), transparent 42%),
+      linear-gradient(152deg, rgba(247, 249, 255, 0.96), rgba(241, 245, 254, 0.92));
+    backdrop-filter: blur(8px) saturate(102%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.86),
+      0 12px 22px rgba(15, 23, 42, 0.08);
+  }
+
+  .app-shell.theme-light .mission-main::before {
+    opacity: 0.1;
+  }
+
+  .app-shell.theme-light .mission-main::after {
+    opacity: 0.14;
+    background:
+      linear-gradient(90deg, transparent 0%, rgba(100, 116, 139, 0.08) 48%, transparent 100%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.35), transparent 18%);
+  }
+
+  .app-shell.theme-light .mission-pill {
+    border-color: #cdd5e7;
+    color: #334155;
+    background: rgba(255, 255, 255, 0.76);
+    box-shadow: none;
+  }
+
+  .app-shell.theme-light .mission-filter-chip {
+    border-color: #d4dbe9;
+    color: #475569;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(4px);
+  }
+
+  .app-shell.theme-light .mission-card {
+    border-color: #d8dfee;
+    background:
+      radial-gradient(circle at 86% -10%, color-mix(in srgb, var(--mission-accent) 8%, transparent), transparent 38%),
+      linear-gradient(165deg, rgba(252, 253, 255, 0.95), rgba(246, 249, 255, 0.9));
+    backdrop-filter: none;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 8px 16px rgba(15, 23, 42, 0.06);
+  }
+
+  .app-shell.theme-light .mission-card::before {
+    opacity: 0.2;
+    background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.22), transparent);
+  }
+
+  .app-shell.theme-light .mission-card::after {
+    opacity: 0.08;
+  }
+
+  .app-shell.theme-light .mission-card:hover {
+    border-color: #c5d0e5;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      0 10px 18px rgba(15, 23, 42, 0.1);
+  }
+
+  .app-shell.theme-light .mission-card-runtime {
+    color: #64748b;
+  }
+
+  .app-shell.theme-light .mission-card-meta {
+    color: #64748b;
+  }
+
+  .app-shell.theme-light .mission-card-trend {
+    color: #64748b;
+  }
+
+  .app-shell.theme-light .mission-card-status-ready {
+    color: #166534;
+    border-color: rgba(34, 197, 94, 0.34);
+    background: rgba(220, 252, 231, 0.72);
+  }
+
+  .app-shell.theme-light .mission-card-status-failed {
+    color: #9f1239;
+    border-color: rgba(244, 63, 94, 0.34);
+    background: rgba(255, 228, 230, 0.72);
+  }
+
+  .app-shell.theme-light .mission-card-status-active {
+    color: #1d4ed8;
+    border-color: rgba(59, 130, 246, 0.34);
+    background: rgba(219, 234, 254, 0.72);
+  }
+
+  .app-shell.theme-light .mission-card-status-queued,
+  .app-shell.theme-light .mission-card-status-idle {
+    color: #475569;
+    border-color: #cdd5e7;
+    background: rgba(241, 245, 249, 0.9);
+  }
+
+  .app-shell.theme-light .mission-card-chart {
+    border-color: #d5deed;
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--mission-accent) 6%, transparent) 0%,
+      rgba(255, 255, 255, 0.54) 82%
+    );
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  }
+
+  .app-shell.theme-light .mission-empty {
+    border-color: #d7deee;
+    background:
+      radial-gradient(circle at 80% 0%, rgba(129, 140, 248, 0.08), transparent 48%),
+      rgba(250, 252, 255, 0.94);
+    backdrop-filter: none;
+  }
+
+  .app-shell.theme-light .mission-empty:hover {
+    border-color: #cdd7eb;
+    background:
+      radial-gradient(circle at 80% 0%, rgba(129, 140, 248, 0.12), transparent 52%),
+      rgba(246, 250, 255, 0.96);
+  }
+
+  .app-shell.theme-light .mission-side {
+    border-color: #d8deef;
+    background:
+      radial-gradient(circle at 100% -20%, rgba(167, 139, 250, 0.14), transparent 42%),
+      radial-gradient(circle at -10% 100%, rgba(129, 140, 248, 0.1), transparent 46%),
+      linear-gradient(160deg, rgba(247, 246, 255, 0.95), rgba(241, 243, 255, 0.92));
+    backdrop-filter: blur(8px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.88),
+      0 10px 18px rgba(30, 41, 59, 0.08);
+  }
+
+  .app-shell.theme-light .mission-side-chip {
+    border-color: #cfd6e9;
+    color: #475569;
+    background: rgba(255, 255, 255, 0.78);
+  }
+
+  .app-shell.theme-light .mission-side-stats {
+    border-color: #d7deee;
+    background: rgba(255, 255, 255, 0.72);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  }
+
+  .app-shell.theme-light .mission-side-stat-row {
+    color: #64748b;
+  }
+
+  .app-shell.theme-light .mission-side-stat-row strong {
+    color: #0f172a;
+  }
+
+  .app-shell.theme-light .mission-side-cta-secondary {
+    border-color: #cfd7ea;
+    color: #334155;
+    background: rgba(248, 250, 253, 0.88);
+  }
+
+  .app-shell.theme-light .mission-side-cta-secondary:hover {
+    border-color: #bdc8df;
+    background: rgba(241, 245, 251, 0.94);
+  }
+
+  .app-shell.theme-light .mission-side-foot {
+    color: #64748b;
   }
 
   @media (max-width: 1279px) {
