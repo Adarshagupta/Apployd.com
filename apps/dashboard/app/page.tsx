@@ -473,7 +473,7 @@ export default function HomePage() {
             </div>
             <div className={styles.heroLayout}>
               <div className={styles.heroMain}>
-                <h1 className={styles.heroTitle}>Automate decisions with confidence.</h1>
+                <h1 className={styles.heroTitle}>Built & deploy with confidence.</h1>
                 <p className={styles.heroCopy}>
                   Deploy backend systems with encrypted secrets, deterministic workflows, and live operational feedback.
                 </p>
