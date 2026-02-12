@@ -14,6 +14,7 @@ import {
   IconSettings,
   IconUsage,
 } from '../../components/dashboard-icons';
+import { ThemeLogo } from '../../components/theme-logo';
 import { WorkspaceProvider } from '../../components/workspace-provider';
 import { apiClient, UnauthorizedError } from '../../lib/api';
 
@@ -231,6 +232,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <header className="panel dashboard-topbar">
             <div className="dashboard-topbar-inner">
               <div className="dashboard-topbar-slot dashboard-topbar-left">
+                <Link href="/overview" className="dashboard-topbar-brand" aria-label="Go to overview">
+                  <ThemeLogo width={96} height={22} className="dashboard-topbar-brand-logo" />
+                </Link>
                 <div ref={topbarMenuRef} className="dashboard-topbar-menu">
                   <button
                     type="button"

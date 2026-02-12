@@ -125,6 +125,7 @@ a {
 
   .dashboard-topbar-left {
     justify-content: flex-start;
+    gap: 0.45rem;
   }
 
   .dashboard-topbar-center {
@@ -140,6 +141,63 @@ a {
     @apply truncate text-base font-semibold;
     color: var(--text);
     letter-spacing: -0.01em;
+  }
+
+  .dashboard-topbar-brand {
+    @apply inline-flex items-center rounded-md border px-2 py-1;
+    border-color: color-mix(in srgb, var(--line) 86%, transparent);
+    background: color-mix(in srgb, var(--bg-1) 88%, transparent);
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+
+  .dashboard-topbar-brand:hover {
+    border-color: color-mix(in srgb, var(--line-strong) 90%, transparent);
+    background: color-mix(in srgb, var(--bg-2) 90%, transparent);
+  }
+
+  .dashboard-topbar-brand-logo {
+    min-height: 18px;
+  }
+
+  .theme-logo {
+    @apply inline-flex items-center;
+    position: relative;
+    line-height: 0;
+  }
+
+  .theme-logo-img {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+  }
+
+  .theme-logo-dark {
+    display: none;
+  }
+
+  .app-shell.theme-dark .theme-logo-light {
+    display: none;
+  }
+
+  .app-shell.theme-dark .theme-logo-dark {
+    display: block;
+  }
+
+  :global(html[data-landing-theme='light']) .theme-logo-light {
+    display: block;
+  }
+
+  :global(html[data-landing-theme='light']) .theme-logo-dark {
+    display: none;
+  }
+
+  :global(html[data-landing-theme='dark']) .theme-logo-light {
+    display: none;
+  }
+
+  :global(html[data-landing-theme='dark']) .theme-logo-dark {
+    display: block;
   }
 
   .dashboard-topbar-menu {
