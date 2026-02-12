@@ -1,4 +1,15 @@
+import type { Metadata } from 'next';
+
+import { buildPageMetadata } from '../../../lib/seo';
 import styles from '../../landing.module.css';
+
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Security',
+  description:
+    'Review Apployd security architecture including encryption, runtime isolation, RBAC, audit logging, and hardening practices.',
+  path: '/security',
+  keywords: ['platform security', 'deployment security', 'Apployd security'],
+});
 
 const features = [
   {

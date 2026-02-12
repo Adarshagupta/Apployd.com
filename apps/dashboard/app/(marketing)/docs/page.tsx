@@ -1,6 +1,16 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { buildPageMetadata } from '../../../lib/seo';
 import styles from '../../landing.module.css';
+
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Docs',
+  description:
+    'Technical documentation, architecture references, and setup guides for operating Apployd in production.',
+  path: '/docs',
+  keywords: ['Apployd docs', 'deployment documentation', 'self-hosted platform guides'],
+});
 
 const quickStartSteps = [
   {

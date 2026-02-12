@@ -1,6 +1,16 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { buildPageMetadata } from '../../../../lib/seo';
 import styles from '../../../landing.module.css';
+
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Compliance',
+  description:
+    'Compliance posture, control areas, and governance practices for operating Apployd in regulated environments.',
+  path: '/legal/compliance',
+  keywords: ['compliance', 'GDPR', 'SOC 2', 'ISO 27001', 'Apployd compliance'],
+});
 
 const complianceItems = [
   { name: 'GDPR', status: 'Active', details: 'Data processing controls and user rights workflows are in place.' },

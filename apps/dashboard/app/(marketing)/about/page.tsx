@@ -1,4 +1,15 @@
+import type { Metadata } from 'next';
+
+import { buildPageMetadata } from '../../../lib/seo';
 import styles from '../../landing.module.css';
+
+export const metadata: Metadata = buildPageMetadata({
+  title: 'About',
+  description:
+    'Learn how Apployd helps engineering teams own their infrastructure with secure, developer-first deployment workflows.',
+  path: '/about',
+  keywords: ['about Apployd', 'deployment platform company', 'developer-first infrastructure'],
+});
 
 const stats = [
   { value: '47s', label: 'Avg. deploy time' },

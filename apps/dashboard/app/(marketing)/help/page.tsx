@@ -1,6 +1,16 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { buildPageMetadata } from '../../../lib/seo';
 import styles from '../../landing.module.css';
+
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Help',
+  description:
+    'Support channels, FAQs, and escalation paths for deployment, security, billing, and compliance questions.',
+  path: '/help',
+  keywords: ['Apployd help', 'deployment support', 'platform FAQ'],
+});
 
 const supportOptions = [
   {

@@ -1,6 +1,16 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { buildPageMetadata } from '../../../lib/seo';
 import styles from '../../landing.module.css';
+
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Terms of Service',
+  description:
+    'Read the terms governing access, acceptable use, billing, data responsibilities, and liability for Apployd platform services.',
+  path: '/terms',
+  keywords: ['terms of service', 'platform legal terms', 'Apployd terms'],
+});
 
 const effectiveDate = 'February 9, 2026';
 

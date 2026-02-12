@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { AuthRedirect } from '../components/auth-redirect';
@@ -7,8 +8,22 @@ import { SectionThreeBackground } from '../components/landing-section-three';
 import { LandingThreeBackground } from '../components/landing-three-background';
 import { LandingThemeToggle } from '../components/landing-theme-toggle';
 import { ThemeLogo } from '../components/theme-logo';
+import { buildPageMetadata } from '../lib/seo';
 
 import styles from './landing.module.css';
+
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Self-Hosted Deployment Platform',
+  description:
+    'Deploy backend apps on your own infrastructure with pooled resources, secure secret management, and real-time operational visibility.',
+  path: '/',
+  keywords: [
+    'self-hosted deployment platform',
+    'backend deployment',
+    'docker app deployment',
+    'platform engineering',
+  ],
+});
 
 const navLinks = [
   { href: '#product', label: 'Product' },

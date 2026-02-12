@@ -1,4 +1,16 @@
+import type { Metadata } from 'next';
+
+import { buildPageMetadata } from '../../../lib/seo';
 import styles from '../../landing.module.css';
+
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Blog',
+  description:
+    'Engineering deep-dives, product updates, and security practices from the Apployd deployment platform team.',
+  path: '/blog',
+  type: 'article',
+  keywords: ['devops blog', 'deployment engineering', 'platform security updates'],
+});
 
 const categories = ['All', 'Engineering', 'Product', 'Security', 'Community'];
 

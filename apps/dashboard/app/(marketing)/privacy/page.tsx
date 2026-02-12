@@ -1,6 +1,16 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { buildPageMetadata } from '../../../lib/seo';
 import styles from '../../landing.module.css';
+
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Privacy Policy',
+  description:
+    'Understand how Apployd collects, processes, secures, and retains account and operational data.',
+  path: '/privacy',
+  keywords: ['privacy policy', 'data processing', 'Apployd privacy'],
+});
 
 const effectiveDate = 'February 9, 2026';
 

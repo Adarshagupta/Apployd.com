@@ -1,4 +1,15 @@
+import type { Metadata } from 'next';
+
+import { buildPageMetadata } from '../../../lib/seo';
 import styles from '../../landing.module.css';
+
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Pricing',
+  description:
+    'Transparent plans for Apployd with project limits, resource pools, and upgrade paths for teams at every stage.',
+  path: '/pricing',
+  keywords: ['Apployd pricing', 'deployment platform plans', 'self-hosted platform cost'],
+});
 
 interface PlanFeature {
   label: string;
