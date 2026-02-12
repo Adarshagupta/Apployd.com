@@ -198,6 +198,15 @@
   box-shadow: 0 0 0 2px rgba(42, 141, 255, 0.18);
 }
 
+.brandLogo {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .navLinks {
   display: flex;
   align-items: center;
@@ -1086,6 +1095,18 @@
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.footerBrandLogo {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .footerCopy {

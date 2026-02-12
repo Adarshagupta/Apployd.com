@@ -6,6 +6,7 @@ import { ProductStepTracker } from '../components/product-step-tracker';
 import { SectionThreeBackground } from '../components/landing-section-three';
 import { LandingThreeBackground } from '../components/landing-three-background';
 import { LandingThemeToggle } from '../components/landing-theme-toggle';
+import { ThemeLogo } from '../components/theme-logo';
 
 import styles from './landing.module.css';
 
@@ -426,8 +427,8 @@ export default function HomePage() {
       <header className={styles.navWrap}>
         <div className={styles.navShell}>
           <a href="#hero" className={styles.brand}>
-            <span className={styles.brandMark} />
-            APployd
+            <ThemeLogo width={20} height={20} className={styles.brandLogo} />
+            Apployd
           </a>
           <nav className={styles.navLinks}>
             {navLinks.map((link) => (
@@ -709,7 +710,10 @@ export default function HomePage() {
         <div className={styles.container}>
           <div className={styles.footerGrid}>
             <div>
-              <p className={styles.footerBrand}>APployd</p>
+              <p className={styles.footerBrand}>
+                <ThemeLogo width={18} height={18} className={styles.footerBrandLogo} />
+                <span>Apployd</span>
+              </p>
               <p className={styles.footerCopy}>
                 Self-hosted deployment platform for backend teams.
               </p>

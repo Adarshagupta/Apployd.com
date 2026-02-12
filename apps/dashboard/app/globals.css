@@ -156,7 +156,8 @@ a {
   }
 
   .dashboard-topbar-brand-logo {
-    min-height: 18px;
+    width: 22px;
+    height: 22px;
   }
 
   .theme-logo {
@@ -184,19 +185,19 @@ a {
     display: block;
   }
 
-  :global(html[data-landing-theme='light']) .theme-logo-light {
+  html[data-landing-theme='light'] .theme-logo-light {
     display: block;
   }
 
-  :global(html[data-landing-theme='light']) .theme-logo-dark {
+  html[data-landing-theme='light'] .theme-logo-dark {
     display: none;
   }
 
-  :global(html[data-landing-theme='dark']) .theme-logo-light {
+  html[data-landing-theme='dark'] .theme-logo-light {
     display: none;
   }
 
-  :global(html[data-landing-theme='dark']) .theme-logo-dark {
+  html[data-landing-theme='dark'] .theme-logo-dark {
     display: block;
   }
 

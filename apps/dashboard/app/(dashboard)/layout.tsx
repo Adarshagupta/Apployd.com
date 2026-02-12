@@ -233,7 +233,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             <div className="dashboard-topbar-inner">
               <div className="dashboard-topbar-slot dashboard-topbar-left">
                 <Link href="/overview" className="dashboard-topbar-brand" aria-label="Go to overview">
-                  <ThemeLogo width={96} height={22} className="dashboard-topbar-brand-logo" />
+                  <ThemeLogo width={22} height={22} className="dashboard-topbar-brand-logo" />
                 </Link>
                 <div ref={topbarMenuRef} className="dashboard-topbar-menu">
                   <button

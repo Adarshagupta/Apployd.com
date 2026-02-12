@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 
 import { LandingThemeToggle } from '../../components/landing-theme-toggle';
+import { ThemeLogo } from '../../components/theme-logo';
 import styles from '../landing.module.css';
 
 const navLinks = [
@@ -23,8 +24,8 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
       <header className={styles.navWrap}>
         <div className={styles.navShell}>
           <Link href="/" className={styles.brand}>
-            <span className={styles.brandMark} />
-            APployd
+            <ThemeLogo width={20} height={20} className={styles.brandLogo} />
+            Apployd
           </Link>
           <nav className={styles.navLinks}>
             {navLinks.map((l) => (
@@ -49,7 +50,10 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
         <div className={styles.container}>
           <div className={styles.footerGrid}>
             <div>
-              <p className={styles.footerBrand}>APployd</p>
+              <p className={styles.footerBrand}>
+                <ThemeLogo width={18} height={18} className={styles.footerBrandLogo} />
+                <span>Apployd</span>
+              </p>
               <p className={styles.footerCopy}>
                 Self-hosted deployment platform for backend teams.
               </p>

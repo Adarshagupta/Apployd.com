@@ -192,6 +192,21 @@
   color: rgba(171, 192, 236, 0.86);
 }
 
+.panelBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.panelBrandLogo {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .panelHeader h2 {
   margin: 0.4rem 0 0;
   font-size: 1.9rem;

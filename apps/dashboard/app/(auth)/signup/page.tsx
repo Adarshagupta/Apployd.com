@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 
 import { LandingThreeBackground } from '../../../components/landing-three-background';
 import { SectionThreeBackground } from '../../../components/landing-section-three';
+import { ThemeLogo } from '../../../components/theme-logo';
 import { apiClient } from '../../../lib/api';
 
 import styles from '../auth.module.css';
@@ -171,7 +172,10 @@ export default function SignupPage() {
         <div className={styles.formColumn}>
           <article className={styles.panel}>
             <header className={styles.panelHeader}>
-              <p>Apployd</p>
+              <p className={styles.panelBrand}>
+                <ThemeLogo width={18} height={18} className={styles.panelBrandLogo} />
+                <span>Apployd</span>
+              </p>
               <h2>{step === 'signup' ? 'Create account' : 'Verify email'}</h2>
               <span>
                 {step === 'signup'
