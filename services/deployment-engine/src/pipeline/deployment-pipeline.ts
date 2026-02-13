@@ -254,19 +254,16 @@ export class DeploymentPipeline {
           domain,
           onLog,
           Math.min(45, env.ENGINE_HEALTHCHECK_TIMEOUT_SECONDS),
+          'https',
         );
-        const edgeReachable = probe.httpStatus !== '000'
-          && probe.httpStatus !== '502'
-          && probe.httpStatus !== '503'
-          && probe.httpStatus !== '504';
         const tlsReachable = probe.httpsStatus !== '000'
           && probe.httpsStatus !== '502'
           && probe.httpsStatus !== '503'
           && probe.httpsStatus !== '504';
 
-        if (!edgeReachable && !tlsReachable) {
+        if (!tlsReachable) {
           throw new Error(
-            `Edge route unhealthy after proxy/SSL setup (http=${probe.httpStatus}, https=${probe.httpsStatus}).`,
+            `TLS route unhealthy after proxy/SSL setup (http=${probe.httpStatus}, https=${probe.httpsStatus}).`,
           );
         }
 

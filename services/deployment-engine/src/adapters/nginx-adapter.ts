@@ -18,6 +18,8 @@ interface ProxyProbeResult {
   httpsStatus: string;
 }
 
+type RouteReadinessMode = 'either' | 'http' | 'https';
+
 const isReachableStatus = (status: string): boolean =>
   status !== '000' && status !== '502' && status !== '503' && status !== '504';
 
@@ -56,6 +58,7 @@ export class NginxAdapter {
     domainInput: string,
     onLog?: (line: string) => void,
     timeoutSeconds = 30,
+    mode: RouteReadinessMode = 'either',
   ): Promise<ProxyProbeResult> {
     const domain = assertValidHostname(domainInput, 'domain');
     const maxAttempts = Math.max(1, timeoutSeconds);
@@ -65,13 +68,21 @@ export class NginxAdapter {
       const probe = await this.probeRoute(domain);
       last = probe;
 
-      if (isReachableStatus(probe.httpStatus) || isReachableStatus(probe.httpsStatus)) {
+      const httpReachable = isReachableStatus(probe.httpStatus);
+      const httpsReachable = isReachableStatus(probe.httpsStatus);
+      const routeReady = mode === 'http'
+        ? httpReachable
+        : mode === 'https'
+          ? httpsReachable
+          : (httpReachable || httpsReachable);
+
+      if (routeReady) {
         return probe;
       }
 
       if (attempt === 1 || attempt % 5 === 0 || attempt === maxAttempts) {
         onLog?.(
-          `Route check: waiting for ${domain} (attempt ${attempt}/${maxAttempts}, http=${probe.httpStatus}, https=${probe.httpsStatus})`,
+          `Route check: waiting for ${domain} (${mode}) (attempt ${attempt}/${maxAttempts}, http=${probe.httpStatus}, https=${probe.httpsStatus})`,
         );
       }
 
