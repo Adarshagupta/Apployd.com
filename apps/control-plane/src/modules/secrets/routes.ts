@@ -212,31 +212,36 @@ export const secretRoutes: FastifyPluginAsync = async (app) => {
     });
     const existingSet = new Set(existing.map((record) => record.key));
 
-    await prisma.$transaction(async (tx) => {
-      for (const [key, value] of mergedSecrets.entries()) {
-        const encrypted = encryptSecret(value);
-        await tx.projectSecret.upsert({
-          where: {
-            projectId_key: {
+    const entries = [...mergedSecrets.entries()];
+    const batchSize = 25;
+    for (let index = 0; index < entries.length; index += batchSize) {
+      const batch = entries.slice(index, index + batchSize);
+      await Promise.all(
+        batch.map(([key, value]) => {
+          const encrypted = encryptSecret(value);
+          return prisma.projectSecret.upsert({
+            where: {
+              projectId_key: {
+                projectId: params.projectId,
+                key,
+              },
+            },
+            update: {
+              encryptedValue: encrypted.encryptedValue,
+              iv: encrypted.iv,
+              authTag: encrypted.authTag,
+            },
+            create: {
               projectId: params.projectId,
               key,
+              encryptedValue: encrypted.encryptedValue,
+              iv: encrypted.iv,
+              authTag: encrypted.authTag,
             },
-          },
-          update: {
-            encryptedValue: encrypted.encryptedValue,
-            iv: encrypted.iv,
-            authTag: encrypted.authTag,
-          },
-          create: {
-            projectId: params.projectId,
-            key,
-            encryptedValue: encrypted.encryptedValue,
-            iv: encrypted.iv,
-            authTag: encrypted.authTag,
-          },
-        });
-      }
-    });
+          });
+        }),
+      );
+    }
 
     const created = keys.filter((key) => !existingSet.has(key)).length;
     const updated = keys.length - created;
