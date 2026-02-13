@@ -13,6 +13,14 @@ interface ConfigureProxyInput {
   aliases?: string[];
 }
 
+interface ProxyProbeResult {
+  httpStatus: string;
+  httpsStatus: string;
+}
+
+const isReachableStatus = (status: string): boolean =>
+  status !== '000' && status !== '502' && status !== '503' && status !== '504';
+
 export class NginxAdapter {
   async configureProjectProxy(input: ConfigureProxyInput): Promise<void> {
     const domain = assertValidHostname(input.domain, 'domain');
@@ -44,6 +52,35 @@ export class NginxAdapter {
     await runHostCommand('systemctl reload nginx');
   }
 
+  async waitForRouteReady(
+    domainInput: string,
+    onLog?: (line: string) => void,
+    timeoutSeconds = 30,
+  ): Promise<ProxyProbeResult> {
+    const domain = assertValidHostname(domainInput, 'domain');
+    const maxAttempts = Math.max(1, timeoutSeconds);
+    let last: ProxyProbeResult = { httpStatus: '000', httpsStatus: '000' };
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const probe = await this.probeRoute(domain);
+      last = probe;
+
+      if (isReachableStatus(probe.httpStatus) || isReachableStatus(probe.httpsStatus)) {
+        return probe;
+      }
+
+      if (attempt === 1 || attempt % 5 === 0 || attempt === maxAttempts) {
+        onLog?.(
+          `Route check: waiting for ${domain} (attempt ${attempt}/${maxAttempts}, http=${probe.httpStatus}, https=${probe.httpsStatus})`,
+        );
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    return last;
+  }
+
   private loadTemplate(): string {
     if (env.NGINX_TEMPLATE_PATH) {
       try {
@@ -66,5 +103,34 @@ export class NginxAdapter {
       '    }',
       '}',
     ].join('\n');
+  }
+
+  private async probeRoute(domain: string): Promise<ProxyProbeResult> {
+    const probeScript = [
+      `HTTP_CODE="000"`,
+      `HTTPS_CODE="000"`,
+      `if command -v curl >/dev/null 2>&1; then`,
+      `  HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" -H "Host: ${domain}" http://127.0.0.1/ || echo 000)`,
+      `  HTTPS_CODE=$(curl -k -sS -o /dev/null -w "%{http_code}" --resolve "${domain}:443:127.0.0.1" "https://${domain}/" || echo 000)`,
+      `elif command -v wget >/dev/null 2>&1; then`,
+      `  wget -q -T 3 -O /dev/null --header="Host: ${domain}" http://127.0.0.1/ && HTTP_CODE=200 || HTTP_CODE=000`,
+      `  wget -q -T 3 -O /dev/null --header="Host: ${domain}" --no-check-certificate "https://127.0.0.1/" && HTTPS_CODE=200 || HTTPS_CODE=000`,
+      `fi`,
+      `echo "\${HTTP_CODE} \${HTTPS_CODE}"`,
+    ].join('\n');
+
+    try {
+      const raw = await runHostCommand(probeScript);
+      const [httpStatus = '000', httpsStatus = '000'] = raw.trim().split(/\s+/);
+      return {
+        httpStatus,
+        httpsStatus,
+      };
+    } catch {
+      return {
+        httpStatus: '000',
+        httpsStatus: '000',
+      };
+    }
   }
 }

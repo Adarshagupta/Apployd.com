@@ -248,6 +248,29 @@ export class DeploymentPipeline {
           delayMs: 3000,
         });
         onLog('SSL certificate ready');
+
+        onLog('Verifying edge route...');
+        const probe = await this.nginx.waitForRouteReady(
+          domain,
+          onLog,
+          Math.min(45, env.ENGINE_HEALTHCHECK_TIMEOUT_SECONDS),
+        );
+        const edgeReachable = probe.httpStatus !== '000'
+          && probe.httpStatus !== '502'
+          && probe.httpStatus !== '503'
+          && probe.httpStatus !== '504';
+        const tlsReachable = probe.httpsStatus !== '000'
+          && probe.httpsStatus !== '502'
+          && probe.httpsStatus !== '503'
+          && probe.httpsStatus !== '504';
+
+        if (!edgeReachable && !tlsReachable) {
+          throw new Error(
+            `Edge route unhealthy after proxy/SSL setup (http=${probe.httpStatus}, https=${probe.httpsStatus}).`,
+          );
+        }
+
+        onLog(`Edge route ready (http=${probe.httpStatus}, https=${probe.httpsStatus})`);
       }
 
       // ── Create container record ────────────────────────────────
