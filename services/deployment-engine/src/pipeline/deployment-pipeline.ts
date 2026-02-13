@@ -174,6 +174,11 @@ export class DeploymentPipeline {
         onLog,
       );
       if (!healthy) {
+        const stateSummary = await this.docker.getContainerStateSummary(run.dockerContainerId);
+        if (stateSummary) {
+          onLog(`Container state: ${stateSummary}`);
+        }
+
         const logs = await this.docker.getContainerLogs(run.dockerContainerId, 40);
         onLog('── Container logs (last 40 lines) ──');
         const logLines = logs.split('\n').filter(Boolean);
@@ -187,12 +192,16 @@ export class DeploymentPipeline {
         );
         const hint = errorLine
           ? `Container crashed: ${errorLine.trim().slice(0, 200)}`
-          : `Health check failed — app did not respond on port ${payload.request.port} within ${env.ENGINE_HEALTHCHECK_TIMEOUT_SECONDS} s.`;
+          : `Health check failed — app did not respond on container port ${payload.request.port} (host ${run.hostPort}) within ${env.ENGINE_HEALTHCHECK_TIMEOUT_SECONDS} s.`;
 
         throw new Error(
           `${hint} Check the container logs above for startup errors.`,
         );
       }
+
+      await this.docker.setRestartPolicy(run.dockerContainerId, 'unless-stopped').catch((error) => {
+        onLog(`Warning: failed to enable restart policy: ${(error as Error).message}`);
+      });
 
       await this.assertDeploymentCanContinue(payload.deploymentId);
 

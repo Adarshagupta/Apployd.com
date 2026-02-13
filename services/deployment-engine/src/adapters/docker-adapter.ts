@@ -536,6 +536,16 @@ interface BuildImageResult {
   sourceCommitSha: string | null;
 }
 
+interface ContainerRuntimeState {
+  status: string;
+  running: boolean;
+  restarting: boolean;
+  exitCode: number;
+  oomKilled: boolean;
+  restartCount: number;
+  error: string;
+}
+
 export class DockerAdapter {
   /**
    * Build a Docker image entirely inside Docker — git clone, dependency
@@ -636,7 +646,8 @@ export class DockerAdapter {
     const cmd = [
       'docker run -d',
       `--name apployd-${input.deploymentId}`,
-      '--restart unless-stopped',
+      // Keep restart disabled until health-check passes so crash loops are visible.
+      '--restart no',
       
       // ── Security: Read-only filesystem (Vercel/Render grade) ──
       '--read-only',
@@ -692,6 +703,15 @@ export class DockerAdapter {
     return { dockerContainerId, hostPort };
   }
 
+  async setRestartPolicy(
+    containerNameOrId: string,
+    policy: 'no' | 'unless-stopped' | 'always' | 'on-failure',
+  ): Promise<void> {
+    await runCommand(
+      `docker update --restart ${shellEscape(policy)} ${shellEscape(containerNameOrId)}`,
+    );
+  }
+
   async stopContainer(containerNameOrId: string): Promise<void> {
     await runCommand(`docker stop ${shellEscape(containerNameOrId)}`).catch(() => undefined);
   }
@@ -713,24 +733,31 @@ export class DockerAdapter {
     const delayMs = env.ENGINE_HEALTHCHECK_DELAY_MS;
     const timeoutMs = env.ENGINE_HEALTHCHECK_TIMEOUT_SECONDS * 1000;
     const maxAttempts = Math.max(1, Math.ceil(timeoutMs / delayMs));
+    let lastRestartCount = 0;
 
     for (let i = 0; i < maxAttempts; i++) {
-      // ── Early exit: check if container is still running ──
-      // Check every attempt for the first 5, then every 5th after that
+      // ── Early exit: inspect container runtime state ──
+      // Check every attempt for the first 5, then every 5th after that.
       if (containerId && (i < 5 || i % 5 === 0)) {
-        try {
-          const state = await runCommand(
-            `docker inspect --format={{.State.Running}} ${shellEscape(containerId)}`,
-          );
-          if (state.trim() === 'false') {
-            onLog?.(`Health check: container exited prematurely (attempt ${i + 1}/${maxAttempts})`);
-            return false;
-          }
-        } catch {
-          // inspect failed — container may have been removed
+        const state = await this.inspectContainerState(containerId);
+        if (!state) {
           onLog?.('Health check: unable to inspect container — it may have crashed');
           return false;
         }
+        if (state.oomKilled) {
+          onLog?.('Health check: container was OOM-killed before becoming ready');
+          return false;
+        }
+        if (state.status === 'exited' || state.status === 'dead') {
+          const errorDetail = state.error ? ` (${state.error})` : '';
+          onLog?.(`Health check: container exited with code ${state.exitCode}${errorDetail}`);
+          return false;
+        }
+        if (state.restartCount >= 3 && state.restartCount > lastRestartCount) {
+          onLog?.(`Health check: container restart loop detected (${state.restartCount} restarts)`);
+          return false;
+        }
+        lastRestartCount = state.restartCount;
       }
 
       // Probe from inside the container first. This works even when the deployment-engine
@@ -776,6 +803,26 @@ export class DockerAdapter {
 
     onLog?.(`Health check: timed out after ${env.ENGINE_HEALTHCHECK_TIMEOUT_SECONDS} seconds`);
     return false;
+  }
+
+  async getContainerStateSummary(containerNameOrId: string): Promise<string | null> {
+    const state = await this.inspectContainerState(containerNameOrId);
+    if (!state) {
+      return null;
+    }
+
+    const parts = [
+      `status=${state.status}`,
+      `running=${state.running}`,
+      `restartCount=${state.restartCount}`,
+      `exitCode=${state.exitCode}`,
+      `oomKilled=${state.oomKilled}`,
+    ];
+    if (state.error) {
+      parts.push(`error=${state.error}`);
+    }
+
+    return parts.join(', ');
   }
 
   private async containerProbe(containerId: string, containerPort: number): Promise<boolean> {
@@ -840,5 +887,40 @@ export class DockerAdapter {
 
   private allocateHostPort(): number {
     return randomInt(20000, 45000);
+  }
+
+  private async inspectContainerState(containerNameOrId: string): Promise<ContainerRuntimeState | null> {
+    try {
+      const output = await runCommand(
+        `docker inspect --format={{json .State}}@@{{.RestartCount}} ${shellEscape(containerNameOrId)}`,
+      );
+      const separator = output.lastIndexOf('@@');
+      if (separator < 0) {
+        return null;
+      }
+
+      const statePayload = output.slice(0, separator);
+      const restartCountRaw = output.slice(separator + 2);
+      const parsed = JSON.parse(statePayload) as {
+        Status?: string;
+        Running?: boolean;
+        Restarting?: boolean;
+        ExitCode?: number;
+        OOMKilled?: boolean;
+        Error?: string;
+      };
+
+      return {
+        status: parsed.Status ?? 'unknown',
+        running: parsed.Running ?? false,
+        restarting: parsed.Restarting ?? false,
+        exitCode: parsed.ExitCode ?? 0,
+        oomKilled: parsed.OOMKilled ?? false,
+        restartCount: Number(restartCountRaw) || 0,
+        error: parsed.Error ?? '',
+      };
+    } catch {
+      return null;
+    }
   }
 }
