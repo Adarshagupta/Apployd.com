@@ -9,8 +9,13 @@ interface ConfigureProxyInput {
   domain: string;
   upstreamHost: string;
   upstreamPort: number;
+  upstreamScheme?: 'http' | 'https';
   /** Additional server_name aliases (custom domains). */
   aliases?: string[];
+}
+
+interface ConfigureTlsProxyInput extends ConfigureProxyInput {
+  certificateDomain?: string;
 }
 
 interface ProxyProbeResult {
@@ -20,6 +25,7 @@ interface ProxyProbeResult {
 
 interface UpstreamProbeResult {
   httpStatus: string;
+  httpsStatus: string;
   tcpReachable: boolean;
 }
 
@@ -41,6 +47,7 @@ export class NginxAdapter {
     if (!Number.isInteger(input.upstreamPort) || input.upstreamPort < 1 || input.upstreamPort > 65535) {
       throw new Error(`Invalid upstream port: ${input.upstreamPort}`);
     }
+    const upstreamScheme = this.normalizeUpstreamScheme(input.upstreamScheme);
 
     const configPath = join(env.NGINX_SITES_PATH, `${domain}.conf`);
     const template = this.loadTemplate();
@@ -48,12 +55,57 @@ export class NginxAdapter {
 
     const aliasString = aliases.join(' ');
 
-    const rendered = template
+    let rendered = template
       .replaceAll('{{DOMAIN}}', domain)
       .replaceAll('{{ALIASES}}', aliasString)
       .replaceAll('{{UPSTREAM_NAME}}', upstreamName)
+      .replaceAll('{{UPSTREAM_SCHEME}}', upstreamScheme)
       .replaceAll('{{UPSTREAM_HOST}}', upstreamHost)
       .replaceAll('{{UPSTREAM_PORT}}', String(input.upstreamPort));
+    // Backward compatibility for template versions that still hardcode http://.
+    if (!template.includes('{{UPSTREAM_SCHEME}}')) {
+      rendered = rendered.replace(/proxy_pass\s+http:\/\//g, `proxy_pass ${upstreamScheme}://`);
+    }
+
+    writeFileSync(configPath, rendered, { encoding: 'utf8' });
+
+    await runHostCommand('nginx -t');
+    await runHostCommand('systemctl reload nginx');
+  }
+
+  async configureProjectProxyWithTls(input: ConfigureTlsProxyInput): Promise<void> {
+    const domain = assertValidHostname(input.domain, 'domain');
+    const aliases = (input.aliases ?? []).map((alias, index) =>
+      assertValidHostname(alias, `alias #${index + 1}`),
+    );
+    const upstreamHost = input.upstreamHost.trim();
+    if (!/^(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|[a-z0-9.-]+)$/i.test(upstreamHost)) {
+      throw new Error(`Invalid upstream host: ${input.upstreamHost}`);
+    }
+    if (!Number.isInteger(input.upstreamPort) || input.upstreamPort < 1 || input.upstreamPort > 65535) {
+      throw new Error(`Invalid upstream port: ${input.upstreamPort}`);
+    }
+    const upstreamScheme = this.normalizeUpstreamScheme(input.upstreamScheme);
+
+    const certDomain = input.certificateDomain
+      ? assertValidHostname(input.certificateDomain, 'certificateDomain')
+      : domain;
+    const certPath = `/etc/letsencrypt/live/${certDomain}/fullchain.pem`;
+    const keyPath = `/etc/letsencrypt/live/${certDomain}/privkey.pem`;
+
+    const configPath = join(env.NGINX_SITES_PATH, `${domain}.conf`);
+    const aliasString = aliases.join(' ');
+    const upstreamName = this.buildUpstreamName(domain);
+    let rendered = this.buildTlsTemplate()
+      .replaceAll('{{DOMAIN}}', domain)
+      .replaceAll('{{ALIASES}}', aliasString)
+      .replaceAll('{{UPSTREAM_NAME}}', upstreamName)
+      .replaceAll('{{UPSTREAM_SCHEME}}', upstreamScheme)
+      .replaceAll('{{UPSTREAM_HOST}}', upstreamHost)
+      .replaceAll('{{UPSTREAM_PORT}}', String(input.upstreamPort))
+      .replaceAll('{{SSL_CERT_PATH}}', certPath)
+      .replaceAll('{{SSL_KEY_PATH}}', keyPath);
+    rendered = rendered.replace(/proxy_pass\s+http:\/\//g, `proxy_pass ${upstreamScheme}://`);
 
     writeFileSync(configPath, rendered, { encoding: 'utf8' });
 
@@ -114,19 +166,21 @@ export class NginxAdapter {
     }
 
     const maxAttempts = Math.max(1, timeoutSeconds);
-    let last: UpstreamProbeResult = { httpStatus: '000', tcpReachable: false };
+    let last: UpstreamProbeResult = { httpStatus: '000', httpsStatus: '000', tcpReachable: false };
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       const probe = await this.probeUpstream(host, upstreamPort);
       last = probe;
 
-      if (isReachableStatus(probe.httpStatus) || probe.tcpReachable) {
+      const httpReachable = isReachableStatus(probe.httpStatus);
+      const httpsReachable = isReachableStatus(probe.httpsStatus);
+      if (httpReachable || httpsReachable) {
         return probe;
       }
 
       if (attempt === 1 || attempt % 5 === 0 || attempt === maxAttempts) {
         onLog?.(
-          `Upstream check: waiting for ${host}:${upstreamPort} (attempt ${attempt}/${maxAttempts}, http=${probe.httpStatus}, tcp=${probe.tcpReachable ? 'ok' : 'down'})`,
+          `Upstream check: waiting for ${host}:${upstreamPort} (attempt ${attempt}/${maxAttempts}, http=${probe.httpStatus}, https=${probe.httpsStatus}, tcp=${probe.tcpReachable ? 'ok' : 'down'})`,
         );
       }
 
@@ -150,12 +204,64 @@ export class NginxAdapter {
       '    listen 80;',
       '    server_name {{DOMAIN}} {{ALIASES}};',
       '    location / {',
-      '        proxy_pass http://{{UPSTREAM_HOST}}:{{UPSTREAM_PORT}};',
       '        proxy_http_version 1.1;',
       '        proxy_set_header Upgrade $http_upgrade;',
       '        proxy_set_header Connection "upgrade";',
       '        proxy_set_header Host $host;',
+      '        proxy_pass {{UPSTREAM_SCHEME}}://{{UPSTREAM_HOST}}:{{UPSTREAM_PORT}};',
       '    }',
+      '}',
+    ].join('\n');
+  }
+
+  private buildTlsTemplate(): string {
+    return [
+      'upstream {{UPSTREAM_NAME}} {',
+      '  server {{UPSTREAM_HOST}}:{{UPSTREAM_PORT}};',
+      '  keepalive 64;',
+      '}',
+      '',
+      'server {',
+      '  listen 80;',
+      '  server_name {{DOMAIN}} {{ALIASES}};',
+      '',
+      '  location /.well-known/acme-challenge/ {',
+      '    root /var/www/html;',
+      '  }',
+      '',
+      '  location /healthz {',
+      "    access_log off;",
+      "    return 200 'ok';",
+      '  }',
+      '',
+      '  location / {',
+      '    return 301 https://$host$request_uri;',
+      '  }',
+      '}',
+      '',
+      'server {',
+      '  listen 443 ssl http2;',
+      '  server_name {{DOMAIN}} {{ALIASES}};',
+      '',
+      '  ssl_certificate {{SSL_CERT_PATH}};',
+      '  ssl_certificate_key {{SSL_KEY_PATH}};',
+      '',
+      '  location /healthz {',
+      "    access_log off;",
+      "    return 200 'ok';",
+      '  }',
+      '',
+      '  location / {',
+      '    proxy_http_version 1.1;',
+      '    proxy_set_header Upgrade $http_upgrade;',
+      '    proxy_set_header Connection $connection_upgrade;',
+      '    proxy_set_header Host $host;',
+      '    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;',
+      '    proxy_set_header X-Forwarded-Proto $scheme;',
+      '    proxy_read_timeout 300;',
+      '    proxy_send_timeout 300;',
+      '    proxy_pass {{UPSTREAM_SCHEME}}://{{UPSTREAM_NAME}};',
+      '  }',
       '}',
     ].join('\n');
   }
@@ -165,8 +271,10 @@ export class NginxAdapter {
       `HTTP_CODE="000"`,
       `HTTPS_CODE="000"`,
       `if command -v curl >/dev/null 2>&1; then`,
-      `  HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" -H "Host: ${domain}" http://127.0.0.1/ || echo 000)`,
-      `  HTTPS_CODE=$(curl -k -sS -o /dev/null -w "%{http_code}" --resolve "${domain}:443:127.0.0.1" "https://${domain}/" || echo 000)`,
+      `  HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" -H "Host: ${domain}" http://127.0.0.1/ || true)`,
+      `  [ -z "$HTTP_CODE" ] && HTTP_CODE=000`,
+      `  HTTPS_CODE=$(curl -k -sS -o /dev/null -w "%{http_code}" --resolve "${domain}:443:127.0.0.1" "https://${domain}/" || true)`,
+      `  [ -z "$HTTPS_CODE" ] && HTTPS_CODE=000`,
       `elif command -v wget >/dev/null 2>&1; then`,
       `  wget -q -T 3 -O /dev/null --header="Host: ${domain}" http://127.0.0.1/ && HTTP_CODE=200 || HTTP_CODE=000`,
       `  wget -q -T 3 -O /dev/null --header="Host: ${domain}" --no-check-certificate "https://127.0.0.1/" && HTTPS_CODE=200 || HTTPS_CODE=000`,
@@ -192,31 +300,51 @@ export class NginxAdapter {
   private async probeUpstream(host: string, port: number): Promise<UpstreamProbeResult> {
     const probeScript = [
       `HTTP_CODE="000"`,
+      `HTTPS_CODE="000"`,
       `TCP_OK="0"`,
       `if command -v curl >/dev/null 2>&1; then`,
-      `  HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 2 "http://${host}:${port}/" || echo 000)`,
+      `  HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 2 "http://${host}:${port}/" || true)`,
+      `  [ -z "$HTTP_CODE" ] && HTTP_CODE=000`,
+      `  HTTPS_CODE=$(curl -k -sS -o /dev/null -w "%{http_code}" --max-time 2 "https://${host}:${port}/" || true)`,
+      `  [ -z "$HTTPS_CODE" ] && HTTPS_CODE=000`,
       `elif command -v wget >/dev/null 2>&1; then`,
       `  wget -q -T 2 -O /dev/null "http://${host}:${port}/" && HTTP_CODE=200 || HTTP_CODE=000`,
+      `  wget -q -T 2 -O /dev/null --no-check-certificate "https://${host}:${port}/" && HTTPS_CODE=200 || HTTPS_CODE=000`,
       `fi`,
       `if command -v nc >/dev/null 2>&1; then`,
       `  nc -z -w2 ${host} ${port} && TCP_OK=1 || TCP_OK=0`,
       `fi`,
-      `echo "\${HTTP_CODE} \${TCP_OK}"`,
+      `echo "\${HTTP_CODE} \${HTTPS_CODE} \${TCP_OK}"`,
     ].join('\n');
 
     try {
       const raw = await runHostCommand(probeScript);
-      const [httpStatus = '000', tcpRaw = '0'] = raw.trim().split(/\s+/);
+      const [httpStatus = '000', httpsStatus = '000', tcpRaw = '0'] = raw.trim().split(/\s+/);
       return {
         httpStatus,
+        httpsStatus,
         tcpReachable: tcpRaw === '1',
       };
     } catch {
       return {
         httpStatus: '000',
+        httpsStatus: '000',
         tcpReachable: false,
       };
     }
+  }
+
+  async getNginxErrorLogTail(lines = 60): Promise<string> {
+    const safeLines = Math.max(1, Math.min(500, Math.trunc(lines) || 60));
+    try {
+      return await runHostCommand(`tail -n ${safeLines} /var/log/nginx/error.log 2>/dev/null || true`);
+    } catch {
+      return '';
+    }
+  }
+
+  private normalizeUpstreamScheme(scheme?: 'http' | 'https'): 'http' | 'https' {
+    return scheme === 'https' ? 'https' : 'http';
   }
 
   private buildUpstreamName(domain: string): string {

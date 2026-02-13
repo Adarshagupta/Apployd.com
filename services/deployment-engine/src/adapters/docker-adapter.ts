@@ -316,7 +316,7 @@ function webServiceDockerfile(projectId: string): string {
     '      printf \'#!/bin/sh\\nexec %s\\n\' "${START_CMD}" > /entrypoint.sh; \\',
     '    elif [ -f package.json ]; then \\',
     '      SCRIPTS=$(node -e "var s=JSON.parse(require(\'fs\').readFileSync(\'package.json\',\'utf8\')).scripts||{}; console.log(JSON.stringify(s))" 2>/dev/null || echo "{}"); \\',
-    '      MAIN=$(node -e "console.log(JSON.parse(require(\'fs\').readFileSync(\'package.json\',\'utf8\')).main||\'\'" 2>/dev/null || echo ""); \\',
+    '      MAIN=$(node -e "console.log(JSON.parse(require(\'fs\').readFileSync(\'package.json\',\'utf8\')).main||\'\')" 2>/dev/null || echo ""); \\',
     '      is_dev_cmd() { echo "$1" | grep -qiE "(ts-node-dev|ts-node([[:space:]]|$)|tsx([[:space:]]|$)|nodemon|next[[:space:]]+dev|nuxt[[:space:]]+dev|vite[[:space:]]+dev|remix[[:space:]]+dev|ng[[:space:]]+serve|webpack-dev-server|node[[:space:]]+--watch)"; }; \\',
     '      get_script() { echo "$SCRIPTS" | node -e "var s=JSON.parse(require(\'fs\').readFileSync(\'/dev/stdin\',\'utf8\')); console.log(s[\'$1\']||\'\')" 2>/dev/null; }; \\',
     '      START_PROD=$(get_script "start:prod"); \\',

@@ -19,6 +19,9 @@ const isInProgressDeploymentStatus = (status: DeploymentStatus): boolean =>
   status === DeploymentStatus.building ||
   status === DeploymentStatus.deploying;
 
+const isReachableHttpStatus = (status: string): boolean =>
+  status !== '000' && status !== '502' && status !== '503' && status !== '504';
+
 class DeploymentCanceledError extends Error {
   constructor(message = 'Deployment canceled by user.') {
     super(message);
@@ -236,12 +239,15 @@ export class DeploymentPipeline {
           onLog,
           Math.min(20, env.ENGINE_HEALTHCHECK_TIMEOUT_SECONDS),
         );
-        if (!(upstream.httpStatus !== '000' && upstream.httpStatus !== '502' && upstream.httpStatus !== '503' && upstream.httpStatus !== '504') && !upstream.tcpReachable) {
+        const upstreamHttpReachable = isReachableHttpStatus(upstream.httpStatus);
+        const upstreamHttpsReachable = isReachableHttpStatus(upstream.httpsStatus);
+        if (!upstreamHttpReachable && !upstreamHttpsReachable) {
           throw new Error(
-            `Host cannot reach container upstream 127.0.0.1:${run.hostPort} (http=${upstream.httpStatus}, tcp=${upstream.tcpReachable ? 'ok' : 'down'}).`,
+            `Host upstream is not speaking HTTP(S) on 127.0.0.1:${run.hostPort} (http=${upstream.httpStatus}, https=${upstream.httpsStatus}, tcp=${upstream.tcpReachable ? 'ok' : 'down'}).`,
           );
         }
-        onLog(`Host upstream reachable (http=${upstream.httpStatus}, tcp=${upstream.tcpReachable ? 'ok' : 'down'})`);
+        const upstreamScheme = upstreamHttpsReachable && !upstreamHttpReachable ? 'https' : 'http';
+        onLog(`Host upstream reachable (http=${upstream.httpStatus}, https=${upstream.httpsStatus}, tcp=${upstream.tcpReachable ? 'ok' : 'down'}, scheme=${upstreamScheme})`);
 
         onLog('Setting up reverse proxy...');
         await withRetry(
@@ -250,6 +256,7 @@ export class DeploymentPipeline {
               domain,
               upstreamHost: '127.0.0.1',
               upstreamPort: run.hostPort,
+              upstreamScheme,
               aliases: customAliases,
             }),
           { retries: 2, delayMs: 1000 },
@@ -270,12 +277,42 @@ export class DeploymentPipeline {
           Math.min(45, env.ENGINE_HEALTHCHECK_TIMEOUT_SECONDS),
           'https',
         );
-        const tlsReachable = probe.httpsStatus !== '000'
-          && probe.httpsStatus !== '502'
-          && probe.httpsStatus !== '503'
-          && probe.httpsStatus !== '504';
+        const tlsReachable = isReachableHttpStatus(probe.httpsStatus);
 
         if (!tlsReachable) {
+          const postRouteUpstream = await this.nginx.waitForUpstreamReachable(
+            '127.0.0.1',
+            run.hostPort,
+            undefined,
+            3,
+          );
+          onLog(
+            `Post-route upstream check (http=${postRouteUpstream.httpStatus}, https=${postRouteUpstream.httpsStatus}, tcp=${postRouteUpstream.tcpReachable ? 'ok' : 'down'})`,
+          );
+
+          const stateSummary = await this.docker.getContainerStateSummary(run.dockerContainerId);
+          if (stateSummary) {
+            onLog(`Container state: ${stateSummary}`);
+          }
+
+          const containerLogs = await this.docker.getContainerLogs(run.dockerContainerId, 20);
+          const containerLogLines = containerLogs.split('\n').filter(Boolean);
+          if (containerLogLines.length > 0) {
+            onLog('-- Container logs (last 20 lines) --');
+            for (const line of containerLogLines) {
+              onLog(line);
+            }
+          }
+
+          const nginxErrors = await this.nginx.getNginxErrorLogTail(40);
+          const nginxErrorLines = nginxErrors.split('\n').filter(Boolean);
+          if (nginxErrorLines.length > 0) {
+            onLog('-- Nginx error log (last 40 lines) --');
+            for (const line of nginxErrorLines) {
+              onLog(line);
+            }
+          }
+
           throw new Error(
             `TLS route unhealthy after proxy/SSL setup (http=${probe.httpStatus}, https=${probe.httpsStatus}).`,
           );
