@@ -847,7 +847,9 @@ export class DockerAdapter {
       );
       return true;
     } catch {
-      return false;
+      // Fallback for minimal images without curl/wget/nc:
+      // detect whether the process is listening on the port via /proc/net/tcp*.
+      return this.containerPortListeningProbe(containerId, containerPort);
     }
   }
 
@@ -889,10 +891,44 @@ export class DockerAdapter {
     return randomInt(20000, 45000);
   }
 
+  private async containerPortListeningProbe(
+    containerId: string,
+    containerPort: number,
+  ): Promise<boolean> {
+    try {
+      const raw = await runCommand(
+        `docker exec ${shellEscape(containerId)} sh -lc ${shellEscape('cat /proc/net/tcp /proc/net/tcp6 2>/dev/null || true')}`,
+      );
+      const targetHex = containerPort.toString(16).toUpperCase().padStart(4, '0');
+      const lines = raw.split(/\r?\n/);
+
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length < 4) {
+          continue;
+        }
+        const localAddress = parts[1] ?? '';
+        const state = parts[3] ?? '';
+        if (state !== '0A') {
+          continue;
+        }
+        const [, localPort = ''] = localAddress.split(':');
+        if (localPort.toUpperCase() === targetHex) {
+          return true;
+        }
+      }
+
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
   private async inspectContainerState(containerNameOrId: string): Promise<ContainerRuntimeState | null> {
     try {
+      const format = '{{json .State}}@@{{.RestartCount}}';
       const output = await runCommand(
-        `docker inspect --format={{json .State}}@@{{.RestartCount}} ${shellEscape(containerNameOrId)}`,
+        `docker inspect --format=${shellEscape(format)} ${shellEscape(containerNameOrId)}`,
       );
       const separator = output.lastIndexOf('@@');
       if (separator < 0) {
