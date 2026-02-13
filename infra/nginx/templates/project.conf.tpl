@@ -1,4 +1,4 @@
-upstream {{DOMAIN}}_upstream {
+upstream {{UPSTREAM_NAME}} {
   server {{UPSTREAM_HOST}}:{{UPSTREAM_PORT}};
   keepalive 64;
 }
@@ -22,6 +22,6 @@ server {
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_read_timeout 300;
     proxy_send_timeout 300;
-    proxy_pass http://{{DOMAIN}}_upstream;
+    proxy_pass http://{{UPSTREAM_NAME}};
   }
 }

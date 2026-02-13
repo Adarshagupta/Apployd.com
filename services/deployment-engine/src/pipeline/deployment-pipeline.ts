@@ -229,6 +229,20 @@ export class DeploymentPipeline {
           onLog('DNS configured');
         }
 
+        onLog('Verifying host upstream...');
+        const upstream = await this.nginx.waitForUpstreamReachable(
+          '127.0.0.1',
+          run.hostPort,
+          onLog,
+          Math.min(20, env.ENGINE_HEALTHCHECK_TIMEOUT_SECONDS),
+        );
+        if (!(upstream.httpStatus !== '000' && upstream.httpStatus !== '502' && upstream.httpStatus !== '503' && upstream.httpStatus !== '504') && !upstream.tcpReachable) {
+          throw new Error(
+            `Host cannot reach container upstream 127.0.0.1:${run.hostPort} (http=${upstream.httpStatus}, tcp=${upstream.tcpReachable ? 'ok' : 'down'}).`,
+          );
+        }
+        onLog(`Host upstream reachable (http=${upstream.httpStatus}, tcp=${upstream.tcpReachable ? 'ok' : 'down'})`);
+
         onLog('Setting up reverse proxy...');
         await withRetry(
           () =>

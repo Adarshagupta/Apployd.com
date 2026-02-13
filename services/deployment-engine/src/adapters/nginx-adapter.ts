@@ -18,6 +18,11 @@ interface ProxyProbeResult {
   httpsStatus: string;
 }
 
+interface UpstreamProbeResult {
+  httpStatus: string;
+  tcpReachable: boolean;
+}
+
 type RouteReadinessMode = 'either' | 'http' | 'https';
 
 const isReachableStatus = (status: string): boolean =>
@@ -39,12 +44,14 @@ export class NginxAdapter {
 
     const configPath = join(env.NGINX_SITES_PATH, `${domain}.conf`);
     const template = this.loadTemplate();
+    const upstreamName = this.buildUpstreamName(domain);
 
     const aliasString = aliases.join(' ');
 
     const rendered = template
       .replaceAll('{{DOMAIN}}', domain)
       .replaceAll('{{ALIASES}}', aliasString)
+      .replaceAll('{{UPSTREAM_NAME}}', upstreamName)
       .replaceAll('{{UPSTREAM_HOST}}', upstreamHost)
       .replaceAll('{{UPSTREAM_PORT}}', String(input.upstreamPort));
 
@@ -83,6 +90,43 @@ export class NginxAdapter {
       if (attempt === 1 || attempt % 5 === 0 || attempt === maxAttempts) {
         onLog?.(
           `Route check: waiting for ${domain} (${mode}) (attempt ${attempt}/${maxAttempts}, http=${probe.httpStatus}, https=${probe.httpsStatus})`,
+        );
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    return last;
+  }
+
+  async waitForUpstreamReachable(
+    upstreamHost: string,
+    upstreamPort: number,
+    onLog?: (line: string) => void,
+    timeoutSeconds = 20,
+  ): Promise<UpstreamProbeResult> {
+    const host = upstreamHost.trim();
+    if (!/^(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|[a-z0-9.-]+)$/i.test(host)) {
+      throw new Error(`Invalid upstream host: ${upstreamHost}`);
+    }
+    if (!Number.isInteger(upstreamPort) || upstreamPort < 1 || upstreamPort > 65535) {
+      throw new Error(`Invalid upstream port: ${upstreamPort}`);
+    }
+
+    const maxAttempts = Math.max(1, timeoutSeconds);
+    let last: UpstreamProbeResult = { httpStatus: '000', tcpReachable: false };
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const probe = await this.probeUpstream(host, upstreamPort);
+      last = probe;
+
+      if (isReachableStatus(probe.httpStatus) || probe.tcpReachable) {
+        return probe;
+      }
+
+      if (attempt === 1 || attempt % 5 === 0 || attempt === maxAttempts) {
+        onLog?.(
+          `Upstream check: waiting for ${host}:${upstreamPort} (attempt ${attempt}/${maxAttempts}, http=${probe.httpStatus}, tcp=${probe.tcpReachable ? 'ok' : 'down'})`,
         );
       }
 
@@ -143,5 +187,45 @@ export class NginxAdapter {
         httpsStatus: '000',
       };
     }
+  }
+
+  private async probeUpstream(host: string, port: number): Promise<UpstreamProbeResult> {
+    const probeScript = [
+      `HTTP_CODE="000"`,
+      `TCP_OK="0"`,
+      `if command -v curl >/dev/null 2>&1; then`,
+      `  HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 2 "http://${host}:${port}/" || echo 000)`,
+      `elif command -v wget >/dev/null 2>&1; then`,
+      `  wget -q -T 2 -O /dev/null "http://${host}:${port}/" && HTTP_CODE=200 || HTTP_CODE=000`,
+      `fi`,
+      `if command -v nc >/dev/null 2>&1; then`,
+      `  nc -z -w2 ${host} ${port} && TCP_OK=1 || TCP_OK=0`,
+      `fi`,
+      `echo "\${HTTP_CODE} \${TCP_OK}"`,
+    ].join('\n');
+
+    try {
+      const raw = await runHostCommand(probeScript);
+      const [httpStatus = '000', tcpRaw = '0'] = raw.trim().split(/\s+/);
+      return {
+        httpStatus,
+        tcpReachable: tcpRaw === '1',
+      };
+    } catch {
+      return {
+        httpStatus: '000',
+        tcpReachable: false,
+      };
+    }
+  }
+
+  private buildUpstreamName(domain: string): string {
+    const normalized = domain
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    const short = normalized.slice(0, 40);
+    return `${short || 'project'}_upstream`;
   }
 }
