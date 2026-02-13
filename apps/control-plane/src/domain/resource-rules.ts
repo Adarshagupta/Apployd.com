@@ -20,16 +20,6 @@ export const validateAllocationRules = (
   pool: PoolSnapshot,
   requested: RequestedAllocation,
 ): { ok: true } => {
-  if (requested.ramMb > Math.floor(pool.poolRamMb * 0.5)) {
-    throw new Error('A project cannot exceed 50% of RAM pool.');
-  }
-  if (requested.cpuMillicores > Math.floor(pool.poolCpuMillicores * 0.5)) {
-    throw new Error('A project cannot exceed 50% of CPU pool.');
-  }
-  if (requested.bandwidthGb > Math.floor(pool.poolBandwidthGb * 0.5)) {
-    throw new Error('A project cannot exceed 50% of bandwidth pool.');
-  }
-
   const plannedRam =
     pool.currentlyAllocatedRamMb - pool.currentProjectRamMb + requested.ramMb;
   const plannedCpu =

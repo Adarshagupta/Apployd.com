@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { apiClient, normalizeWebSocketUrl } from '../lib/api';
+import { parseDotenvText } from '../lib/dotenv-parser';
 
 const ENV_KEY_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
 
@@ -58,6 +59,7 @@ export function DeployForm({
   const [events, setEvents] = useState<DeploymentEvent[]>([]);
   const [liveUrl, setLiveUrl] = useState<string>('');
   const [envRows, setEnvRows] = useState<EnvRow[]>([{ key: '', value: '' }]);
+  const [envBulkText, setEnvBulkText] = useState('');
   const [followEvents, setFollowEvents] = useState(true);
   const socketRef = useRef<WebSocket | null>(null);
   const logContainerRef = useRef<HTMLDivElement | null>(null);
@@ -80,6 +82,7 @@ export function DeployForm({
 
   useEffect(() => {
     setEnvRows([{ key: '', value: '' }]);
+    setEnvBulkText('');
   }, [projectId]);
 
   /* ── Reconnect to an in-progress deployment when returning to the page ── */
@@ -218,6 +221,19 @@ export function DeployForm({
     setLiveUrl('');
 
     const envPayload: Record<string, string> = {};
+
+    if (envBulkText.trim().length > 0) {
+      try {
+        for (const entry of parseDotenvText(envBulkText)) {
+          envPayload[entry.key] = entry.value;
+        }
+      } catch (error) {
+        setStatus(`Failed: ${(error as Error).message}`);
+        setDeploying(false);
+        return;
+      }
+    }
+
     const seenKeys = new Set<string>();
 
     for (const row of envRows) {
@@ -246,8 +262,8 @@ export function DeployForm({
       envPayload[key] = value;
     }
 
-    if (Object.keys(envPayload).length > 50) {
-      setStatus('Failed: At most 50 environment variables are allowed.');
+    if (Object.keys(envPayload).length > 250) {
+      setStatus('Failed: At most 250 environment variables are allowed.');
       setDeploying(false);
       return;
     }
@@ -527,8 +543,17 @@ export function DeployForm({
           >
             Add variable
           </button>
+          <label className="block">
+            <span className="field-label">Paste full .env</span>
+            <textarea
+              value={envBulkText}
+              onChange={(event) => setEnvBulkText(event.target.value)}
+              className="field-input min-h-32 font-mono text-xs"
+              placeholder={'DATABASE_URL=postgres://...\nJWT_SECRET=...\n# Comments are supported'}
+            />
+          </label>
           <p className="text-xs text-slate-600">
-            Keys must be uppercase snake case. These values apply only to this deployment request.
+            Keys must be uppercase snake case. Values here apply only to this deployment request.
           </p>
         </div>
       ) : null}

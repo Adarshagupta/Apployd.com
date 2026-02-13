@@ -3,13 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { validateAllocationRules } from '../src/domain/resource-rules.js';
 
 describe('validateAllocationRules', () => {
-  it('accepts allocation within 50% and pool limits', () => {
+  it('accepts allocation up to full pool when aggregate remains within pool limits', () => {
     const result = validateAllocationRules(
       {
         poolRamMb: 2048,
         poolCpuMillicores: 2000,
         poolBandwidthGb: 200,
-        currentlyAllocatedRamMb: 1100,
+        currentlyAllocatedRamMb: 900,
         currentlyAllocatedCpuMillicores: 1000,
         currentlyAllocatedBandwidthGb: 80,
         currentProjectRamMb: 256,
@@ -17,7 +17,7 @@ describe('validateAllocationRules', () => {
         currentProjectBandwidthGb: 20,
       },
       {
-        ramMb: 512,
+        ramMb: 1200,
         cpuMillicores: 500,
         bandwidthGb: 40,
       },
@@ -26,14 +26,14 @@ describe('validateAllocationRules', () => {
     expect(result.ok).toBe(true);
   });
 
-  it('rejects a project using over 50% of ram pool', () => {
+  it('rejects total ram pool overflow', () => {
     expect(() =>
       validateAllocationRules(
         {
           poolRamMb: 2048,
           poolCpuMillicores: 2000,
           poolBandwidthGb: 200,
-          currentlyAllocatedRamMb: 1000,
+          currentlyAllocatedRamMb: 1200,
           currentlyAllocatedCpuMillicores: 800,
           currentlyAllocatedBandwidthGb: 70,
           currentProjectRamMb: 128,
@@ -46,7 +46,7 @@ describe('validateAllocationRules', () => {
           bandwidthGb: 20,
         },
       ),
-    ).toThrowError('A project cannot exceed 50% of RAM pool.');
+    ).toThrowError('RAM pool exceeded.');
   });
 
   it('rejects total cpu pool overflow', () => {

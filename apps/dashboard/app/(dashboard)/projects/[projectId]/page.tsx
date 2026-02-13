@@ -13,6 +13,7 @@ import { useWorkspaceContext } from '../../../../components/workspace-provider';
 
 /* ---------- types ---------- */
 const ENV_KEY_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
+const OTP_PATTERN = /^\d{6}$/;
 
 interface ProjectSecretSummary {
   id: string;
@@ -47,6 +48,13 @@ interface CustomDomainSummary {
 interface ProjectUsageMetricPoint {
   day: string;
   total: string;
+}
+
+interface CurrentSubscription {
+  status: string;
+  poolRamMb: number;
+  poolCpuMillicores: number;
+  poolBandwidthGb: number;
 }
 
 interface ProjectUsageDetails {
@@ -110,7 +118,12 @@ export default function ProjectDetailPage() {
   const params = useParams<{ projectId: string }>();
   const { projectId } = params ?? { projectId: '' };
   const router = useRouter();
-  const { projects, refresh, loading: workspaceLoading } = useWorkspaceContext();
+  const {
+    projects,
+    refresh,
+    loading: workspaceLoading,
+    selectedOrganizationId,
+  } = useWorkspaceContext();
 
   const project = useMemo(
     () => projects.find((p) => p.id === projectId) ?? null,
@@ -306,6 +319,12 @@ export default function ProjectDetailPage() {
 
   /* ---- Settings state ---- */
   const [saving, setSaving] = useState(false);
+  const [deleteOtpCode, setDeleteOtpCode] = useState('');
+  const [deleteOtpRequested, setDeleteOtpRequested] = useState(false);
+  const [deleteOtpRequesting, setDeleteOtpRequesting] = useState(false);
+  const [deletingProject, setDeletingProject] = useState(false);
+  const [deleteProjectMessage, setDeleteProjectMessage] = useState('');
+  const [subscription, setSubscription] = useState<CurrentSubscription | null>(null);
   const [projectSettings, setProjectSettings] = useState({
     repoUrl: '',
     branch: 'main',
@@ -320,6 +339,15 @@ export default function ProjectDetailPage() {
     cpu: 500,
     bandwidth: 50,
   });
+
+  const settingsResourceLimits = useMemo(
+    () => ({
+      ram: Math.max(128, subscription?.poolRamMb ?? 8192),
+      cpu: Math.max(100, subscription?.poolCpuMillicores ?? 8000),
+      bandwidth: Math.max(1, subscription?.poolBandwidthGb ?? 2000),
+    }),
+    [subscription],
+  );
 
   useEffect(() => {
     if (!project) return;
@@ -339,6 +367,35 @@ export default function ProjectDetailPage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id]);
+
+  useEffect(() => {
+    const loadSubscription = async () => {
+      if (!selectedOrganizationId) {
+        setSubscription(null);
+        return;
+      }
+
+      try {
+        const data = (await apiClient.get(
+          `/plans/current?organizationId=${selectedOrganizationId}`,
+        )) as { subscription?: CurrentSubscription | null };
+        setSubscription(data.subscription ?? null);
+      } catch {
+        setSubscription(null);
+      }
+    };
+
+    loadSubscription().catch(() => undefined);
+  }, [selectedOrganizationId]);
+
+  useEffect(() => {
+    setProjectSettings((previous) => ({
+      ...previous,
+      ram: Math.min(Math.max(previous.ram, 128), settingsResourceLimits.ram),
+      cpu: Math.min(Math.max(previous.cpu, 100), settingsResourceLimits.cpu),
+      bandwidth: Math.min(Math.max(previous.bandwidth, 1), settingsResourceLimits.bandwidth),
+    }));
+  }, [settingsResourceLimits]);
 
   const saveProjectWorkspace = async () => {
     if (!projectId) return;
@@ -366,9 +423,9 @@ export default function ProjectDetailPage() {
         }
       }
       await apiClient.patch(`/projects/${projectId}/resources`, {
-        resourceRamMb: Number(projectSettings.ram),
-        resourceCpuMillicore: Number(projectSettings.cpu),
-        resourceBandwidthGb: Number(projectSettings.bandwidth),
+        resourceRamMb: Math.min(Math.max(Number(projectSettings.ram), 128), settingsResourceLimits.ram),
+        resourceCpuMillicore: Math.min(Math.max(Number(projectSettings.cpu), 100), settingsResourceLimits.cpu),
+        resourceBandwidthGb: Math.min(Math.max(Number(projectSettings.bandwidth), 1), settingsResourceLimits.bandwidth),
       });
       await refresh();
       setMessage(
@@ -383,36 +440,83 @@ export default function ProjectDetailPage() {
     }
   };
 
+  const requestProjectDeleteOtp = async () => {
+    if (!projectId) return;
+    try {
+      setDeleteOtpRequesting(true);
+      setDeleteProjectMessage('');
+      const result = (await apiClient.post(`/projects/${projectId}/delete/request-otp`, {})) as {
+        expiresInMinutes?: number;
+        devCode?: string;
+      };
+      setDeleteOtpRequested(true);
+      setDeleteProjectMessage(
+        result.devCode
+          ? `OTP sent (dev: ${result.devCode}).`
+          : `OTP sent to your email. It expires in ${result.expiresInMinutes ?? 10} minutes.`,
+      );
+    } catch (error) {
+      setDeleteProjectMessage((error as Error).message);
+    } finally {
+      setDeleteOtpRequesting(false);
+    }
+  };
+
+  const confirmProjectDelete = async () => {
+    if (!projectId) return;
+    if (!OTP_PATTERN.test(deleteOtpCode.trim())) {
+      setDeleteProjectMessage('Enter a valid 6 digit OTP.');
+      return;
+    }
+
+    try {
+      setDeletingProject(true);
+      setDeleteProjectMessage('');
+      await apiClient.post(`/projects/${projectId}/delete/confirm`, {
+        code: deleteOtpCode.trim(),
+      });
+      await refresh();
+      router.push('/projects');
+    } catch (error) {
+      setDeleteProjectMessage((error as Error).message);
+    } finally {
+      setDeletingProject(false);
+    }
+  };
+
   /* ---- Env vars state ---- */
   const [envMessage, setEnvMessage] = useState('');
   const [envLoading, setEnvLoading] = useState(false);
   const [envSaving, setEnvSaving] = useState(false);
+  const [envBulkSaving, setEnvBulkSaving] = useState(false);
   const [envDeletingKey, setEnvDeletingKey] = useState('');
   const [projectSecrets, setProjectSecrets] = useState<ProjectSecretSummary[]>([]);
   const [envDraft, setEnvDraft] = useState({ key: '', value: '' });
+  const [envBulkText, setEnvBulkText] = useState('');
+
+  const loadProjectSecrets = useCallback(async () => {
+    if (!projectId) {
+      setProjectSecrets([]);
+      return;
+    }
+    try {
+      setEnvLoading(true);
+      const data = (await apiClient.get(`/projects/${projectId}/secrets`)) as {
+        secrets?: ProjectSecretSummary[];
+      };
+      setProjectSecrets(data.secrets ?? []);
+      setEnvMessage('');
+    } catch (error) {
+      setProjectSecrets([]);
+      setEnvMessage((error as Error).message);
+    } finally {
+      setEnvLoading(false);
+    }
+  }, [projectId]);
 
   useEffect(() => {
-    const loadSecrets = async () => {
-      if (!projectId) {
-        setProjectSecrets([]);
-        return;
-      }
-      try {
-        setEnvLoading(true);
-        const data = (await apiClient.get(`/projects/${projectId}/secrets`)) as {
-          secrets?: ProjectSecretSummary[];
-        };
-        setProjectSecrets(data.secrets ?? []);
-        setEnvMessage('');
-      } catch (error) {
-        setProjectSecrets([]);
-        setEnvMessage((error as Error).message);
-      } finally {
-        setEnvLoading(false);
-      }
-    };
-    loadSecrets().catch(() => undefined);
-  }, [projectId]);
+    loadProjectSecrets().catch(() => undefined);
+  }, [loadProjectSecrets]);
 
   const saveProjectEnvVar = async () => {
     if (!projectId) return;
@@ -429,16 +533,36 @@ export default function ProjectDetailPage() {
     try {
       setEnvSaving(true);
       await apiClient.put(`/projects/${projectId}/secrets/${encodeURIComponent(key)}`, { value });
-      const data = (await apiClient.get(`/projects/${projectId}/secrets`)) as {
-        secrets?: ProjectSecretSummary[];
-      };
-      setProjectSecrets(data.secrets ?? []);
+      await loadProjectSecrets();
       setEnvDraft({ key: '', value: '' });
       setEnvMessage(`${key} saved.`);
     } catch (error) {
       setEnvMessage((error as Error).message);
     } finally {
       setEnvSaving(false);
+    }
+  };
+
+  const importProjectEnvVars = async () => {
+    if (!projectId) return;
+    const envText = envBulkText.trim();
+    if (!envText) {
+      setEnvMessage('Paste .env content first.');
+      return;
+    }
+
+    try {
+      setEnvBulkSaving(true);
+      const result = (await apiClient.post(`/projects/${projectId}/secrets/bulk`, {
+        envText,
+      })) as { imported?: number };
+      await loadProjectSecrets();
+      setEnvBulkText('');
+      setEnvMessage(`${result.imported ?? 0} environment variables imported.`);
+    } catch (error) {
+      setEnvMessage((error as Error).message);
+    } finally {
+      setEnvBulkSaving(false);
     }
   };
 
@@ -1031,11 +1155,14 @@ export default function ProjectDetailPage() {
               <div>
                 <h3 className="text-base font-semibold text-slate-900">Resources</h3>
                 <p className="mt-1 text-sm text-slate-500">RAM, CPU, and bandwidth allocation for this project.</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Pool limits: {settingsResourceLimits.ram} MB RAM, {settingsResourceLimits.cpu} mCPU, {settingsResourceLimits.bandwidth} GB bandwidth.
+                </p>
               </div>
               <ResourceSlider
                 label="RAM"
                 min={128}
-                max={8192}
+                max={settingsResourceLimits.ram}
                 step={128}
                 value={projectSettings.ram}
                 unit="MB"
@@ -1044,7 +1171,7 @@ export default function ProjectDetailPage() {
               <ResourceSlider
                 label="CPU"
                 min={100}
-                max={8000}
+                max={settingsResourceLimits.cpu}
                 step={100}
                 value={projectSettings.cpu}
                 unit="mCPU"
@@ -1053,7 +1180,7 @@ export default function ProjectDetailPage() {
               <ResourceSlider
                 label="Bandwidth"
                 min={1}
-                max={2000}
+                max={settingsResourceLimits.bandwidth}
                 value={projectSettings.bandwidth}
                 unit="GB"
                 onChange={(bandwidth) => setProjectSettings((p) => ({ ...p, bandwidth }))}
@@ -1069,6 +1196,54 @@ export default function ProjectDetailPage() {
               >
                 {saving ? 'Saving…' : 'Save settings'}
               </button>
+            </div>
+
+            <div className="space-y-3 rounded-xl border border-red-200 bg-red-50/60 p-4">
+              <div>
+                <h3 className="text-base font-semibold text-red-700">Danger zone</h3>
+                <p className="mt-1 text-sm text-red-700/80">
+                  Delete this project permanently. We will require a one-time OTP from your email.
+                </p>
+              </div>
+
+              <button
+                className="btn-danger"
+                type="button"
+                onClick={requestProjectDeleteOtp}
+                disabled={deleteOtpRequesting || deletingProject}
+              >
+                {deleteOtpRequesting ? 'Sending OTP…' : 'Send delete OTP'}
+              </button>
+
+              {deleteOtpRequested ? (
+                <div className="grid gap-3 md:grid-cols-[200px_auto]">
+                  <label>
+                    <span className="field-label">OTP</span>
+                    <input
+                      value={deleteOtpCode}
+                      onChange={(event) => setDeleteOtpCode(event.target.value)}
+                      className="field-input"
+                      placeholder="6 digit code"
+                      inputMode="numeric"
+                      maxLength={6}
+                    />
+                  </label>
+                  <div className="flex items-end">
+                    <button
+                      className="btn-danger"
+                      type="button"
+                      onClick={confirmProjectDelete}
+                      disabled={deletingProject}
+                    >
+                      {deletingProject ? 'Deleting…' : 'Delete project'}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {deleteProjectMessage ? (
+                <p className="text-sm text-red-700">{deleteProjectMessage}</p>
+              ) : null}
             </div>
           </div>
         )}
@@ -1300,6 +1475,26 @@ export default function ProjectDetailPage() {
                   {envSaving ? 'Saving…' : 'Add'}
                 </button>
               </div>
+            </div>
+
+            <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+              <label className="block">
+                <span className="field-label">Paste full .env</span>
+                <textarea
+                  value={envBulkText}
+                  onChange={(event) => setEnvBulkText(event.target.value)}
+                  className="field-input min-h-36 font-mono text-xs"
+                  placeholder={'DATABASE_URL=postgres://...\nJWT_SECRET=...\n# Comments are supported'}
+                />
+              </label>
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={importProjectEnvVars}
+                disabled={envBulkSaving}
+              >
+                {envBulkSaving ? 'Importing…' : 'Import .env'}
+              </button>
             </div>
 
             {envLoading ? (

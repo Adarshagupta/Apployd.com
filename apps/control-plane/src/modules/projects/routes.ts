@@ -9,6 +9,7 @@ import { prisma } from '../../lib/prisma.js';
 import { isSerializableRetryableError, withSerializableRetry } from '../../lib/transaction-retry.js';
 import { ProjectUsageService } from '../../services/project-usage-service.js';
 import { ResourcePolicyService } from '../../services/resource-policy-service.js';
+import { ProjectDeleteOtpError, ProjectDeleteOtpService } from '../../services/project-delete-otp-service.js';
 
 const createProjectSchema = z.object({
   organizationId: z.string().cuid(),
@@ -42,11 +43,20 @@ const updateResourceSchema = z.object({
   resourceBandwidthGb: z.number().int().min(1).max(50000),
 });
 
+const projectIdParamsSchema = z.object({
+  projectId: z.string().cuid(),
+});
+
+const confirmProjectDeleteSchema = z.object({
+  code: z.string().regex(/^\d{6}$/, 'OTP must be a 6 digit code'),
+});
+
 export const projectRoutes: FastifyPluginAsync = async (app) => {
   const access = new AccessService();
   const policy = new ResourcePolicyService();
   const audit = new AuditLogService();
   const usage = new ProjectUsageService();
+  const projectDeleteOtp = new ProjectDeleteOtpService();
 
   app.get('/projects', { preHandler: [app.authenticate] }, async (request, reply) => {
     const user = request.user as { userId: string; email: string };
@@ -253,5 +263,131 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
     });
 
     return { project: updated };
+  });
+
+  app.post('/projects/:projectId/delete/request-otp', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
+    const params = projectIdParamsSchema.parse(request.params);
+
+    const project = await prisma.project.findUnique({
+      where: { id: params.projectId },
+      select: {
+        id: true,
+        name: true,
+        organizationId: true,
+      },
+    });
+
+    if (!project) {
+      return reply.notFound('Project not found');
+    }
+
+    try {
+      await access.requireOrganizationRole(user.userId, project.organizationId, 'admin');
+    } catch (error) {
+      return reply.forbidden((error as Error).message);
+    }
+
+    const actor = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: {
+        email: true,
+        name: true,
+      },
+    });
+    if (!actor) {
+      return reply.unauthorized('User no longer exists.');
+    }
+
+    try {
+      const dispatched = await projectDeleteOtp.sendCode({
+        projectId: project.id,
+        projectName: project.name,
+        userId: user.userId,
+        email: actor.email,
+        name: actor.name,
+      });
+
+      await audit.record({
+        organizationId: project.organizationId,
+        actorUserId: user.userId,
+        action: 'project.delete_otp.requested',
+        entityType: 'project',
+        entityId: project.id,
+      });
+
+      return {
+        success: true,
+        expiresInMinutes: dispatched.expiresInMinutes,
+        ...(dispatched.devCode ? { devCode: dispatched.devCode } : {}),
+      };
+    } catch (error) {
+      if (error instanceof ProjectDeleteOtpError) {
+        return reply.code(error.statusCode).send({ message: error.message });
+      }
+      throw error;
+    }
+  });
+
+  app.post('/projects/:projectId/delete/confirm', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
+    const params = projectIdParamsSchema.parse(request.params);
+    const body = confirmProjectDeleteSchema.parse(request.body);
+
+    const project = await prisma.project.findUnique({
+      where: { id: params.projectId },
+      select: {
+        id: true,
+        name: true,
+        organizationId: true,
+      },
+    });
+
+    if (!project) {
+      return reply.notFound('Project not found');
+    }
+
+    try {
+      await access.requireOrganizationRole(user.userId, project.organizationId, 'admin');
+    } catch (error) {
+      return reply.forbidden((error as Error).message);
+    }
+
+    try {
+      const valid = await projectDeleteOtp.verifyCode({
+        projectId: project.id,
+        userId: user.userId,
+        code: body.code,
+      });
+
+      if (!valid) {
+        return reply.unauthorized('Invalid or expired OTP.');
+      }
+    } catch (error) {
+      if (error instanceof ProjectDeleteOtpError) {
+        return reply.code(error.statusCode).send({ message: error.message });
+      }
+      throw error;
+    }
+
+    await prisma.project.delete({
+      where: { id: project.id },
+    });
+
+    await audit.record({
+      organizationId: project.organizationId,
+      actorUserId: user.userId,
+      action: 'project.deleted',
+      entityType: 'project',
+      entityId: project.id,
+      metadata: {
+        name: project.name,
+      },
+    });
+
+    return {
+      success: true,
+      deletedProjectId: project.id,
+    };
   });
 };

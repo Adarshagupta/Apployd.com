@@ -121,6 +121,7 @@ export default function CreateProjectPage() {
   const [message, setMessage] = useState('');
   const [notice, setNotice] = useState('');
   const [envRows, setEnvRows] = useState<EnvRow[]>([{ key: '', value: '' }]);
+  const [envBulkText, setEnvBulkText] = useState('');
   const [githubStatus, setGithubStatus] = useState<GitHubConnectionStatus | null>(null);
   const [githubRepos, setGithubRepos] = useState<GitHubRepository[]>([]);
   const [githubSearch, setGithubSearch] = useState('');
@@ -319,11 +320,6 @@ export default function CreateProjectPage() {
       envPayload.push({ key, value });
     }
 
-    if (envPayload.length > 50) {
-      setMessage('At most 50 environment variables are allowed.');
-      return;
-    }
-
     const cleanedRepoUrl = form.repoUrl.trim();
     const cleanedRootDirectory =
       form.rootDirectory
@@ -372,23 +368,20 @@ export default function CreateProjectPage() {
 
       const createdProjectId = (response.project as { id?: string } | undefined)?.id;
       if (createdProjectId) {
-        if (envPayload.length) {
-          const results = await Promise.allSettled(
-            envPayload.map((entry) =>
-              apiClient.put(`/projects/${createdProjectId}/secrets/${encodeURIComponent(entry.key)}`, {
-                value: entry.value,
-              }),
-            ),
-          );
-          const failed = results.filter((result) => result.status === 'rejected').length;
-          if (failed) {
+        if (envPayload.length || envBulkText.trim().length > 0) {
+          try {
+            await apiClient.post(`/projects/${createdProjectId}/secrets/bulk`, {
+              ...(envPayload.length ? { secrets: envPayload } : {}),
+              ...(envBulkText.trim().length ? { envText: envBulkText } : {}),
+            });
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            router.push(`/projects?created=${createdProjectId}&secretSetup=ok` as any);
+            return;
+          } catch {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             router.push(`/projects?created=${createdProjectId}&secretSetup=partial` as any);
             return;
           }
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          router.push(`/projects?created=${createdProjectId}&secretSetup=ok` as any);
-          return;
         }
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -641,6 +634,15 @@ export default function CreateProjectPage() {
               >
                 Add variable
               </button>
+              <label className="block">
+                <span className="field-label">Paste full .env</span>
+                <textarea
+                  value={envBulkText}
+                  onChange={(event) => setEnvBulkText(event.target.value)}
+                  className="field-input min-h-36 font-mono text-xs"
+                  placeholder={'DATABASE_URL=postgres://...\nJWT_SECRET=...\n# Comments are supported'}
+                />
+              </label>
               <p className="text-xs text-slate-600">
                 Saved as encrypted project secrets and injected into deployments.
               </p>

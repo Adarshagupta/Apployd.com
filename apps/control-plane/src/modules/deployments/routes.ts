@@ -18,8 +18,8 @@ const envSchema = z
       .max(64),
     z.string().max(4096),
   )
-  .refine((record) => Object.keys(record).length <= 50, {
-    message: 'At most 50 environment variables are allowed per deployment request.',
+  .refine((record) => Object.keys(record).length <= 250, {
+    message: 'At most 250 environment variables are allowed per deployment request.',
   });
 
 const deploymentDomainSchema = z
