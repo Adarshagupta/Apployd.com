@@ -343,6 +343,30 @@ a {
     transform: translateY(-1px);
   }
 
+  .dashboard-topbar-upgrade-gold {
+    border-color: color-mix(in srgb, #d9a628 72%, var(--line));
+    color: #f8cf63;
+    background:
+      linear-gradient(
+        135deg,
+        color-mix(in srgb, #3a2c0a 84%, var(--bg-0)),
+        color-mix(in srgb, #1f1502 88%, var(--bg-0))
+      );
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, #f0c14a 28%, transparent),
+      0 6px 16px rgba(0, 0, 0, 0.28);
+  }
+
+  .dashboard-topbar-upgrade-gold:hover {
+    border-color: #f0c14a;
+    background:
+      linear-gradient(
+        135deg,
+        color-mix(in srgb, #4d3a11 82%, var(--bg-0)),
+        color-mix(in srgb, #241903 88%, var(--bg-0))
+      );
+  }
+
   .dashboard-topbar-profile {
     @apply inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium;
     border: 1px solid transparent;

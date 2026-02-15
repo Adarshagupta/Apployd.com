@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
@@ -168,6 +169,8 @@ export default function BillingPage() {
     displayName: string;
   } | null>(null);
   const [message, setMessage] = useState('');
+  const [redirectingToCheckout, setRedirectingToCheckout] = useState(false);
+  const [redirectingPlanCode, setRedirectingPlanCode] = useState<string | null>(null);
 
   const availablePlansByCode = useMemo(() => {
     const map = new Map<string, Plan>();
@@ -179,6 +182,7 @@ export default function BillingPage() {
 
   const currentPlanCode = currentPlan?.code.toLowerCase() ?? null;
   const checkoutStatus = searchParams?.get('status');
+  const checkoutSuccess = checkoutStatus === 'success';
 
   const load = async () => {
     setLoading(true);
@@ -211,9 +215,7 @@ export default function BillingPage() {
         setCurrentPlan(null);
         setInvoices([]);
       }
-      if (checkoutStatus === 'success') {
-        setMessage('Payment confirmed. Subscription limits and features were refreshed.');
-      } else if (checkoutStatus === 'cancelled') {
+      if (checkoutStatus === 'cancelled') {
         setMessage('Checkout was cancelled.');
       } else {
         setMessage('');
@@ -237,6 +239,9 @@ export default function BillingPage() {
     }
 
     try {
+      setMessage('');
+      setRedirectingPlanCode(planCode);
+      setRedirectingToCheckout(true);
       const response = await apiClient.post('/billing/checkout-session', {
         organizationId: selectedOrganizationId,
         planCode,
@@ -250,13 +255,50 @@ export default function BillingPage() {
       }
 
       setMessage('Checkout URL missing');
+      setRedirectingToCheckout(false);
+      setRedirectingPlanCode(null);
     } catch (error) {
       setMessage((error as Error).message);
+      setRedirectingToCheckout(false);
+      setRedirectingPlanCode(null);
     }
   };
 
   return (
     <div className="space-y-4">
+      {checkoutSuccess ? (
+        <SectionCard title="Purchase Complete" subtitle="Your billing upgrade is active and synced.">
+          <div className="relative overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-amber-50 p-5">
+            <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-emerald-200/40 blur-2xl" />
+            <div className="pointer-events-none absolute -bottom-10 -left-10 h-36 w-36 rounded-full bg-amber-200/40 blur-2xl" />
+            <div className="relative flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Billing updated</p>
+                <p className="mt-1 text-xl font-semibold text-slate-900">
+                  {currentPlan ? `${currentPlan.displayName} plan is now active.` : 'Your subscription is now active.'}
+                </p>
+                <p className="mt-2 text-sm text-slate-700">
+                  Usage pools, feature limits, and project entitlements have been refreshed.
+                </p>
+                {currentPlan ? (
+                  <p className="mt-2 text-xs text-slate-600">
+                    Current period ends {new Date(currentPlan.periodEnd).toLocaleDateString()}
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex gap-2">
+                <Link href="/usage" className="btn-secondary">
+                  View usage
+                </Link>
+                <Link href="/projects" className="btn-primary">
+                  Open projects
+                </Link>
+              </div>
+            </div>
+          </div>
+        </SectionCard>
+      ) : null}
+
       <SectionCard title="Subscription" subtitle="Manage plan upgrades, renewals, and invoice lifecycle.">
         <div className="grid gap-3">
           {loading ? (
@@ -337,8 +379,14 @@ export default function BillingPage() {
                     Contact Sales
                   </a>
                 ) : canCheckout ? (
-                  <button className="btn-primary mt-4 w-full" onClick={() => startUpgrade(apiPlan.code)}>
-                    Choose {catalogPlan.name}
+                  <button
+                    className="btn-primary mt-4 w-full disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => startUpgrade(apiPlan.code)}
+                    disabled={redirectingToCheckout}
+                  >
+                    {redirectingToCheckout && redirectingPlanCode === apiPlan.code
+                      ? 'Redirecting...'
+                      : `Choose ${catalogPlan.name}`}
                   </button>
                 ) : catalogPlan.code === 'free' ? (
                   <p className="mt-3 text-xs text-slate-500">Free plan available by default for new organizations.</p>
@@ -439,6 +487,20 @@ export default function BillingPage() {
       </SectionCard>
 
       {message ? <p className="text-sm text-slate-700">{message}</p> : null}
+
+      {redirectingToCheckout ? (
+        <div className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/45 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-xl">
+            <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
+            <p className="text-sm font-semibold text-slate-900">Redirecting to Stripe checkout</p>
+            <p className="mt-1 text-xs text-slate-600">
+              {redirectingPlanCode
+                ? `Preparing ${redirectingPlanCode.toUpperCase()} plan checkout...`
+                : 'Preparing secure checkout...'}
+            </p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

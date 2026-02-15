@@ -15,7 +15,7 @@ import {
   IconUsage,
 } from '../../components/dashboard-icons';
 import { ThemeLogo } from '../../components/theme-logo';
-import { WorkspaceProvider } from '../../components/workspace-provider';
+import { WorkspaceProvider, useWorkspaceContext } from '../../components/workspace-provider';
 import { apiClient, UnauthorizedError } from '../../lib/api';
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
@@ -286,10 +286,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 <h1 className="dashboard-topbar-title">{topbarTitle}</h1>
               </div>
               <div className="dashboard-topbar-slot dashboard-topbar-right">
-                <Link href="/billing" className="dashboard-topbar-upgrade" aria-label="Upgrade subscription">
-                  <IconBilling size={16} />
-                  <span className="dashboard-topbar-upgrade-label">Upgrade</span>
-                </Link>
+                <TopbarSubscriptionChip />
                 <Link href="/profile" className="dashboard-topbar-profile" aria-label="Open profile">
                   <IconProfile size={17} />
                   <span className="dashboard-topbar-profile-label">Profile</span>
@@ -305,5 +302,61 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       </div>
     </main>
     </WorkspaceProvider>
+  );
+}
+
+interface CurrentSubscriptionResponse {
+  subscription?: {
+    plan?: {
+      displayName?: string | null;
+    } | null;
+  } | null;
+}
+
+function TopbarSubscriptionChip() {
+  const { selectedOrganizationId } = useWorkspaceContext();
+  const [planName, setPlanName] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!selectedOrganizationId) {
+      setPlanName(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    apiClient
+      .get(`/plans/current?organizationId=${selectedOrganizationId}`)
+      .then((data) => {
+        if (cancelled) {
+          return;
+        }
+        const current = (data as CurrentSubscriptionResponse).subscription?.plan?.displayName;
+        setPlanName(typeof current === 'string' && current.trim().length > 0 ? current : null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPlanName(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedOrganizationId]);
+
+  const hasPlan = Boolean(planName);
+
+  return (
+    <Link
+      href="/billing"
+      className={`dashboard-topbar-upgrade ${hasPlan ? 'dashboard-topbar-upgrade-gold' : ''}`}
+      aria-label={hasPlan ? `Current subscription ${planName}` : 'Upgrade subscription'}
+    >
+      <IconBilling size={16} />
+      <span className="dashboard-topbar-upgrade-label">{planName ?? 'Upgrade'}</span>
+    </Link>
   );
 }
