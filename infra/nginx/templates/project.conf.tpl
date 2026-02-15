@@ -6,6 +6,13 @@ upstream {{UPSTREAM_NAME}} {
 server {
   listen 80;
   server_name {{DOMAIN}} {{ALIASES}};
+  server_tokens off;
+
+  add_header X-Frame-Options "SAMEORIGIN" always;
+  add_header X-Content-Type-Options "nosniff" always;
+  add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+  add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+  add_header Cross-Origin-Opener-Policy "same-origin" always;
 
   location /healthz {
     access_log off;

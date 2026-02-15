@@ -23,8 +23,22 @@
 ## Network Security
 
 - Nginx rate limiting and WebSocket-aware proxy setup.
+- Baseline response hardening headers on routed domains:
+  - `X-Frame-Options`
+  - `X-Content-Type-Options`
+  - `Referrer-Policy`
+  - `Permissions-Policy`
+  - `Cross-Origin-Opener-Policy`
+  - `Strict-Transport-Security` (TLS vhosts)
 - Cloudflare proxy records to mask origin and add DDoS/WAF layer.
 - UFW baseline rules via `infra/scripts/provision-ubuntu.sh`.
+
+## Supply Chain Guardrails
+
+- Deployment requests reject repository URLs that target local/private hosts by default
+  (`localhost`, RFC1918 IP ranges, loopback/link-local/internal names).
+- Override for trusted private Git infrastructure with:
+  - `ALLOW_PRIVATE_GIT_HOSTS=true`
 
 ## Billing Risk Controls
 

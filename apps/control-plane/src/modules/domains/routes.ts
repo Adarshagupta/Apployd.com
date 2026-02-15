@@ -132,18 +132,42 @@ export const domainRoutes: FastifyPluginAsync = async (app) => {
     const user = request.user as { userId: string; email: string };
     const { projectId } = projectIdParam.parse(request.params);
 
+    let project;
     try {
-      await resolveProject(projectId, user.userId, 'viewer');
+      project = await resolveProject(projectId, user.userId, 'viewer');
     } catch (err) {
       return reply.forbidden((err as Error).message);
     }
 
-    const domains = await prisma.customDomain.findMany({
-      where: { projectId },
-      orderBy: { createdAt: 'desc' },
-    });
+    const [domains, activeDeployment] = await Promise.all([
+      prisma.customDomain.findMany({
+        where: { projectId },
+        orderBy: { createdAt: 'desc' },
+      }),
+      project.activeDeploymentId
+        ? prisma.deployment.findUnique({
+            where: { id: project.activeDeploymentId },
+            select: {
+              id: true,
+              domain: true,
+              environment: true,
+              status: true,
+            },
+          })
+        : Promise.resolve(null),
+    ]);
 
-    return { domains };
+    const autoDomain =
+      activeDeployment?.domain
+        ? {
+            deploymentId: activeDeployment.id,
+            domain: activeDeployment.domain,
+            environment: activeDeployment.environment,
+            status: activeDeployment.status,
+          }
+        : null;
+
+    return { domains, autoDomain };
   });
 
   /* ── ADD a custom domain ────────────────────────────────────── */

@@ -45,6 +45,13 @@ interface CustomDomainSummary {
   createdAt: string;
 }
 
+interface AutoDomainSummary {
+  deploymentId: string;
+  domain: string;
+  environment: 'production' | 'preview';
+  status: string;
+}
+
 interface ProjectUsageMetricPoint {
   day: string;
   total: string;
@@ -587,11 +594,27 @@ export default function ProjectDetailPage() {
   const [domainVerifying, setDomainVerifying] = useState('');
   const [domainDeleting, setDomainDeleting] = useState('');
   const [customDomains, setCustomDomains] = useState<CustomDomainSummary[]>([]);
+  const [autoDomain, setAutoDomain] = useState<AutoDomainSummary | null>(null);
   const [domainDraft, setDomainDraft] = useState('');
   const [domainInstructions, setDomainInstructions] = useState<{
     cname: { host: string; value: string };
     txt: { host: string; value: string };
   } | null>(null);
+  const autoDomainUrl = useMemo(() => {
+    if (!autoDomain?.domain) {
+      return null;
+    }
+
+    if (/^https?:\/\//i.test(autoDomain.domain)) {
+      return autoDomain.domain;
+    }
+
+    if (/^(localhost|\d+\.\d+\.\d+\.\d+)(:\d+)?$/i.test(autoDomain.domain)) {
+      return `http://${autoDomain.domain}`;
+    }
+
+    return `https://${autoDomain.domain}`;
+  }, [autoDomain]);
 
   const loadDomains = useCallback(async () => {
     if (!projectId) return;
@@ -599,10 +622,14 @@ export default function ProjectDetailPage() {
       setDomainsLoading(true);
       const data = (await apiClient.get(`/projects/${projectId}/domains`)) as {
         domains?: CustomDomainSummary[];
+        autoDomain?: AutoDomainSummary | null;
       };
       setCustomDomains(data.domains ?? []);
+      setAutoDomain(data.autoDomain ?? null);
     } catch (error) {
       setDomainMessage((error as Error).message);
+      setCustomDomains([]);
+      setAutoDomain(null);
     } finally {
       setDomainsLoading(false);
     }
@@ -1257,6 +1284,34 @@ export default function ProjectDetailPage() {
                 Connect your own domains to this project. Add a domain, configure DNS at your registrar, then verify.
               </p>
             </div>
+
+            <article className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Default Apployd Domain</p>
+                {autoDomain ? (
+                  <>
+                    <p className="mono mt-1 truncate text-sm font-medium text-slate-900">{autoDomain.domain}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Active {autoDomain.environment} deployment
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-1 text-sm text-slate-500">
+                    No active deployment domain yet. Trigger a deployment to generate one.
+                  </p>
+                )}
+              </div>
+              {autoDomainUrl ? (
+                <a
+                  href={autoDomainUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-white hover:bg-slate-700 transition"
+                >
+                  Visit default domain
+                </a>
+              ) : null}
+            </article>
 
             {/* Add domain form */}
             <div className="flex flex-wrap items-end gap-3">

@@ -317,7 +317,7 @@ function webServiceDockerfile(projectId: string): string {
     '    elif [ -f package.json ]; then \\',
     '      SCRIPTS=$(node -e "var s=JSON.parse(require(\'fs\').readFileSync(\'package.json\',\'utf8\')).scripts||{}; console.log(JSON.stringify(s))" 2>/dev/null || echo "{}"); \\',
     '      MAIN=$(node -e "console.log(JSON.parse(require(\'fs\').readFileSync(\'package.json\',\'utf8\')).main||\'\')" 2>/dev/null || echo ""); \\',
-    '      is_dev_cmd() { echo "$1" | grep -qiE "(ts-node-dev|ts-node([[:space:]]|$)|tsx([[:space:]]|$)|nodemon|next[[:space:]]+dev|nuxt[[:space:]]+dev|vite[[:space:]]+dev|remix[[:space:]]+dev|ng[[:space:]]+serve|webpack-dev-server|node[[:space:]]+--watch)"; }; \\',
+    '      is_dev_cmd() { echo "$1" | grep -qiE "(ts-node-dev|ts-node([[:space:]]|$)|tsx([[:space:]]|$)|nodemon|next[[:space:]]+dev|nuxt[[:space:]]+dev|vite[[:space:]]+dev|remix[[:space:]]+dev|nest[[:space:]]+start|ng[[:space:]]+serve|webpack-dev-server|node[[:space:]]+--watch)"; }; \\',
     '      get_script() { echo "$SCRIPTS" | node -e "var s=JSON.parse(require(\'fs\').readFileSync(\'/dev/stdin\',\'utf8\')); console.log(s[\'$1\']||\'\')" 2>/dev/null; }; \\',
     '      START_PROD=$(get_script "start:prod"); \\',
     '      START_SERVE=$(get_script "serve"); \\',
@@ -516,6 +516,7 @@ const DEV_CMD_PATTERNS = [
   /\bnodemon\b/i,
   /\bts-node\b/i,
   /\btsx\s+(watch|src)\b/i,
+  /\bnest\s+start\b/i,
   /\bnext\s+dev\b/i,
   /\bvite\s+dev\b/i,
   /\bnuxt\s+dev\b/i,
@@ -523,6 +524,15 @@ const DEV_CMD_PATTERNS = [
 
 function isDevCommand(cmd: string): boolean {
   return DEV_CMD_PATTERNS.some((p) => p.test(cmd));
+}
+
+const AMBIGUOUS_START_CMD_PATTERNS = [
+  /^\s*npm\s+start(?:\s+.*)?$/i,
+  /^\s*npm\s+run\s+start(?:\s+.*)?$/i,
+];
+
+function isAmbiguousStartCommand(cmd: string): boolean {
+  return AMBIGUOUS_START_CMD_PATTERNS.some((p) => p.test(cmd));
 }
 
 interface RunContainerInput {
@@ -606,6 +616,10 @@ export class DockerAdapter {
       if (!isStatic && input.startCommand) {
         if (isDevCommand(input.startCommand)) {
           safeLog?.(`Ignoring dev-mode start command "${input.startCommand}" — auto-detecting production command instead`);
+        } else if (isAmbiguousStartCommand(input.startCommand)) {
+          safeLog?.(
+            `Ignoring ambiguous start command "${input.startCommand}" — auto-detecting startup command (prefers start:prod and compiled entrypoints)`,
+          );
         } else {
           args.push(`--build-arg START_CMD=${shellEscape(input.startCommand)}`);
         }

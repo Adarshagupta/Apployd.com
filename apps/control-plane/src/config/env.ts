@@ -67,6 +67,7 @@ const envSchema = z.object({
   PREVIEW_BASE_DOMAIN: z.string().min(3).optional(),
   PREVIEW_DOMAIN_STYLE: z.enum(['project', 'project_ref']).default('project_ref'),
   DEFAULT_REGION: z.string().default('fsn1'),
+  ALLOW_PRIVATE_GIT_HOSTS: booleanFromEnv.optional(),
   AUTO_PROVISION_DEV_SERVER: booleanFromEnv.optional(),
   DEV_SERVER_NAME: z.string().min(2).default('local-dev-1'),
   DEV_SERVER_IPV4: z.string().ip({ version: 'v4' }).default('127.0.0.1'),
@@ -81,6 +82,7 @@ export const env = {
   ...parsedEnv,
   SMTP_SECURE: parsedEnv.SMTP_SECURE ?? parsedEnv.SMTP_PORT === 465,
   PREVIEW_BASE_DOMAIN: parsedEnv.PREVIEW_BASE_DOMAIN ?? parsedEnv.BASE_DOMAIN,
+  ALLOW_PRIVATE_GIT_HOSTS: parsedEnv.ALLOW_PRIVATE_GIT_HOSTS ?? false,
   AUTO_PROVISION_DEV_SERVER:
     parsedEnv.AUTO_PROVISION_DEV_SERVER ?? parsedEnv.NODE_ENV !== 'production',
 };
