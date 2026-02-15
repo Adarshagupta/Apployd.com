@@ -665,10 +665,9 @@ export class DockerAdapter {
       '--tmpfs /var/cache/nginx:rw,noexec,nosuid,size=128m',
       '--tmpfs /var/log/nginx:rw,noexec,nosuid,size=64m',
       '--tmpfs /var/lib/nginx:rw,noexec,nosuid,size=64m',
-      // Next.js/framework cache dirs
-      '--tmpfs /app/.next:rw,noexec,nosuid,size=512m',
-      '--tmpfs /app/.nuxt:rw,noexec,nosuid,size=256m',
-      '--tmpfs /app/.output:rw,noexec,nosuid,size=256m',
+      // Keep framework build outputs from the image readable at runtime.
+      // Mounting tmpfs on /app/.next or /app/.output masks compiled artifacts and
+      // can cause restart loops with upstream connection resets.
       
       // ── Security: Capability drops & isolation ──
       '--security-opt no-new-privileges:true',
