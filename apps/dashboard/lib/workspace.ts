@@ -24,6 +24,8 @@ export interface WorkspaceProject {
   buildCommand: string | null;
   startCommand: string | null;
   targetPort: number;
+  wakeMessage?: string | null;
+  wakeRetrySeconds?: number;
   autoDeployEnabled: boolean;
   activeDeploymentId: string | null;
   resourceRamMb: number;

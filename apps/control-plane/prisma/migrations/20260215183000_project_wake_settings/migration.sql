@@ -1,0 +1,3 @@
+ALTER TABLE "projects"
+ADD COLUMN "wakeMessage" TEXT,
+ADD COLUMN "wakeRetrySeconds" INTEGER NOT NULL DEFAULT 5;

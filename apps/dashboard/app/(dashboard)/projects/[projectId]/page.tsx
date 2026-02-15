@@ -338,6 +338,8 @@ export default function ProjectDetailPage() {
     buildCommand: '',
     startCommand: '',
     targetPort: 3000,
+    wakeMessage: '',
+    wakeRetrySeconds: 5,
     autoDeployEnabled: true,
     serviceType: 'web_service' as 'web_service' | 'static_site' | 'python',
     outputDirectory: '',
@@ -364,6 +366,8 @@ export default function ProjectDetailPage() {
       buildCommand: project.buildCommand ?? '',
       startCommand: project.startCommand ?? '',
       targetPort: project.targetPort ?? 3000,
+      wakeMessage: project.wakeMessage ?? '',
+      wakeRetrySeconds: Math.max(1, Math.min(60, project.wakeRetrySeconds ?? 5)),
       autoDeployEnabled: project.autoDeployEnabled,
       serviceType: (project.serviceType as 'web_service' | 'static_site' | 'python') ?? 'web_service',
       outputDirectory: project.outputDirectory ?? '',
@@ -416,6 +420,8 @@ export default function ProjectDetailPage() {
           buildCommand: projectSettings.buildCommand || null,
           startCommand: projectSettings.startCommand || null,
           targetPort: Number(projectSettings.targetPort),
+          wakeMessage: projectSettings.wakeMessage.trim() || null,
+          wakeRetrySeconds: Math.max(1, Math.min(60, Number(projectSettings.wakeRetrySeconds) || 5)),
           autoDeployEnabled: projectSettings.autoDeployEnabled,
           serviceType: projectSettings.serviceType,
           outputDirectory: projectSettings.outputDirectory || null,
@@ -1247,6 +1253,22 @@ export default function ProjectDetailPage() {
                 />
               </label>
               <label>
+                <span className="field-label">Wake retry (seconds)</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={60}
+                  value={projectSettings.wakeRetrySeconds}
+                  onChange={(e) =>
+                    setProjectSettings((p) => ({
+                      ...p,
+                      wakeRetrySeconds: Math.max(1, Math.min(60, Number(e.target.value) || 5)),
+                    }))
+                  }
+                  className="field-input"
+                />
+              </label>
+              <label>
                 <span className="field-label">Build command</span>
                 <input
                   value={projectSettings.buildCommand}
@@ -1266,6 +1288,19 @@ export default function ProjectDetailPage() {
                   />
                 </label>
               )}
+              <label className="md:col-span-2">
+                <span className="field-label">Wake message (optional)</span>
+                <input
+                  value={projectSettings.wakeMessage}
+                  onChange={(e) => setProjectSettings((p) => ({ ...p, wakeMessage: e.target.value }))}
+                  className="field-input"
+                  maxLength={280}
+                  placeholder="This app was sleeping due to inactivity. We are waking it up now."
+                />
+                <span className="text-[10px] text-slate-400">
+                  Shown to visitors during cold start.
+                </span>
+              </label>
               {projectSettings.serviceType === 'static_site' && (
                 <label>
                   <span className="field-label">Output directory</span>

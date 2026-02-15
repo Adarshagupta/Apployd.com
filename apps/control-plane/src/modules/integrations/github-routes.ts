@@ -44,6 +44,8 @@ const updateGitSettingsSchema = z.object({
   previewDeploymentsEnabled: z.boolean().optional(),
   serviceType: z.enum(['web_service', 'static_site', 'python']).optional(),
   outputDirectory: z.string().trim().max(300).nullable().optional(),
+  wakeMessage: z.string().trim().max(280).nullable().optional(),
+  wakeRetrySeconds: z.number().int().min(1).max(60).optional(),
 });
 
 const pushWebhookSchema = z.object({
@@ -341,6 +343,8 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
     }
     if (body.serviceType !== undefined) updateData.serviceType = body.serviceType;
     if (body.outputDirectory !== undefined) updateData.outputDirectory = body.outputDirectory || null;
+    if (body.wakeMessage !== undefined) updateData.wakeMessage = body.wakeMessage || null;
+    if (body.wakeRetrySeconds !== undefined) updateData.wakeRetrySeconds = body.wakeRetrySeconds;
 
     const updated = await prisma.project.update({
       where: { id: params.projectId },

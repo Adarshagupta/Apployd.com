@@ -28,6 +28,21 @@ const sanitizeOriginalUri = (value: string): string => {
   return trimmed;
 };
 
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const clampRetrySeconds = (value: number, fallback: number): number => {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.max(1, Math.min(60, Math.trunc(value)));
+};
+
 const wantsHtml = (acceptHeader: string): boolean => {
   const accept = acceptHeader.toLowerCase();
   return accept.includes('text/html') || accept.includes('*/*');
@@ -42,9 +57,11 @@ const isNavigationRequest = (headers: Record<string, string | string[] | undefin
   return mode === 'navigate' || dest === 'document';
 };
 
-const renderWakePage = (targetPath: string, retryAfterSeconds: number): string => {
+const renderWakePage = (targetPath: string, retryAfterSeconds: number, message: string): string => {
   const safeTargetPath = JSON.stringify(targetPath);
   const safeRetryMs = Math.max(1000, retryAfterSeconds * 1000);
+  const safeLinkPath = escapeHtml(targetPath);
+  const safeMessage = escapeHtml(message);
 
   return `<!doctype html>
 <html lang="en">
@@ -75,9 +92,9 @@ const renderWakePage = (targetPath: string, retryAfterSeconds: number): string =
         <span class="dot" aria-hidden="true"></span>
         <h1>Waking up this service</h1>
       </div>
-      <p>This app was sleeping due to inactivity. We started it now. This usually takes 5-20 seconds.</p>
+      <p>${safeMessage}</p>
       <p class="meta">This page auto-refreshes until the app is ready.</p>
-      <a class="btn" href="${targetPath}">Try again now</a>
+      <a class="btn" href="${safeLinkPath}">Try again now</a>
     </main>
   </div>
   <script>
@@ -106,6 +123,12 @@ export const edgeRoutes: FastifyPluginAsync = async (app) => {
       select: {
         id: true,
         projectId: true,
+        project: {
+          select: {
+            wakeMessage: true,
+            wakeRetrySeconds: true,
+          },
+        },
         container: {
           select: {
             id: true,
@@ -182,7 +205,13 @@ export const edgeRoutes: FastifyPluginAsync = async (app) => {
       })
       .catch(() => undefined);
 
-    const retryAfterSeconds = env.EDGE_WAKE_RETRY_SECONDS;
+    const retryAfterSeconds = clampRetrySeconds(
+      deployment.project?.wakeRetrySeconds ?? env.EDGE_WAKE_RETRY_SECONDS,
+      env.EDGE_WAKE_RETRY_SECONDS,
+    );
+    const wakeMessage =
+      deployment.project?.wakeMessage?.trim() ||
+      'This app was sleeping due to inactivity. We started it now. This usually takes 5-20 seconds.';
     const originalMethod = getHeaderValue(request.headers['x-apployd-original-method']) || request.method;
     const targetPath = sanitizeOriginalUri(getHeaderValue(request.headers['x-apployd-original-uri']) || '/');
 
@@ -211,6 +240,6 @@ export const edgeRoutes: FastifyPluginAsync = async (app) => {
     return reply
       .code(503)
       .type('text/html; charset=utf-8')
-      .send(renderWakePage(targetPath, retryAfterSeconds));
+      .send(renderWakePage(targetPath, retryAfterSeconds, wakeMessage));
   });
 };

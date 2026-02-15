@@ -21,6 +21,7 @@ done
 
 npm install
 npm --workspace apps/control-plane run prisma:generate
+npm --workspace apps/control-plane exec prisma migrate deploy
 npm --workspace packages/shared run build
 npm --workspace apps/control-plane run build
 npm --workspace services/deployment-engine run build
