@@ -241,13 +241,20 @@ export class DeploymentPipeline {
         );
         const upstreamHttpReachable = isReachableHttpStatus(upstream.httpStatus);
         const upstreamHttpsReachable = isReachableHttpStatus(upstream.httpsStatus);
-        if (!upstreamHttpReachable && !upstreamHttpsReachable) {
+        if (!upstreamHttpReachable && !upstreamHttpsReachable && !upstream.tcpReachable) {
           throw new Error(
             `Host upstream is not speaking HTTP(S) on 127.0.0.1:${run.hostPort} (http=${upstream.httpStatus}, https=${upstream.httpsStatus}, tcp=${upstream.tcpReachable ? 'ok' : 'down'}).`,
           );
         }
+        if (!upstreamHttpReachable && !upstreamHttpsReachable && upstream.tcpReachable) {
+          onLog(
+            `Warning: upstream port is open but HTTP(S) probe failed (http=${upstream.httpStatus}, https=${upstream.httpsStatus}); continuing with http proxy and validating edge route next.`,
+          );
+        }
         const upstreamScheme = upstreamHttpsReachable && !upstreamHttpReachable ? 'https' : 'http';
-        onLog(`Host upstream reachable (http=${upstream.httpStatus}, https=${upstream.httpsStatus}, tcp=${upstream.tcpReachable ? 'ok' : 'down'}, scheme=${upstreamScheme})`);
+        onLog(
+          `Host upstream check (http=${upstream.httpStatus}, https=${upstream.httpsStatus}, tcp=${upstream.tcpReachable ? 'ok' : 'down'}, scheme=${upstreamScheme})`,
+        );
 
         onLog('Setting up reverse proxy...');
         await withRetry(
