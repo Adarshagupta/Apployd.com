@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 
-import { Prisma } from '@prisma/client';
+import { PlanCode, Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { env } from '../../config/env.js';
@@ -49,6 +49,29 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
       return reply.badRequest('No current subscription');
     }
 
+    let stripeCustomerId = subscription.stripeCustomerId;
+    if (!isStripeCustomerId(stripeCustomerId)) {
+      const organization = await prisma.organization.findUnique({
+        where: { id: body.organizationId },
+        select: { name: true },
+      });
+      const customer = await stripe.customers.create({
+        email: user.email,
+        ...(organization?.name ? { name: organization.name } : {}),
+        metadata: {
+          organizationId: body.organizationId,
+        },
+      });
+      stripeCustomerId = customer.id;
+
+      await prisma.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          stripeCustomerId,
+        },
+      });
+    }
+
     const lineItem =
       plan.stripePriceId
         ? {
@@ -67,13 +90,15 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
-      customer: subscription.stripeCustomerId,
+      customer: stripeCustomerId,
       line_items: [lineItem],
       success_url: body.successUrl,
       cancel_url: body.cancelUrl,
+      client_reference_id: body.organizationId,
       metadata: {
         organizationId: body.organizationId,
         planCode: body.planCode,
+        currentSubscriptionId: subscription.id,
       },
       subscription_data: {
         metadata: {
@@ -162,6 +187,76 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
       throw error;
     }
 
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as {
+        mode?: string | null;
+        customer?: string | { id: string } | null;
+        subscription?: string | { id: string } | null;
+        metadata?: Record<string, string | undefined> | null;
+      };
+
+      if (session.mode === 'subscription') {
+        const organizationId = session.metadata?.organizationId;
+        const planCode = parsePlanCode(session.metadata?.planCode);
+        const stripeCustomerId = getStripeResourceId(session.customer);
+        const stripeSubscriptionId = getStripeResourceId(session.subscription);
+
+        if (organizationId && stripeCustomerId && stripeSubscriptionId) {
+          const targetSubscription = await prisma.subscription.findFirst({
+            where: { organizationId },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          if (targetSubscription) {
+            const stripeSubscription = await stripe.subscriptions
+              .retrieve(stripeSubscriptionId)
+              .catch(() => null);
+
+            const now = new Date();
+            const periodStart =
+              typeof stripeSubscription?.current_period_start === 'number'
+                ? new Date(stripeSubscription.current_period_start * 1000)
+                : now;
+            const periodEnd =
+              typeof stripeSubscription?.current_period_end === 'number'
+                ? new Date(stripeSubscription.current_period_end * 1000)
+                : addOneMonth(periodStart);
+            const subscriptionStatus = mapStripeSubscriptionStatus(
+              stripeSubscription?.status,
+              'active',
+            );
+            const plan =
+              planCode
+                ? await prisma.plan.findUnique({
+                    where: { code: planCode },
+                  })
+                : null;
+
+            await prisma.subscription.update({
+              where: { id: targetSubscription.id },
+              data: {
+                stripeCustomerId,
+                stripeSubscriptionId,
+                status: subscriptionStatus,
+                currentPeriodStart: periodStart,
+                currentPeriodEnd: periodEnd,
+                cancelAtPeriodEnd: Boolean(stripeSubscription?.cancel_at_period_end),
+                ...(plan
+                  ? {
+                      planId: plan.id,
+                      poolRamMb: plan.includedRamMb,
+                      poolCpuMillicores: plan.includedCpuMillicore,
+                      poolBandwidthGb: plan.includedBandwidthGb,
+                      overageEnabled: plan.code !== 'free',
+                    }
+                  : {}),
+              },
+            });
+          }
+        }
+      }
+    }
+
     if (event.type === 'invoice.payment_failed') {
       const invoice = event.data.object;
       const stripeSubscriptionId =
@@ -219,28 +314,143 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
-    if (event.type === 'customer.subscription.updated') {
-      const sub = event.data.object;
+    if (
+      event.type === 'customer.subscription.created'
+      || event.type === 'customer.subscription.updated'
+      || event.type === 'customer.subscription.deleted'
+    ) {
+      const sub = event.data.object as {
+        id: string;
+        customer?: string | { id: string } | null;
+        status?: string | null;
+        current_period_start?: number | null;
+        current_period_end?: number | null;
+        cancel_at_period_end?: boolean | null;
+        metadata?: Record<string, string | undefined> | null;
+        items?: { data?: Array<{ price?: { id?: string | null } | null }> } | null;
+      };
       const stripeSubscriptionId = sub.id;
-      await prisma.subscription.updateMany({
-        where: { stripeSubscriptionId },
-        data: {
-          status: sub.status as
-            | 'active'
-            | 'trialing'
-            | 'past_due'
-            | 'canceled'
-            | 'incomplete'
-            | 'unpaid',
-          currentPeriodStart: new Date(sub.current_period_start * 1000),
-          currentPeriodEnd: new Date(sub.current_period_end * 1000),
-          cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
-        },
-      });
+      const stripeCustomerId = getStripeResourceId(sub.customer);
+      const metadataPlanCode = parsePlanCode(sub.metadata?.planCode);
+      const stripePriceId = sub.items?.data?.[0]?.price?.id ?? null;
+
+      const targetSubscription =
+        (await prisma.subscription.findUnique({
+          where: { stripeSubscriptionId },
+        }))
+        ?? (stripeCustomerId
+          ? await prisma.subscription.findFirst({
+              where: { stripeCustomerId },
+              orderBy: { createdAt: 'desc' },
+            })
+          : null);
+
+      if (targetSubscription) {
+        const matchedPlan =
+          (metadataPlanCode
+            ? await prisma.plan.findUnique({
+                where: { code: metadataPlanCode },
+              })
+            : null)
+          ?? (stripePriceId
+            ? await prisma.plan.findFirst({
+                where: { stripePriceId },
+              })
+            : null);
+
+        const periodStart =
+          typeof sub.current_period_start === 'number'
+            ? new Date(sub.current_period_start * 1000)
+            : targetSubscription.currentPeriodStart;
+        const periodEnd =
+          typeof sub.current_period_end === 'number'
+            ? new Date(sub.current_period_end * 1000)
+            : targetSubscription.currentPeriodEnd;
+        const statusFallback = event.type === 'customer.subscription.deleted' ? 'canceled' : targetSubscription.status;
+
+        await prisma.subscription.update({
+          where: { id: targetSubscription.id },
+          data: {
+            stripeSubscriptionId,
+            ...(stripeCustomerId ? { stripeCustomerId } : {}),
+            status: mapStripeSubscriptionStatus(sub.status, statusFallback),
+            currentPeriodStart: periodStart,
+            currentPeriodEnd: periodEnd,
+            cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
+            ...(matchedPlan
+              ? {
+                  planId: matchedPlan.id,
+                  poolRamMb: matchedPlan.includedRamMb,
+                  poolCpuMillicores: matchedPlan.includedCpuMillicore,
+                  poolBandwidthGb: matchedPlan.includedBandwidthGb,
+                  overageEnabled: matchedPlan.code !== 'free',
+                }
+              : {}),
+          },
+        });
+      }
     }
 
     return reply.code(200).send({ received: true });
   });
+};
+
+const knownPlanCodes: PlanCode[] = ['free', 'dev', 'pro', 'max', 'enterprise'];
+
+const parsePlanCode = (value?: string): PlanCode | null => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return knownPlanCodes.includes(normalized as PlanCode) ? (normalized as PlanCode) : null;
+};
+
+const isStripeCustomerId = (value: string): boolean => /^cus_[A-Za-z0-9]+$/.test(value);
+
+const getStripeResourceId = (value: string | { id: string } | null | undefined): string | null => {
+  if (!value) {
+    return null;
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value.id === 'string' && value.id.length > 0) {
+    return value.id;
+  }
+  return null;
+};
+
+const addOneMonth = (start: Date): Date => {
+  const end = new Date(start);
+  end.setMonth(end.getMonth() + 1);
+  return end;
+};
+
+const mapStripeSubscriptionStatus = (
+  status: string | null | undefined,
+  fallback: 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete' | 'unpaid',
+): 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete' | 'unpaid' => {
+  switch (status) {
+    case 'active':
+      return 'active';
+    case 'trialing':
+      return 'trialing';
+    case 'past_due':
+      return 'past_due';
+    case 'canceled':
+      return 'canceled';
+    case 'incomplete':
+      return 'incomplete';
+    case 'unpaid':
+      return 'unpaid';
+    case 'incomplete_expired':
+      return 'incomplete';
+    case 'paused':
+      return 'past_due';
+    default:
+      return fallback;
+  }
 };
 
 const mapInvoiceStatus = (status: string | null): 'draft' | 'open' | 'paid' | 'void' | 'uncollectible' => {
