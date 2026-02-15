@@ -57,6 +57,11 @@ interface CurrentSubscription {
   poolRamMb: number;
   poolCpuMillicores: number;
   poolBandwidthGb: number;
+  entitlements?: {
+    autoDeploy: boolean;
+    previewDeployments: boolean;
+    customDomains: boolean;
+  };
   plan?: {
     code: string;
     displayName: string;
@@ -135,6 +140,7 @@ export default function CreateProjectPage() {
     () => githubRepos.find((repo) => repo.id === selectedGithubRepoId) ?? null,
     [githubRepos, selectedGithubRepoId],
   );
+  const autoDeployLocked = subscription?.entitlements?.autoDeploy === false;
   const resourceLimits = useMemo(
     () => ({
       ram: Math.max(
@@ -276,6 +282,14 @@ export default function CreateProjectPage() {
       bandwidth: clamp(prev.bandwidth, MIN_RESOURCE_LIMITS.bandwidth, resourceLimits.bandwidth),
     }));
   }, [resourceLimits]);
+
+  useEffect(() => {
+    if (!autoDeployLocked) {
+      return;
+    }
+
+    setForm((prev) => (prev.autoDeployEnabled ? { ...prev, autoDeployEnabled: false } : prev));
+  }, [autoDeployLocked]);
 
   const searchGitHubRepos = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -653,9 +667,15 @@ export default function CreateProjectPage() {
                 type="checkbox"
                 checked={form.autoDeployEnabled}
                 onChange={(event) => setForm((prev) => ({ ...prev, autoDeployEnabled: event.target.checked }))}
+                disabled={autoDeployLocked}
               />
               <span className="text-sm text-slate-700">Auto deploy on push to selected branch</span>
             </label>
+            {autoDeployLocked ? (
+              <p className="text-xs text-slate-500">
+                Auto deploy is available on Dev plan and above.
+              </p>
+            ) : null}
           </section>
 
           <aside className="space-y-4 rounded-2xl border border-slate-200 p-4">

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 import { SectionCard } from '../../../components/section-card';
 import { useWorkspaceContext } from '../../../components/workspace-provider';
@@ -156,6 +157,7 @@ function SkeletonBlock({ className }: { className: string }) {
 
 export default function BillingPage() {
   const { selectedOrganizationId } = useWorkspaceContext();
+  const searchParams = useSearchParams();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -176,6 +178,7 @@ export default function BillingPage() {
   }, [plans]);
 
   const currentPlanCode = currentPlan?.code.toLowerCase() ?? null;
+  const checkoutStatus = searchParams?.get('status');
 
   const load = async () => {
     setLoading(true);
@@ -184,6 +187,12 @@ export default function BillingPage() {
       setPlans(planData.plans ?? []);
 
       if (selectedOrganizationId) {
+        if (checkoutStatus === 'success') {
+          await apiClient.post('/billing/sync-subscription', {
+            organizationId: selectedOrganizationId,
+          });
+        }
+
         const currentData = await apiClient.get(`/plans/current?organizationId=${selectedOrganizationId}`);
         setCurrentPlan(
           currentData.subscription
@@ -202,7 +211,13 @@ export default function BillingPage() {
         setCurrentPlan(null);
         setInvoices([]);
       }
-      setMessage('');
+      if (checkoutStatus === 'success') {
+        setMessage('Payment confirmed. Subscription limits and features were refreshed.');
+      } else if (checkoutStatus === 'cancelled') {
+        setMessage('Checkout was cancelled.');
+      } else {
+        setMessage('');
+      }
     } catch (error) {
       setMessage((error as Error).message);
     } finally {
@@ -213,7 +228,7 @@ export default function BillingPage() {
   useEffect(() => {
     load().catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedOrganizationId]);
+  }, [selectedOrganizationId, checkoutStatus]);
 
   const startUpgrade = async (planCode: string) => {
     if (!selectedOrganizationId) {

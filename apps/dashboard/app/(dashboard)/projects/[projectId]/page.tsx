@@ -61,6 +61,11 @@ interface CurrentSubscription {
   poolRamMb: number;
   poolCpuMillicores: number;
   poolBandwidthGb: number;
+  entitlements?: {
+    autoDeploy: boolean;
+    previewDeployments: boolean;
+    customDomains: boolean;
+  };
 }
 
 interface ProjectUsageDetails {
@@ -356,6 +361,7 @@ export default function ProjectDetailPage() {
     }),
     [subscription],
   );
+  const autoDeployLocked = subscription?.entitlements?.autoDeploy === false;
 
   useEffect(() => {
     if (!project) return;
@@ -406,6 +412,18 @@ export default function ProjectDetailPage() {
       bandwidth: Math.min(Math.max(previous.bandwidth, 1), settingsResourceLimits.bandwidth),
     }));
   }, [settingsResourceLimits]);
+
+  useEffect(() => {
+    if (!autoDeployLocked) {
+      return;
+    }
+
+    setProjectSettings((previous) =>
+      previous.autoDeployEnabled
+        ? { ...previous, autoDeployEnabled: false }
+        : previous,
+    );
+  }, [autoDeployLocked]);
 
   const saveProjectWorkspace = async () => {
     if (!projectId) return;
@@ -1318,9 +1336,15 @@ export default function ProjectDetailPage() {
                   type="checkbox"
                   checked={projectSettings.autoDeployEnabled}
                   onChange={(e) => setProjectSettings((p) => ({ ...p, autoDeployEnabled: e.target.checked }))}
+                  disabled={autoDeployLocked}
                 />
                 <span className="text-sm text-slate-700">Auto-deploy on push</span>
               </label>
+              {autoDeployLocked && (
+                <p className="md:col-span-2 text-xs text-slate-500">
+                  Auto deploy is available on Dev plan and above.
+                </p>
+              )}
             </div>
 
             <div className="space-y-4 border-t border-slate-200 pt-5">

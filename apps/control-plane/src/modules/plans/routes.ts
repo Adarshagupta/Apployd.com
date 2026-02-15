@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { z } from 'zod';
 
+import { getPlanEntitlements } from '../../domain/plan-entitlements.js';
 import { AccessService } from '../../services/access-service.js';
 import { prisma } from '../../lib/prisma.js';
 
@@ -13,7 +14,12 @@ export const planRoutes: FastifyPluginAsync = async (app) => {
       orderBy: { priceUsdMonthly: 'asc' },
     });
 
-    return { plans };
+    return {
+      plans: plans.map((plan) => ({
+        ...plan,
+        entitlements: getPlanEntitlements(plan.code),
+      })),
+    };
   });
 
   app.get('/plans/current', { preHandler: [app.authenticate] }, async (request, reply) => {
@@ -60,6 +66,15 @@ export const planRoutes: FastifyPluginAsync = async (app) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    return { subscription };
+    if (!subscription) {
+      return { subscription: null };
+    }
+
+    return {
+      subscription: {
+        ...subscription,
+        entitlements: getPlanEntitlements(subscription.plan.code),
+      },
+    };
   });
 };

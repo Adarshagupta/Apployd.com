@@ -4,6 +4,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { env } from '../../config/env.js';
+import { getPlanEntitlements } from '../../domain/plan-entitlements.js';
 import { hashPassword } from '../../lib/crypto.js';
 import { prisma } from '../../lib/prisma.js';
 import { redis } from '../../lib/redis.js';
@@ -321,6 +322,27 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
       await access.requireOrganizationRole(user.userId, project.organizationId, 'developer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
+    }
+
+    const subscription = await prisma.subscription.findFirst({
+      where: {
+        organizationId: project.organizationId,
+        status: { in: ['active', 'trialing', 'past_due'] },
+      },
+      include: { plan: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!subscription) {
+      return reply.code(402).send({ message: 'No active subscription found for this organization.' });
+    }
+
+    const entitlements = getPlanEntitlements(subscription.plan.code);
+    if (body.autoDeployEnabled === true && !entitlements.autoDeploy) {
+      return reply.code(402).send({ message: 'Auto deploy is not available on your current plan.' });
+    }
+    if (body.previewDeploymentsEnabled === true && !entitlements.previewDeployments) {
+      return reply.code(402).send({ message: 'Preview deployments are not available on your current plan.' });
     }
 
     const updateData: Record<string, unknown> = {};

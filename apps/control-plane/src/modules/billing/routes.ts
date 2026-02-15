@@ -14,6 +14,9 @@ const checkoutSchema = z.object({
   successUrl: z.string().url(),
   cancelUrl: z.string().url(),
 });
+const syncSubscriptionSchema = z.object({
+  organizationId: z.string().cuid(),
+});
 
 export const billingRoutes: FastifyPluginAsync = async (app) => {
   const access = new AccessService();
@@ -143,6 +146,93 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
     });
 
     return { invoices };
+  });
+
+  app.post('/billing/sync-subscription', { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (!stripe) {
+      return reply.serviceUnavailable('Billing not configured');
+    }
+
+    const user = request.user as { userId: string; email: string };
+    const body = syncSubscriptionSchema.parse(request.body);
+
+    try {
+      await access.requireOrganizationRole(user.userId, body.organizationId, 'admin');
+    } catch (error) {
+      return reply.forbidden((error as Error).message);
+    }
+
+    const subscription = await prisma.subscription.findFirst({
+      where: { organizationId: body.organizationId },
+      include: { plan: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!subscription) {
+      return reply.notFound('No subscription found for organization');
+    }
+
+    if (!isStripeCustomerId(subscription.stripeCustomerId)) {
+      return { subscription, synced: false, reason: 'no_stripe_customer' };
+    }
+
+    const stripeSubscriptions = await stripe.subscriptions.list({
+      customer: subscription.stripeCustomerId,
+      status: 'all',
+      limit: 20,
+    });
+    const latest = pickPreferredStripeSubscription(stripeSubscriptions.data);
+
+    if (!latest) {
+      return { subscription, synced: false, reason: 'no_stripe_subscription' };
+    }
+
+    const metadataPlanCode = parsePlanCode(latest.metadata?.planCode);
+    const stripePriceId = latest.items.data[0]?.price?.id ?? null;
+    const matchedPlan =
+      (metadataPlanCode
+        ? await prisma.plan.findUnique({
+            where: { code: metadataPlanCode },
+          })
+        : null)
+      ?? (stripePriceId
+        ? await prisma.plan.findFirst({
+            where: { stripePriceId },
+          })
+        : null);
+
+    const periodStart =
+      typeof latest.current_period_start === 'number'
+        ? new Date(latest.current_period_start * 1000)
+        : subscription.currentPeriodStart;
+    const periodEnd =
+      typeof latest.current_period_end === 'number'
+        ? new Date(latest.current_period_end * 1000)
+        : subscription.currentPeriodEnd;
+
+    const updated = await prisma.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        stripeCustomerId: subscription.stripeCustomerId,
+        stripeSubscriptionId: latest.id,
+        status: mapStripeSubscriptionStatus(latest.status, subscription.status),
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: periodEnd,
+        cancelAtPeriodEnd: Boolean(latest.cancel_at_period_end),
+        ...(matchedPlan
+          ? {
+              planId: matchedPlan.id,
+              poolRamMb: matchedPlan.includedRamMb,
+              poolCpuMillicores: matchedPlan.includedCpuMillicore,
+              poolBandwidthGb: matchedPlan.includedBandwidthGb,
+              overageEnabled: matchedPlan.code !== 'free',
+            }
+          : {}),
+      },
+      include: { plan: true },
+    });
+
+    return { subscription: updated, synced: true };
   });
 
   app.post('/billing/webhook', async (request, reply) => {
@@ -451,6 +541,21 @@ const mapStripeSubscriptionStatus = (
     default:
       return fallback;
   }
+};
+
+const pickPreferredStripeSubscription = <T extends { status: string; created: number }>(
+  subscriptions: T[],
+): T | null => {
+  if (!subscriptions.length) {
+    return null;
+  }
+
+  const sorted = [...subscriptions].sort((a, b) => b.created - a.created);
+  const preferred = sorted.find((subscription) =>
+    ['active', 'trialing', 'past_due', 'incomplete', 'unpaid'].includes(subscription.status),
+  );
+
+  return preferred ?? sorted[0] ?? null;
 };
 
 const mapInvoiceStatus = (status: string | null): 'draft' | 'open' | 'paid' | 'void' | 'uncollectible' => {

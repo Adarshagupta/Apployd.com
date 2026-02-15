@@ -10,6 +10,7 @@ import { prisma } from '../lib/prisma.js';
 import { redis } from '../lib/redis.js';
 import { decryptSecret } from '../lib/secrets.js';
 import { isSerializableRetryableError } from '../lib/transaction-retry.js';
+import { getPlanEntitlements } from '../domain/plan-entitlements.js';
 import { AuditLogService } from './audit-log-service.js';
 import { DeployQueueService } from './deploy-queue-service.js';
 import { ResourcePolicyService } from './resource-policy-service.js';
@@ -106,7 +107,7 @@ export class DeploymentRequestService {
         organization: {
           include: {
             subscriptions: {
-              where: { status: { in: ['active', 'trialing'] } },
+              where: { status: { in: ['active', 'trialing', 'past_due'] } },
               include: { plan: true },
               orderBy: { createdAt: 'desc' },
               take: 1,
@@ -157,9 +158,16 @@ export class DeploymentRequestService {
     if (!activeSubscription) {
       throw new DeploymentRequestError('No active subscription for this organization.', 402);
     }
+    const entitlements = getPlanEntitlements(activeSubscription.plan.code);
 
     if (activeSubscription.currentPeriodEnd < new Date()) {
       throw new DeploymentRequestError('Subscription period has ended. Renew to deploy.', 402);
+    }
+    if (resolvedEnvironment === 'preview' && !entitlements.previewDeployments) {
+      throw new DeploymentRequestError(
+        'Preview deployments are not available on your current plan.',
+        402,
+      );
     }
 
     try {

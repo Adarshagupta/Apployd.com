@@ -3,6 +3,7 @@ import type { Project } from '@prisma/client';
 
 import { z } from 'zod';
 
+import { getPlanEntitlements } from '../../domain/plan-entitlements.js';
 import { AccessService } from '../../services/access-service.js';
 import { AuditLogService } from '../../services/audit-log-service.js';
 import { prisma } from '../../lib/prisma.js';
@@ -118,7 +119,7 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
     const subscription = await prisma.subscription.findFirst({
       where: {
         organizationId: body.organizationId,
-        status: { in: ['active', 'trialing'] },
+        status: { in: ['active', 'trialing', 'past_due'] },
       },
       include: { plan: true },
       orderBy: { createdAt: 'desc' },
@@ -136,6 +137,10 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
         return reply.badRequest('Project limit reached for plan');
       }
     }
+    const entitlements = getPlanEntitlements(subscription.plan.code);
+    const autoDeployEnabled = entitlements.autoDeploy ? body.autoDeployEnabled : false;
+    const previewDeploymentsEnabled =
+      entitlements.previewDeployments ? body.previewDeploymentsEnabled : false;
 
     let project: Project;
     try {
@@ -157,8 +162,8 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
             ...(body.buildCommand && { buildCommand: body.buildCommand }),
             ...(body.startCommand && { startCommand: body.startCommand }),
             ...(body.rootDirectory && { rootDirectory: body.rootDirectory }),
-            ...(body.autoDeployEnabled !== undefined && { autoDeployEnabled: body.autoDeployEnabled }),
-            ...(body.previewDeploymentsEnabled !== undefined && { previewDeploymentsEnabled: body.previewDeploymentsEnabled }),
+            autoDeployEnabled,
+            previewDeploymentsEnabled,
             ...(body.targetPort && { targetPort: body.targetPort }),
             resourceRamMb: 128,
             resourceCpuMillicore: 100,
