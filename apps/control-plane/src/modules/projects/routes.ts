@@ -163,7 +163,8 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
             resourceRamMb: 128,
             resourceCpuMillicore: 100,
             resourceBandwidthGb: 1,
-            sleepEnabled: subscription.plan.code === 'free',
+            // Sleep mode is globally disabled; keep all projects always active.
+            sleepEnabled: false,
           },
         });
 
