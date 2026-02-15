@@ -265,6 +265,7 @@ export class DeploymentPipeline {
               upstreamPort: run.hostPort,
               upstreamScheme,
               aliases: customAliases,
+              wakePath: `/api/v1/edge/deployments/${deployment.id}/wake`,
             }),
           { retries: 2, delayMs: 1000 },
         );

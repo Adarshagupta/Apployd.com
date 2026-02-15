@@ -12,6 +12,8 @@ interface ConfigureProxyInput {
   upstreamScheme?: 'http' | 'https';
   /** Additional server_name aliases (custom domains). */
   aliases?: string[];
+  /** Internal edge wake path (for example: /api/v1/edge/deployments/<id>/wake). */
+  wakePath?: string;
 }
 
 interface ConfigureTlsProxyInput extends ConfigureProxyInput {
@@ -52,6 +54,7 @@ export class NginxAdapter {
     const configPath = join(env.NGINX_SITES_PATH, `${domain}.conf`);
     const template = this.loadTemplate();
     const upstreamName = this.buildUpstreamName(domain);
+    const wakeConfig = this.buildWakeConfig(input.wakePath);
 
     const aliasString = aliases.join(' ');
 
@@ -61,11 +64,14 @@ export class NginxAdapter {
       .replaceAll('{{UPSTREAM_NAME}}', upstreamName)
       .replaceAll('{{UPSTREAM_SCHEME}}', upstreamScheme)
       .replaceAll('{{UPSTREAM_HOST}}', upstreamHost)
-      .replaceAll('{{UPSTREAM_PORT}}', String(input.upstreamPort));
+      .replaceAll('{{UPSTREAM_PORT}}', String(input.upstreamPort))
+      .replaceAll('{{WAKE_PROXY_DIRECTIVES}}', wakeConfig.proxyDirectives)
+      .replaceAll('{{WAKE_FALLBACK_LOCATION}}', wakeConfig.locationBlock);
     // Backward compatibility for template versions that still hardcode http://.
     if (!template.includes('{{UPSTREAM_SCHEME}}')) {
       rendered = rendered.replace(/proxy_pass\s+http:\/\//g, `proxy_pass ${upstreamScheme}://`);
     }
+    rendered = this.ensureWakeFallback(rendered, wakeConfig);
 
     writeFileSync(configPath, rendered, { encoding: 'utf8' });
 
@@ -96,6 +102,7 @@ export class NginxAdapter {
     const configPath = join(env.NGINX_SITES_PATH, `${domain}.conf`);
     const aliasString = aliases.join(' ');
     const upstreamName = this.buildUpstreamName(domain);
+    const wakeConfig = this.buildWakeConfig(input.wakePath);
     let rendered = this.buildTlsTemplate()
       .replaceAll('{{DOMAIN}}', domain)
       .replaceAll('{{ALIASES}}', aliasString)
@@ -104,8 +111,11 @@ export class NginxAdapter {
       .replaceAll('{{UPSTREAM_HOST}}', upstreamHost)
       .replaceAll('{{UPSTREAM_PORT}}', String(input.upstreamPort))
       .replaceAll('{{SSL_CERT_PATH}}', certPath)
-      .replaceAll('{{SSL_KEY_PATH}}', keyPath);
+      .replaceAll('{{SSL_KEY_PATH}}', keyPath)
+      .replaceAll('{{WAKE_PROXY_DIRECTIVES}}', wakeConfig.proxyDirectives)
+      .replaceAll('{{WAKE_FALLBACK_LOCATION}}', wakeConfig.locationBlock);
     rendered = rendered.replace(/proxy_pass\s+http:\/\//g, `proxy_pass ${upstreamScheme}://`);
+    rendered = this.ensureWakeFallback(rendered, wakeConfig);
 
     writeFileSync(configPath, rendered, { encoding: 'utf8' });
 
@@ -214,8 +224,10 @@ export class NginxAdapter {
       '        proxy_set_header Upgrade $http_upgrade;',
       '        proxy_set_header Connection "upgrade";',
       '        proxy_set_header Host $host;',
+      '{{WAKE_PROXY_DIRECTIVES}}',
       '        proxy_pass {{UPSTREAM_SCHEME}}://{{UPSTREAM_HOST}}:{{UPSTREAM_PORT}};',
       '    }',
+      '{{WAKE_FALLBACK_LOCATION}}',
       '}',
     ].join('\n');
   }
@@ -279,8 +291,10 @@ export class NginxAdapter {
       '    proxy_set_header X-Forwarded-Proto $scheme;',
       '    proxy_read_timeout 300;',
       '    proxy_send_timeout 300;',
+      '{{WAKE_PROXY_DIRECTIVES}}',
       '    proxy_pass {{UPSTREAM_SCHEME}}://{{UPSTREAM_NAME}};',
       '  }',
+      '{{WAKE_FALLBACK_LOCATION}}',
       '}',
     ].join('\n');
   }
@@ -360,6 +374,91 @@ export class NginxAdapter {
     } catch {
       return '';
     }
+  }
+
+  private buildWakeConfig(wakePathInput?: string): { proxyDirectives: string; locationBlock: string } {
+    const wakeEnabled = env.EDGE_WAKE_ENABLED && typeof wakePathInput === 'string' && wakePathInput.trim().length > 0;
+    if (!wakeEnabled) {
+      return { proxyDirectives: '', locationBlock: '' };
+    }
+
+    const wakePath = wakePathInput!.trim().startsWith('/') ? wakePathInput!.trim() : `/${wakePathInput!.trim()}`;
+    const controlPlaneBase = env.CONTROL_PLANE_INTERNAL_URL.replace(/\/+$/, '');
+    const wakeUrl = `${controlPlaneBase}${wakePath}`;
+    const token = this.escapeNginxHeaderValue(env.EDGE_WAKE_TOKEN ?? '');
+
+    const proxyDirectives = [
+      'proxy_intercept_errors on;',
+      'error_page 502 503 504 = @apployd_wake;',
+    ]
+      .map((line) => `        ${line}`)
+      .join('\n');
+
+    const locationBlock = [
+      'location @apployd_wake {',
+      '  internal;',
+      '  proxy_http_version 1.1;',
+      '  proxy_method GET;',
+      '  proxy_pass_request_body off;',
+      '  proxy_set_header Content-Length "";',
+      '  proxy_set_header Host $host;',
+      '  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;',
+      '  proxy_set_header X-Forwarded-Proto $scheme;',
+      `  proxy_set_header X-Apployd-Edge-Token "${token}";`,
+      '  proxy_set_header X-Apployd-Original-Uri $request_uri;',
+      '  proxy_set_header X-Apployd-Original-Method $request_method;',
+      '  proxy_set_header X-Apployd-Upstream-Status $upstream_status;',
+      `  proxy_pass ${wakeUrl};`,
+      '}',
+    ]
+      .map((line) => `  ${line}`)
+      .join('\n');
+
+    return { proxyDirectives, locationBlock };
+  }
+
+  private ensureWakeFallback(
+    renderedConfig: string,
+    wakeConfig: { proxyDirectives: string; locationBlock: string },
+  ): string {
+    if (!wakeConfig.proxyDirectives || !wakeConfig.locationBlock) {
+      return renderedConfig;
+    }
+
+    let rendered = renderedConfig;
+
+    if (!rendered.includes('proxy_intercept_errors on;')) {
+      const proxyPassLine = rendered.match(/^(\s*)proxy_pass\s+[^\n;]+;$/m);
+      if (proxyPassLine && proxyPassLine.index !== undefined) {
+        const indent = proxyPassLine[1] ?? '';
+        rendered =
+          rendered.slice(0, proxyPassLine.index) +
+          `${indent}proxy_intercept_errors on;\n` +
+          `${indent}error_page 502 503 504 = @apployd_wake;\n` +
+          rendered.slice(proxyPassLine.index);
+      }
+    }
+
+    if (!rendered.includes('location @apployd_wake')) {
+      const lastBraceIndex = rendered.lastIndexOf('}');
+      if (lastBraceIndex > 0) {
+        rendered =
+          `${rendered.slice(0, lastBraceIndex).trimEnd()}\n\n` +
+          `${wakeConfig.locationBlock}\n` +
+          `${rendered.slice(lastBraceIndex)}`;
+      }
+    }
+
+    return rendered;
+  }
+
+  private escapeNginxHeaderValue(value: string): string {
+    return value
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\$/g, '\\$')
+      .replace(/\r/g, '')
+      .replace(/\n/g, '');
   }
 
   private normalizeUpstreamScheme(scheme?: 'http' | 'https'): 'http' | 'https' {

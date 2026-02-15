@@ -11,6 +11,7 @@ import { billingRoutes } from './modules/billing/routes.js';
 import { containerRoutes } from './modules/containers/routes.js';
 import { deploymentRoutes } from './modules/deployments/routes.js';
 import { domainRoutes } from './modules/domains/routes.js';
+import { edgeRoutes } from './modules/edge/routes.js';
 import { healthRoutes } from './modules/health/routes.js';
 import { githubIntegrationRoutes } from './modules/integrations/github-routes.js';
 import { logRoutes } from './modules/logs/routes.js';
@@ -92,6 +93,7 @@ export const buildApp = () => {
 
   app.register(healthRoutes);
   app.register(observabilityRoutes);
+  app.register(edgeRoutes);
 
   app.register(async (api) => {
     api.register(authRoutes);

@@ -74,6 +74,8 @@ const envSchema = z.object({
   DEV_SERVER_TOTAL_RAM_MB: z.coerce.number().int().min(128).default(8192),
   DEV_SERVER_TOTAL_CPU_MILLICORES: z.coerce.number().int().min(100).default(4000),
   DEV_SERVER_TOTAL_BANDWIDTH_GB: z.coerce.number().int().min(1).default(1000),
+  EDGE_WAKE_TOKEN: optionalString,
+  EDGE_WAKE_RETRY_SECONDS: z.coerce.number().int().min(1).max(60).default(5),
 });
 
 const parsedEnv = envSchema.parse(process.env);

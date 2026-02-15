@@ -29,6 +29,9 @@ server {
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_read_timeout 300;
     proxy_send_timeout 300;
+{{WAKE_PROXY_DIRECTIVES}}
     proxy_pass {{UPSTREAM_SCHEME}}://{{UPSTREAM_NAME}};
   }
+
+{{WAKE_FALLBACK_LOCATION}}
 }
