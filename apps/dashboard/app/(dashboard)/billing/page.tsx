@@ -183,6 +183,19 @@ export default function BillingPage() {
   const currentPlanCode = currentPlan?.code.toLowerCase() ?? null;
   const checkoutStatus = searchParams?.get('status');
   const checkoutSuccess = checkoutStatus === 'success';
+  const currentPlanPrice = useMemo(() => {
+    if (!currentPlan) {
+      return null;
+    }
+
+    const apiPlan = availablePlansByCode.get(currentPlan.code.toLowerCase());
+    if (apiPlan?.priceUsdMonthly) {
+      return `$${apiPlan.priceUsdMonthly} / month`;
+    }
+
+    const catalogPlan = planCatalog.find((item) => item.code === currentPlan.code.toLowerCase());
+    return catalogPlan?.price ?? null;
+  }, [availablePlansByCode, currentPlan]);
 
   const load = async () => {
     setLoading(true);
@@ -268,31 +281,57 @@ export default function BillingPage() {
     <div className="space-y-4">
       {checkoutSuccess ? (
         <SectionCard title="Purchase Complete" subtitle="Your billing upgrade is active and synced.">
-          <div className="relative overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-amber-50 p-5">
-            <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-emerald-200/40 blur-2xl" />
-            <div className="pointer-events-none absolute -bottom-10 -left-10 h-36 w-36 rounded-full bg-amber-200/40 blur-2xl" />
-            <div className="relative flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Billing updated</p>
-                <p className="mt-1 text-xl font-semibold text-slate-900">
-                  {currentPlan ? `${currentPlan.displayName} plan is now active.` : 'Your subscription is now active.'}
-                </p>
-                <p className="mt-2 text-sm text-slate-700">
-                  Usage pools, feature limits, and project entitlements have been refreshed.
-                </p>
-                {currentPlan ? (
-                  <p className="mt-2 text-xs text-slate-600">
-                    Current period ends {new Date(currentPlan.periodEnd).toLocaleDateString()}
-                  </p>
-                ) : null}
+          <div className="billing-success-wrap">
+            <div className="billing-success-confetti billing-success-confetti-left" />
+            <div className="billing-success-confetti billing-success-confetti-right" />
+            <div className="billing-success-card">
+              <div className="billing-success-kicker">
+                <span className="billing-success-check" aria-hidden="true">✓</span>
+                <span>Payment Successful</span>
               </div>
-              <div className="flex gap-2">
-                <Link href="/usage" className="btn-secondary">
-                  View usage
-                </Link>
-                <Link href="/projects" className="btn-primary">
-                  Open projects
-                </Link>
+              <p className="billing-success-title">
+                {currentPlan ? `${currentPlan.displayName} plan is now active.` : 'Your subscription is now active.'}
+              </p>
+              <p className="billing-success-copy">
+                Usage pools, feature limits, and project entitlements have been refreshed.
+              </p>
+              <div className="billing-success-meta">
+                <span>
+                  Status: <strong>Successful</strong>
+                </span>
+                <span>
+                  Date: <strong>{new Date().toLocaleDateString()}</strong>
+                </span>
+              </div>
+
+              {currentPlan ? (
+                <div className="billing-success-plan">
+                  <div>
+                    <p className="billing-success-plan-name">{currentPlan.displayName}</p>
+                    <p className="billing-success-plan-status">{currentPlan.status.replace('_', ' ')}</p>
+                  </div>
+                  <div className="billing-success-plan-price">
+                    {currentPlanPrice ?? 'Active'}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="relative flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  {currentPlan ? (
+                    <p className="billing-success-period">
+                      Current period ends {new Date(currentPlan.periodEnd).toLocaleDateString()}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex gap-2">
+                  <Link href="/usage" className="btn-secondary">
+                    View usage
+                  </Link>
+                  <Link href="/projects" className="btn-primary">
+                    Open projects
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
