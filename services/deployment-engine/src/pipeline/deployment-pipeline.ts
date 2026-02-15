@@ -278,6 +278,22 @@ export class DeploymentPipeline {
         });
         onLog('SSL certificate ready');
 
+        onLog('Applying TLS reverse proxy configuration...');
+        await withRetry(
+          () =>
+            this.nginx.configureProjectProxyWithTls({
+              domain,
+              certificateDomain: domain,
+              upstreamHost: '127.0.0.1',
+              upstreamPort: run.hostPort,
+              upstreamScheme,
+              aliases: customAliases,
+              wakePath: `/api/v1/edge/deployments/${deployment.id}/wake`,
+            }),
+          { retries: 2, delayMs: 1000 },
+        );
+        onLog('TLS reverse proxy configured');
+
         onLog('Verifying edge route...');
         const probe = await this.nginx.waitForRouteReady(
           domain,
