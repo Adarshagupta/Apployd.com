@@ -61,6 +61,7 @@ const schema = z.object({
   ENGINE_HEALTHCHECK_TIMEOUT_SECONDS: z.coerce.number().int().min(5).max(300).default(60),
   ENGINE_HEALTHCHECK_DELAY_MS: z.coerce.number().int().min(250).max(5000).default(1000),
   ENGINE_LOCAL_MODE: booleanFromEnv.optional(),
+  ENGINE_CONTAINER_READ_ONLY: booleanFromEnv.optional(),
 });
 
 const parsed = schema.parse(process.env);
@@ -70,4 +71,5 @@ export const env = {
   SMTP_SECURE: parsed.SMTP_SECURE ?? parsed.SMTP_PORT === 465,
   PREVIEW_BASE_DOMAIN: parsed.PREVIEW_BASE_DOMAIN ?? parsed.BASE_DOMAIN,
   ENGINE_LOCAL_MODE: parsed.ENGINE_LOCAL_MODE ?? parsed.NODE_ENV !== 'production',
+  ENGINE_CONTAINER_READ_ONLY: parsed.ENGINE_CONTAINER_READ_ONLY ?? false,
 };

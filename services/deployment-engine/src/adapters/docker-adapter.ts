@@ -646,58 +646,58 @@ export class DockerAdapter {
       .map(([k, v]) => `-e ${shellEscape(`${k}=${v}`)}`)
       .join(' ');
 
+    const filesystemFlags = env.ENGINE_CONTAINER_READ_ONLY
+      ? [
+          '--read-only',
+          '--tmpfs /tmp:rw,noexec,nosuid,size=512m',
+          '--tmpfs /run:rw,noexec,nosuid,size=64m',
+          '--tmpfs /var/run:rw,noexec,nosuid,size=64m',
+          '--tmpfs /app/.npm:rw,noexec,nosuid,size=256m',
+          '--tmpfs /app/.cache:rw,noexec,nosuid,size=256m',
+          '--tmpfs /app/node_modules/.cache:rw,noexec,nosuid,size=256m',
+          '--tmpfs /var/cache/nginx:rw,noexec,nosuid,size=128m',
+          '--tmpfs /var/log/nginx:rw,noexec,nosuid,size=64m',
+          '--tmpfs /var/lib/nginx:rw,noexec,nosuid,size=64m',
+        ]
+      : [];
+
     const cmd = [
       'docker run -d',
       `--name apployd-${input.deploymentId}`,
       // Keep restart disabled until health-check passes so crash loops are visible.
       '--restart no',
-      
-      // ── Security: Read-only filesystem (Vercel/Render grade) ──
-      '--read-only',
-      '--tmpfs /tmp:rw,noexec,nosuid,size=512m',
-      '--tmpfs /run:rw,noexec,nosuid,size=64m',
-      '--tmpfs /var/run:rw,noexec,nosuid,size=64m',
-      // Node.js runtime dirs
-      '--tmpfs /app/.npm:rw,noexec,nosuid,size=256m',
-      '--tmpfs /app/.cache:rw,noexec,nosuid,size=256m',
-      '--tmpfs /app/node_modules/.cache:rw,noexec,nosuid,size=256m',
-      // nginx runtime dirs (required for read-only with nginx:alpine)
-      '--tmpfs /var/cache/nginx:rw,noexec,nosuid,size=128m',
-      '--tmpfs /var/log/nginx:rw,noexec,nosuid,size=64m',
-      '--tmpfs /var/lib/nginx:rw,noexec,nosuid,size=64m',
-      // Keep framework build outputs from the image readable at runtime.
-      // Mounting tmpfs on /app/.next or /app/.output masks compiled artifacts and
-      // can cause restart loops with upstream connection resets.
-      
-      // ── Security: Capability drops & isolation ──
+
+      ...filesystemFlags,
+
+      // Security: capability drops and isolation.
       '--security-opt no-new-privileges:true',
       '--cap-drop ALL',
       '--cap-add NET_BIND_SERVICE',
       '--cap-add CHOWN',
       '--cap-add SETUID',
       '--cap-add SETGID',
-      
-      // ── Security: Process limits (prevent fork bombs) ──
+
+      // Security: process limits.
       '--pids-limit 256',
       '--ulimit nofile=4096:8192',
       '--ulimit nproc=256:512',
-      
-      // ── Network & Resource isolation ──
+
+      // Network and resource limits.
       '--network apployd-net',
       '--network-alias',
       `deployment-${input.deploymentId}`,
       `--memory ${memoryLimit}`,
       '--memory-swap',
-      memoryLimit, // No swap usage
+      memoryLimit,
       '--oom-kill-disable=false',
       `--cpu-period 100000 --cpu-quota ${cpuQuota}`,
-      
-      // ── Port mapping ──
+
+      // Port mapping.
       `-p 127.0.0.1:${hostPort}:${input.port}`,
-      
-      // ── Environment variables (sanitized) ──
+
+      // Environment variables (sanitized).
       envArgs,
-      
+
       input.imageTag,
     ].join(' ');
 
@@ -962,3 +962,4 @@ export class DockerAdapter {
     }
   }
 }
+
