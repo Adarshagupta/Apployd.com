@@ -382,6 +382,7 @@ export class NginxAdapter {
     wakeLocationBlock: string;
     errorLocationBlock: string;
   } {
+    const wakeInternalLocation = '/_apployd_wake';
     const fallbackHtml = this.escapeNginxHeaderValue(this.buildEdgeErrorHtml());
     const errorLocationBlock = [
       '  location = /_apployd_error_fallback {',
@@ -419,13 +420,13 @@ export class NginxAdapter {
 
     const proxyDirectives = [
       'proxy_intercept_errors on;',
-      'error_page 502 503 504 = @apployd_wake;',
+      `error_page 502 503 504 = ${wakeInternalLocation};`,
     ]
       .map((line) => `        ${line}`)
       .join('\n');
 
     const wakeLocationBlock = [
-      '  location @apployd_wake {',
+      `  location = ${wakeInternalLocation} {`,
       '    internal;',
       '    proxy_http_version 1.1;',
       '    proxy_method GET;',
@@ -465,7 +466,9 @@ export class NginxAdapter {
       return renderedConfig;
     }
 
-    let rendered = renderedConfig;
+    let rendered = renderedConfig
+      .replaceAll('error_page 502 503 504 = @apployd_wake;', 'error_page 502 503 504 = /_apployd_wake;')
+      .replaceAll('location @apployd_wake {', 'location = /_apployd_wake {');
 
     if (!rendered.includes('proxy_intercept_errors on;')) {
       const proxyPassLine = rendered.match(/^(\s*)proxy_pass\s+[^\n;]+;$/m);
@@ -486,7 +489,9 @@ export class NginxAdapter {
     }
 
     const blocksToAppend: string[] = [];
-    if (wakeConfig.wakeLocationBlock && !rendered.includes('location @apployd_wake')) {
+    const hasWakeLocation =
+      rendered.includes('location = /_apployd_wake {') || rendered.includes('location @apployd_wake {');
+    if (wakeConfig.wakeLocationBlock && !hasWakeLocation) {
       blocksToAppend.push(wakeConfig.wakeLocationBlock);
     }
     if (!rendered.includes('/_apployd_error_fallback')) {
