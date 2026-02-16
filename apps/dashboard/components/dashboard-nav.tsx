@@ -50,7 +50,7 @@ const accountItems = [
     icon: <IconUsage title="Usage" />,
   },
   {
-    href: '/security',
+    href: '/security-center',
     label: 'Security',
     icon: <IconShield title="Security" />,
   },
@@ -129,3 +129,4 @@ export function DashboardNav() {
     </div>
   );
 }
+

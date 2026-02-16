@@ -36,7 +36,7 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
     title: 'Usage',
     subtitle: 'Metered consumption against pooled subscription limits.',
   },
-  '/security': {
+  '/security-center': {
     title: 'Security',
     subtitle: 'Anomaly detection for DDoS and abuse patterns with attack mode controls.',
   },
@@ -271,7 +271,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                         <IconUsage size={16} />
                         <span>Usage</span>
                       </Link>
-                      <Link href="/security" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                      <Link href="/security-center" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
                         <IconShield size={16} />
                         <span>Security</span>
                       </Link>
