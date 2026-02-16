@@ -3,6 +3,7 @@ import { DeploymentStatus } from '@prisma/client';
 
 import { z } from 'zod';
 
+import { getPlanEntitlements } from '../../domain/plan-entitlements.js';
 import { AccessService } from '../../services/access-service.js';
 import { AuditLogService } from '../../services/audit-log-service.js';
 import { DeploymentRequestError, DeploymentRequestService } from '../../services/deployment-request-service.js';
@@ -45,6 +46,26 @@ export const domainRoutes: FastifyPluginAsync = async (app) => {
     if (!project) throw new Error('Project not found');
     await access.requireOrganizationRole(userId, project.organizationId, role);
     return project;
+  };
+
+  const assertCustomDomainEntitlement = async (organizationId: string): Promise<void> => {
+    const subscription = await prisma.subscription.findFirst({
+      where: {
+        organizationId,
+        status: { in: ['active', 'trialing', 'past_due'] },
+      },
+      include: { plan: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!subscription) {
+      throw new Error('No active subscription found for this organization.');
+    }
+
+    const entitlements = getPlanEntitlements(subscription.plan.code);
+    if (!entitlements.customDomains) {
+      throw new Error('Custom domains are not available on your current plan.');
+    }
   };
 
   const syncActiveDeploymentDomains = async (input: {
@@ -132,18 +153,42 @@ export const domainRoutes: FastifyPluginAsync = async (app) => {
     const user = request.user as { userId: string; email: string };
     const { projectId } = projectIdParam.parse(request.params);
 
+    let project;
     try {
-      await resolveProject(projectId, user.userId, 'viewer');
+      project = await resolveProject(projectId, user.userId, 'viewer');
     } catch (err) {
       return reply.forbidden((err as Error).message);
     }
 
-    const domains = await prisma.customDomain.findMany({
-      where: { projectId },
-      orderBy: { createdAt: 'desc' },
-    });
+    const [domains, activeDeployment] = await Promise.all([
+      prisma.customDomain.findMany({
+        where: { projectId },
+        orderBy: { createdAt: 'desc' },
+      }),
+      project.activeDeploymentId
+        ? prisma.deployment.findUnique({
+            where: { id: project.activeDeploymentId },
+            select: {
+              id: true,
+              domain: true,
+              environment: true,
+              status: true,
+            },
+          })
+        : Promise.resolve(null),
+    ]);
 
-    return { domains };
+    const autoDomain =
+      activeDeployment?.domain
+        ? {
+            deploymentId: activeDeployment.id,
+            domain: activeDeployment.domain,
+            environment: activeDeployment.environment,
+            status: activeDeployment.status,
+          }
+        : null;
+
+    return { domains, autoDomain };
   });
 
   /* ── ADD a custom domain ────────────────────────────────────── */
@@ -162,8 +207,14 @@ export const domainRoutes: FastifyPluginAsync = async (app) => {
     let project;
     try {
       project = await resolveProject(projectId, user.userId);
+      await assertCustomDomainEntitlement(project.organizationId);
     } catch (err) {
-      return reply.forbidden((err as Error).message);
+      const message = (err as Error).message;
+      const lower = message.toLowerCase();
+      if (lower.includes('custom domains are not available') || lower.includes('no active subscription')) {
+        return reply.code(402).send({ message });
+      }
+      return reply.forbidden(message);
     }
 
     // Ensure domain doesn't already exist across any project

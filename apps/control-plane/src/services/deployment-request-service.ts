@@ -1,5 +1,6 @@
 import type { DeploymentRequest } from '@apployd/shared';
 import { createHash } from 'crypto';
+import { isIP } from 'node:net';
 import { ServerStatus, type Deployment, type Prisma, type Server } from '@prisma/client';
 import { setTimeout as sleep } from 'timers/promises';
 
@@ -9,6 +10,7 @@ import { prisma } from '../lib/prisma.js';
 import { redis } from '../lib/redis.js';
 import { decryptSecret } from '../lib/secrets.js';
 import { isSerializableRetryableError } from '../lib/transaction-retry.js';
+import { getPlanEntitlements } from '../domain/plan-entitlements.js';
 import { AuditLogService } from './audit-log-service.js';
 import { DeployQueueService } from './deploy-queue-service.js';
 import { ResourcePolicyService } from './resource-policy-service.js';
@@ -105,7 +107,7 @@ export class DeploymentRequestService {
         organization: {
           include: {
             subscriptions: {
-              where: { status: { in: ['active', 'trialing'] } },
+              where: { status: { in: ['active', 'trialing', 'past_due'] } },
               include: { plan: true },
               orderBy: { createdAt: 'desc' },
               take: 1,
@@ -150,14 +152,22 @@ export class DeploymentRequestService {
         400,
       );
     }
+    assertSafeGitUrl(resolvedGitUrl);
 
     const activeSubscription = project.organization.subscriptions[0];
     if (!activeSubscription) {
       throw new DeploymentRequestError('No active subscription for this organization.', 402);
     }
+    const entitlements = getPlanEntitlements(activeSubscription.plan.code);
 
     if (activeSubscription.currentPeriodEnd < new Date()) {
       throw new DeploymentRequestError('Subscription period has ended. Renew to deploy.', 402);
+    }
+    if (resolvedEnvironment === 'preview' && !entitlements.previewDeployments) {
+      throw new DeploymentRequestError(
+        'Preview deployments are not available on your current plan.',
+        402,
+      );
     }
 
     try {
@@ -592,4 +602,95 @@ const buildPreviewDomain = (input: {
   const previewLabel = buildPreviewLabel(input.projectSlug, input.ref);
   const organizationLabel = sanitizeDomainLabel(input.organizationSlug, 'org');
   return `${previewLabel}.${organizationLabel}.${input.baseDomain}`;
+};
+
+const isPrivateIpv4 = (host: string): boolean => {
+  const parts = host.split('.').map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => Number.isNaN(part) || part < 0 || part > 255)) {
+    return false;
+  }
+
+  const [a = 0, b = 0] = parts;
+  return (
+    a === 10
+    || a === 127
+    || a === 0
+    || (a === 169 && b === 254)
+    || (a === 172 && b >= 16 && b <= 31)
+    || (a === 192 && b === 168)
+  );
+};
+
+const isPrivateIpv6 = (host: string): boolean => {
+  const normalized = host.toLowerCase();
+  return (
+    normalized === '::1'
+    || normalized.startsWith('fe80:')
+    || normalized.startsWith('fc')
+    || normalized.startsWith('fd')
+  );
+};
+
+const isPrivateHost = (hostInput: string): boolean => {
+  const host = hostInput.trim().toLowerCase();
+  if (!host) {
+    return true;
+  }
+
+  if (
+    host === 'localhost'
+    || host.endsWith('.localhost')
+    || host.endsWith('.local')
+    || host === 'host.docker.internal'
+    || host.endsWith('.internal')
+  ) {
+    return true;
+  }
+
+  const ipKind = isIP(host);
+  if (ipKind === 4) {
+    return isPrivateIpv4(host);
+  }
+  if (ipKind === 6) {
+    return isPrivateIpv6(host);
+  }
+
+  return false;
+};
+
+const assertSafeGitUrl = (gitUrl: string): void => {
+  if (env.ALLOW_PRIVATE_GIT_HOSTS) {
+    return;
+  }
+
+  const trimmed = gitUrl.trim();
+  const sshStyleMatch = trimmed.match(/^git@([^:]+):.+$/i);
+  if (sshStyleMatch) {
+    const sshHost = sshStyleMatch[1] ?? '';
+    if (isPrivateHost(sshHost)) {
+      throw new DeploymentRequestError(
+        `Repository host "${sshHost}" is private or local. Set ALLOW_PRIVATE_GIT_HOSTS=true if this is intentional.`,
+        400,
+      );
+    }
+    return;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new DeploymentRequestError('gitUrl must be a valid HTTPS or SSH repository URL.', 400);
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'ssh:') {
+    throw new DeploymentRequestError('Only https:// and ssh:// repository URLs are allowed.', 400);
+  }
+
+  if (isPrivateHost(parsed.hostname)) {
+    throw new DeploymentRequestError(
+      `Repository host "${parsed.hostname}" is private or local. Set ALLOW_PRIVATE_GIT_HOSTS=true if this is intentional.`,
+      400,
+    );
+  }
 };

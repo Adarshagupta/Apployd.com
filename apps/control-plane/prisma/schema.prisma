@@ -160,6 +160,8 @@ model Project {
   previewDeploymentsEnabled Boolean @default(true)
   sleepEnabled         Boolean      @default(false)
   sleepAfterSeconds    Int          @default(900)
+  wakeMessage          String?
+  wakeRetrySeconds     Int          @default(5)
   targetPort           Int          @default(3000)
   resourceRamMb        Int          @default(256)
   resourceCpuMillicore Int          @default(250)

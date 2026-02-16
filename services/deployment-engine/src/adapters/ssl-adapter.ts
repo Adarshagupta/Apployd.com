@@ -21,13 +21,15 @@ export class SslAdapter {
         ...aliases.map((alias, index) => assertValidHostname(alias, `alias #${index + 1}`)),
       ]),
     );
+    const certificateDomain = allDomains[0]!;
     const domainFlags = allDomains.map((d) => `-d ${shellEscape(d)}`).join(' ');
 
     const command = [
-      'certbot --nginx',
+      'certbot certonly --nginx',
       '--non-interactive',
       '--agree-tos',
       '--expand',
+      `--cert-name ${shellEscape(certificateDomain)}`,
       `--email ${shellEscape(env.CERTBOT_EMAIL)}`,
       domainFlags,
     ].join(' ');

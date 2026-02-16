@@ -4,6 +4,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { env } from '../../config/env.js';
+import { getPlanEntitlements } from '../../domain/plan-entitlements.js';
 import { hashPassword } from '../../lib/crypto.js';
 import { prisma } from '../../lib/prisma.js';
 import { redis } from '../../lib/redis.js';
@@ -44,6 +45,8 @@ const updateGitSettingsSchema = z.object({
   previewDeploymentsEnabled: z.boolean().optional(),
   serviceType: z.enum(['web_service', 'static_site', 'python']).optional(),
   outputDirectory: z.string().trim().max(300).nullable().optional(),
+  wakeMessage: z.string().trim().max(280).nullable().optional(),
+  wakeRetrySeconds: z.number().int().min(1).max(60).optional(),
 });
 
 const pushWebhookSchema = z.object({
@@ -87,6 +90,9 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
       configured: github.isConfigured(),
       connected: Boolean(connection),
       connection,
+      oauthRedirectUri: github.getOAuthRedirectUri(),
+      webhookConfigured: Boolean(env.GITHUB_WEBHOOK_SECRET?.trim()),
+      webhookUrl: buildGitHubWebhookUrl(),
     };
   });
 
@@ -308,7 +314,14 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
 
     const project = await prisma.project.findUnique({
       where: { id: params.projectId },
-      select: { id: true, organizationId: true },
+      select: {
+        id: true,
+        organizationId: true,
+        repoOwner: true,
+        repoName: true,
+        repoFullName: true,
+        autoDeployEnabled: true,
+      },
     });
 
     if (!project) {
@@ -319,6 +332,27 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
       await access.requireOrganizationRole(user.userId, project.organizationId, 'developer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
+    }
+
+    const subscription = await prisma.subscription.findFirst({
+      where: {
+        organizationId: project.organizationId,
+        status: { in: ['active', 'trialing', 'past_due'] },
+      },
+      include: { plan: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!subscription) {
+      return reply.code(402).send({ message: 'No active subscription found for this organization.' });
+    }
+
+    const entitlements = getPlanEntitlements(subscription.plan.code);
+    if (body.autoDeployEnabled === true && !entitlements.autoDeploy) {
+      return reply.code(402).send({ message: 'Auto deploy is not available on your current plan.' });
+    }
+    if (body.previewDeploymentsEnabled === true && !entitlements.previewDeployments) {
+      return reply.code(402).send({ message: 'Preview deployments are not available on your current plan.' });
     }
 
     const updateData: Record<string, unknown> = {};
@@ -341,13 +375,87 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
     }
     if (body.serviceType !== undefined) updateData.serviceType = body.serviceType;
     if (body.outputDirectory !== undefined) updateData.outputDirectory = body.outputDirectory || null;
+    if (body.wakeMessage !== undefined) updateData.wakeMessage = body.wakeMessage || null;
+    if (body.wakeRetrySeconds !== undefined) updateData.wakeRetrySeconds = body.wakeRetrySeconds;
+
+    const resolvedAutoDeployEnabled = body.autoDeployEnabled ?? project.autoDeployEnabled;
+    const repoIdentity = resolveRepoIdentity({
+      repoOwner: body.repoOwner ?? project.repoOwner ?? undefined,
+      repoName: body.repoName ?? project.repoName ?? undefined,
+      repoFullName: body.repoFullName ?? project.repoFullName ?? undefined,
+    });
+    let webhookResult:
+      | {
+          configured: true;
+          created: boolean;
+          hookId: number;
+          url: string;
+        }
+      | {
+          configured: false;
+          reason: string;
+        };
+
+    if (resolvedAutoDeployEnabled && repoIdentity) {
+      if (!env.GITHUB_WEBHOOK_SECRET?.trim()) {
+        return reply.code(503).send({
+          message:
+            'GitHub webhook secret is not configured on the server. Set GITHUB_WEBHOOK_SECRET to enable automatic push deployments.',
+        });
+      }
+
+      const connection = await prisma.gitHubConnection.findUnique({
+        where: { userId: user.userId },
+      });
+      if (!connection) {
+        return reply.code(409).send({
+          message: 'Connect your GitHub account before enabling automatic push deployments.',
+        });
+      }
+
+      const accessToken = decryptSecret({
+        encryptedValue: connection.encryptedAccessToken,
+        iv: connection.iv,
+        authTag: connection.authTag,
+      });
+
+      try {
+        const ensured = await github.ensureRepositoryPushWebhook({
+          accessToken,
+          owner: repoIdentity.owner,
+          repo: repoIdentity.name,
+          webhookUrl: buildGitHubWebhookUrl(),
+          secret: env.GITHUB_WEBHOOK_SECRET,
+        });
+        webhookResult = {
+          configured: true,
+          created: ensured.created,
+          hookId: ensured.hookId,
+          url: buildGitHubWebhookUrl(),
+        };
+      } catch (error) {
+        return reply.code(400).send({
+          message: `GitHub webhook setup failed: ${(error as Error).message}`,
+        });
+      }
+    } else {
+      webhookResult = {
+        configured: false,
+        reason: resolvedAutoDeployEnabled
+          ? 'missing_repo_identity'
+          : 'auto_deploy_disabled',
+      };
+    }
 
     const updated = await prisma.project.update({
       where: { id: params.projectId },
       data: updateData,
     });
 
-    return { project: updated };
+    return {
+      project: updated,
+      webhook: webhookResult,
+    };
   });
 
   app.post('/integrations/github/webhook', async (request, reply) => {
@@ -526,6 +634,33 @@ const normalizeEmail = (value?: string | null): string | null => {
   }
   const normalized = value.trim().toLowerCase();
   return normalized || null;
+};
+
+const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
+
+const buildGitHubWebhookUrl = (): string =>
+  `${trimTrailingSlash(env.API_BASE_URL)}/api/v1/integrations/github/webhook`;
+
+const resolveRepoIdentity = (input: {
+  repoOwner?: string | undefined;
+  repoName?: string | undefined;
+  repoFullName?: string | undefined;
+}): { owner: string; name: string } | null => {
+  if (input.repoOwner?.trim() && input.repoName?.trim()) {
+    return {
+      owner: input.repoOwner.trim(),
+      name: input.repoName.trim(),
+    };
+  }
+
+  if (input.repoFullName?.trim()) {
+    const [owner, name] = input.repoFullName.trim().split('/').filter(Boolean);
+    if (owner && name) {
+      return { owner, name };
+    }
+  }
+
+  return null;
 };
 
 const slugifyOrganization = (value: string): string => {

@@ -1,6 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 import { SectionCard } from '../../../components/section-card';
 import { useWorkspaceContext } from '../../../components/workspace-provider';
@@ -156,6 +158,7 @@ function SkeletonBlock({ className }: { className: string }) {
 
 export default function BillingPage() {
   const { selectedOrganizationId } = useWorkspaceContext();
+  const searchParams = useSearchParams();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -166,6 +169,8 @@ export default function BillingPage() {
     displayName: string;
   } | null>(null);
   const [message, setMessage] = useState('');
+  const [redirectingToCheckout, setRedirectingToCheckout] = useState(false);
+  const [redirectingPlanCode, setRedirectingPlanCode] = useState<string | null>(null);
 
   const availablePlansByCode = useMemo(() => {
     const map = new Map<string, Plan>();
@@ -176,6 +181,21 @@ export default function BillingPage() {
   }, [plans]);
 
   const currentPlanCode = currentPlan?.code.toLowerCase() ?? null;
+  const checkoutStatus = searchParams?.get('status');
+  const checkoutSuccess = checkoutStatus === 'success';
+  const currentPlanPrice = useMemo(() => {
+    if (!currentPlan) {
+      return null;
+    }
+
+    const apiPlan = availablePlansByCode.get(currentPlan.code.toLowerCase());
+    if (apiPlan?.priceUsdMonthly) {
+      return `$${apiPlan.priceUsdMonthly} / month`;
+    }
+
+    const catalogPlan = planCatalog.find((item) => item.code === currentPlan.code.toLowerCase());
+    return catalogPlan?.price ?? null;
+  }, [availablePlansByCode, currentPlan]);
 
   const load = async () => {
     setLoading(true);
@@ -184,6 +204,12 @@ export default function BillingPage() {
       setPlans(planData.plans ?? []);
 
       if (selectedOrganizationId) {
+        if (checkoutStatus === 'success') {
+          await apiClient.post('/billing/sync-subscription', {
+            organizationId: selectedOrganizationId,
+          });
+        }
+
         const currentData = await apiClient.get(`/plans/current?organizationId=${selectedOrganizationId}`);
         setCurrentPlan(
           currentData.subscription
@@ -202,7 +228,11 @@ export default function BillingPage() {
         setCurrentPlan(null);
         setInvoices([]);
       }
-      setMessage('');
+      if (checkoutStatus === 'cancelled') {
+        setMessage('Checkout was cancelled.');
+      } else {
+        setMessage('');
+      }
     } catch (error) {
       setMessage((error as Error).message);
     } finally {
@@ -213,7 +243,7 @@ export default function BillingPage() {
   useEffect(() => {
     load().catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedOrganizationId]);
+  }, [selectedOrganizationId, checkoutStatus]);
 
   const startUpgrade = async (planCode: string) => {
     if (!selectedOrganizationId) {
@@ -222,6 +252,9 @@ export default function BillingPage() {
     }
 
     try {
+      setMessage('');
+      setRedirectingPlanCode(planCode);
+      setRedirectingToCheckout(true);
       const response = await apiClient.post('/billing/checkout-session', {
         organizationId: selectedOrganizationId,
         planCode,
@@ -235,13 +268,76 @@ export default function BillingPage() {
       }
 
       setMessage('Checkout URL missing');
+      setRedirectingToCheckout(false);
+      setRedirectingPlanCode(null);
     } catch (error) {
       setMessage((error as Error).message);
+      setRedirectingToCheckout(false);
+      setRedirectingPlanCode(null);
     }
   };
 
   return (
     <div className="space-y-4">
+      {checkoutSuccess ? (
+        <SectionCard title="Purchase Complete" subtitle="Your billing upgrade is active and synced.">
+          <div className="billing-success-wrap">
+            <div className="billing-success-confetti billing-success-confetti-left" />
+            <div className="billing-success-confetti billing-success-confetti-right" />
+            <div className="billing-success-card">
+              <div className="billing-success-kicker">
+                <span className="billing-success-check" aria-hidden="true">✓</span>
+                <span>Payment Successful</span>
+              </div>
+              <p className="billing-success-title">
+                {currentPlan ? `${currentPlan.displayName} plan is now active.` : 'Your subscription is now active.'}
+              </p>
+              <p className="billing-success-copy">
+                Usage pools, feature limits, and project entitlements have been refreshed.
+              </p>
+              <div className="billing-success-meta">
+                <span>
+                  Status: <strong>Successful</strong>
+                </span>
+                <span>
+                  Date: <strong>{new Date().toLocaleDateString()}</strong>
+                </span>
+              </div>
+
+              {currentPlan ? (
+                <div className="billing-success-plan">
+                  <div>
+                    <p className="billing-success-plan-name">{currentPlan.displayName}</p>
+                    <p className="billing-success-plan-status">{currentPlan.status.replace('_', ' ')}</p>
+                  </div>
+                  <div className="billing-success-plan-price">
+                    {currentPlanPrice ?? 'Active'}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="relative flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  {currentPlan ? (
+                    <p className="billing-success-period">
+                      Current period ends {new Date(currentPlan.periodEnd).toLocaleDateString()}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex gap-2">
+                  <Link href="/usage" className="btn-secondary">
+                    View usage
+                  </Link>
+                  <Link href="/projects" className="btn-primary">
+                    Open projects
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </SectionCard>
+      ) : null}
+
       <SectionCard title="Subscription" subtitle="Manage plan upgrades, renewals, and invoice lifecycle.">
         <div className="grid gap-3">
           {loading ? (
@@ -322,8 +418,14 @@ export default function BillingPage() {
                     Contact Sales
                   </a>
                 ) : canCheckout ? (
-                  <button className="btn-primary mt-4 w-full" onClick={() => startUpgrade(apiPlan.code)}>
-                    Choose {catalogPlan.name}
+                  <button
+                    className="btn-primary mt-4 w-full disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => startUpgrade(apiPlan.code)}
+                    disabled={redirectingToCheckout}
+                  >
+                    {redirectingToCheckout && redirectingPlanCode === apiPlan.code
+                      ? 'Redirecting...'
+                      : `Choose ${catalogPlan.name}`}
                   </button>
                 ) : catalogPlan.code === 'free' ? (
                   <p className="mt-3 text-xs text-slate-500">Free plan available by default for new organizations.</p>
@@ -424,6 +526,20 @@ export default function BillingPage() {
       </SectionCard>
 
       {message ? <p className="text-sm text-slate-700">{message}</p> : null}
+
+      {redirectingToCheckout ? (
+        <div className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/45 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-xl">
+            <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
+            <p className="text-sm font-semibold text-slate-900">Redirecting to Stripe checkout</p>
+            <p className="mt-1 text-xs text-slate-600">
+              {redirectingPlanCode
+                ? `Preparing ${redirectingPlanCode.toUpperCase()} plan checkout...`
+                : 'Preparing secure checkout...'}
+            </p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -53,14 +53,12 @@ export class ContainerActionConsumer {
   }
 
   private async handleSleep(payload: z.infer<typeof actionSchema>): Promise<void> {
-    await this.docker.stopContainer(payload.dockerContainerId);
-
     await prisma.container.updateMany({
       where: { id: payload.containerId },
       data: {
-        status: ContainerStatus.sleeping,
-        sleepStatus: SleepStatus.sleeping,
-        stoppedAt: new Date(),
+        status: ContainerStatus.running,
+        sleepStatus: SleepStatus.awake,
+        lastRequestAt: new Date(),
       },
     });
 
@@ -77,8 +75,8 @@ export class ContainerActionConsumer {
           containerId: payload.containerId,
           level: 'info',
           source: 'deployment-engine',
-          message: 'Container moved to sleep state',
-          metadata: { action: 'sleep' },
+          message: 'Sleep action ignored; container kept active',
+          metadata: { action: 'sleep', ignored: true },
         },
       });
     }
@@ -88,8 +86,8 @@ export class ContainerActionConsumer {
         `apployd:deployments:${payload.deploymentId}`,
         JSON.stringify({
           deploymentId: payload.deploymentId,
-          type: 'sleeping',
-          message: 'Container moved to sleep state',
+          type: 'running',
+          message: 'Sleep action ignored; container kept active',
           timestamp: new Date().toISOString(),
         }),
       );

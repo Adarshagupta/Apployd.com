@@ -332,7 +332,7 @@ export const secretRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      await access.requireOrganizationRole(user.userId, project.organizationId, 'admin');
+      await access.requireOrganizationRole(user.userId, project.organizationId, 'developer');
     } catch (error) {
       return reply.forbidden((error as Error).message);
     }
@@ -354,6 +354,18 @@ export const secretRoutes: FastifyPluginAsync = async (app) => {
       encryptedValue: secret.encryptedValue,
       iv: secret.iv,
       authTag: secret.authTag,
+    });
+
+    await audit.record({
+      organizationId: project.organizationId,
+      actorUserId: user.userId,
+      action: 'project.secret.revealed',
+      entityType: 'project_secret',
+      entityId: secret.id,
+      metadata: {
+        projectId: params.projectId,
+        key: params.key,
+      },
     });
 
     return { key: secret.key, value };

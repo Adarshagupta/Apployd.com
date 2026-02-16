@@ -28,7 +28,7 @@ export const usageRoutes: FastifyPluginAsync = async (app) => {
     const subscription = await prisma.subscription.findFirst({
       where: {
         organizationId: query.organizationId,
-        status: { in: ['active', 'trialing'] },
+        status: { in: ['active', 'trialing', 'past_due'] },
       },
       orderBy: { createdAt: 'desc' },
     });

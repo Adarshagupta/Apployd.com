@@ -41,6 +41,15 @@ interface GitHubRepoApiItem {
   };
 }
 
+interface GitHubWebhookApiItem {
+  id: number;
+  active: boolean;
+  events?: string[];
+  config?: {
+    url?: string;
+  };
+}
+
 export interface GitHubRepoSummary {
   id: string;
   name: string;
@@ -185,6 +194,59 @@ export class GitHubService {
     };
   }
 
+  async ensureRepositoryPushWebhook(input: {
+    accessToken: string;
+    owner: string;
+    repo: string;
+    webhookUrl: string;
+    secret: string;
+  }): Promise<{ hookId: number; created: boolean }> {
+    const owner = input.owner.trim();
+    const repo = input.repo.trim();
+    if (!owner || !repo) {
+      throw new Error('Repository owner and name are required for webhook configuration.');
+    }
+
+    const webhookUrl = normalizeWebhookUrl(input.webhookUrl);
+    const hooksApiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/hooks`;
+
+    const hooksResponse = await this.githubRequest(hooksApiUrl, input.accessToken, {
+      method: 'GET',
+    });
+    const hooks = (await hooksResponse.json()) as GitHubWebhookApiItem[];
+
+    const existing = hooks.find((hook) => normalizeWebhookUrl(hook.config?.url ?? '') === webhookUrl);
+    const payload = {
+      active: true,
+      events: ['push'],
+      config: {
+        url: webhookUrl,
+        content_type: 'json',
+        secret: input.secret,
+        insecure_ssl: '0',
+      },
+    };
+
+    if (existing) {
+      await this.githubRequest(
+        `${hooksApiUrl}/${existing.id}`,
+        input.accessToken,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        },
+      );
+      return { hookId: existing.id, created: false };
+    }
+
+    const createdResponse = await this.githubRequest(hooksApiUrl, input.accessToken, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    const created = (await createdResponse.json()) as GitHubWebhookApiItem;
+    return { hookId: created.id, created: true };
+  }
+
   verifyWebhookSignature(payload: Buffer, signatureHeader?: string): boolean {
     if (!env.GITHUB_WEBHOOK_SECRET || !signatureHeader) {
       return false;
@@ -206,4 +268,50 @@ export class GitHubService {
       throw new Error('GitHub OAuth is not configured.');
     }
   }
+
+  private async githubRequest(url: string, accessToken: string, init: RequestInit): Promise<Response> {
+    const headers = new Headers(init.headers ?? {});
+    headers.set('Accept', 'application/vnd.github+json');
+    headers.set('Authorization', `Bearer ${accessToken}`);
+    headers.set('User-Agent', 'apployd-control-plane');
+    headers.set('X-GitHub-Api-Version', '2022-11-28');
+    if (init.body && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+
+    const response = await fetch(url, {
+      ...init,
+      headers,
+    });
+
+    if (response.ok) {
+      return response;
+    }
+
+    const responseText = await response.text().catch(() => '');
+    let detail = '';
+    if (responseText) {
+      try {
+        const parsed = JSON.parse(responseText) as { message?: string };
+        detail = parsed.message ?? responseText;
+      } catch {
+        detail = responseText;
+      }
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      throw new Error(`GitHub access denied (${response.status}). Reconnect GitHub and ensure repo admin access.`);
+    }
+    if (response.status === 404) {
+      throw new Error('Repository not found or webhook API unavailable for your token.');
+    }
+    if (response.status === 422) {
+      throw new Error(`GitHub rejected webhook setup: ${detail || 'Validation failed.'}`);
+    }
+
+    throw new Error(`GitHub API request failed (${response.status})${detail ? `: ${detail}` : ''}`);
+  }
 }
+
+const normalizeWebhookUrl = (value: string): string =>
+  value.trim().replace(/\/+$/, '');

@@ -31,6 +31,7 @@ Optional flags:
   --default-region        Default scheduler region (default: fsn1)
   --jwt-secret            JWT secret (auto-generated if omitted)
   --encryption-key        32+ char secret for AES encryption (auto-generated if omitted)
+  --edge-wake-token       Shared token for nginx -> control-plane wake endpoint (auto-generated if omitted)
   --cloudflare-api-token  Cloudflare API token (overrides CLOUDFLARE_API_TOKEN env)
   --cloudflare-zone-id    Cloudflare zone ID (overrides CLOUDFLARE_ZONE_ID env)
 
@@ -50,6 +51,7 @@ Runtime secrets are sourced from env vars when present:
   GITHUB_CLIENT_ID
   GITHUB_CLIENT_SECRET
   GITHUB_WEBHOOK_SECRET
+  EDGE_WAKE_TOKEN
   CLOUDFLARE_API_TOKEN
   CLOUDFLARE_ZONE_ID
 EOF
@@ -67,6 +69,8 @@ REDIS_URL="redis://redis:6379"
 DEFAULT_REGION="fsn1"
 JWT_SECRET_VALUE=""
 ENCRYPTION_KEY_VALUE=""
+EDGE_WAKE_TOKEN_VALUE="${EDGE_WAKE_TOKEN:-}"
+CONTROL_PLANE_INTERNAL_URL_VALUE="${CONTROL_PLANE_INTERNAL_URL:-http://127.0.0.1:4000}"
 CLOUDFLARE_API_TOKEN_VALUE="${CLOUDFLARE_API_TOKEN:-replace}"
 CLOUDFLARE_ZONE_ID_VALUE="${CLOUDFLARE_ZONE_ID:-replace}"
 
@@ -118,6 +122,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --encryption-key)
       ENCRYPTION_KEY_VALUE="${2:-}"
+      shift 2
+      ;;
+    --edge-wake-token)
+      EDGE_WAKE_TOKEN_VALUE="${2:-}"
       shift 2
       ;;
     --cloudflare-api-token)
@@ -191,6 +199,10 @@ if [[ -z "$ENCRYPTION_KEY_VALUE" ]]; then
   ENCRYPTION_KEY_VALUE="$(generate_secret)"
 fi
 
+if [[ -z "$EDGE_WAKE_TOKEN_VALUE" ]]; then
+  EDGE_WAKE_TOKEN_VALUE="$(generate_secret)"
+fi
+
 STRIPE_SECRET_KEY_VALUE="${STRIPE_SECRET_KEY:-sk_test_replace}"
 STRIPE_WEBHOOK_SECRET_VALUE="${STRIPE_WEBHOOK_SECRET:-whsec_replace}"
 SMTP_HOST_VALUE="${SMTP_HOST:-}"
@@ -236,6 +248,8 @@ GITHUB_OAUTH_REDIRECT_URI=${API_BASE_URL%/}/api/v1/integrations/github/callback
 GITHUB_WEBHOOK_SECRET=$GITHUB_WEBHOOK_SECRET_VALUE
 DASHBOARD_BASE_URL=$DASHBOARD_BASE_URL
 ENCRYPTION_KEY=$ENCRYPTION_KEY_VALUE
+EDGE_WAKE_TOKEN=$EDGE_WAKE_TOKEN_VALUE
+EDGE_WAKE_RETRY_SECONDS=5
 CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN_VALUE
 CLOUDFLARE_ZONE_ID=$CLOUDFLARE_ZONE_ID_VALUE
 BASE_DOMAIN=$BASE_DOMAIN
@@ -266,6 +280,9 @@ DOCKER_HOST=unix:///var/run/docker.sock
 NGINX_SITES_PATH=/etc/nginx/sites-enabled
 NGINX_TEMPLATE_PATH=/opt/apployd/nginx/templates/project.conf.tpl
 CERTBOT_EMAIL=$CERTBOT_EMAIL
+CONTROL_PLANE_INTERNAL_URL=$CONTROL_PLANE_INTERNAL_URL_VALUE
+EDGE_WAKE_TOKEN=$EDGE_WAKE_TOKEN_VALUE
+EDGE_WAKE_ENABLED=true
 ENGINE_REGION=$DEFAULT_REGION
 ENGINE_METRICS_PORT=9102
 ENGINE_HEALTHCHECK_TIMEOUT_SECONDS=60

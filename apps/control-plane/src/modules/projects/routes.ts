@@ -3,8 +3,12 @@ import type { Project } from '@prisma/client';
 
 import { z } from 'zod';
 
+import { env } from '../../config/env.js';
+import { getPlanEntitlements } from '../../domain/plan-entitlements.js';
+import { decryptSecret } from '../../lib/secrets.js';
 import { AccessService } from '../../services/access-service.js';
 import { AuditLogService } from '../../services/audit-log-service.js';
+import { GitHubService } from '../../services/github-service.js';
 import { prisma } from '../../lib/prisma.js';
 import { isSerializableRetryableError, withSerializableRetry } from '../../lib/transaction-retry.js';
 import { ProjectUsageService } from '../../services/project-usage-service.js';
@@ -51,12 +55,40 @@ const confirmProjectDeleteSchema = z.object({
   code: z.string().regex(/^\d{6}$/, 'OTP must be a 6 digit code'),
 });
 
+const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
+
+const buildGitHubWebhookUrl = (): string =>
+  `${trimTrailingSlash(env.API_BASE_URL)}/api/v1/integrations/github/webhook`;
+
+const resolveRepoIdentity = (input: {
+  repoOwner?: string | undefined;
+  repoName?: string | undefined;
+  repoFullName?: string | undefined;
+}): { owner: string; name: string } | null => {
+  if (input.repoOwner?.trim() && input.repoName?.trim()) {
+    return {
+      owner: input.repoOwner.trim(),
+      name: input.repoName.trim(),
+    };
+  }
+
+  if (input.repoFullName?.trim()) {
+    const [owner, name] = input.repoFullName.trim().split('/').filter(Boolean);
+    if (owner && name) {
+      return { owner, name };
+    }
+  }
+
+  return null;
+};
+
 export const projectRoutes: FastifyPluginAsync = async (app) => {
   const access = new AccessService();
   const policy = new ResourcePolicyService();
   const audit = new AuditLogService();
   const usage = new ProjectUsageService();
   const projectDeleteOtp = new ProjectDeleteOtpService();
+  const github = new GitHubService();
 
   app.get('/projects', { preHandler: [app.authenticate] }, async (request, reply) => {
     const user = request.user as { userId: string; email: string };
@@ -118,7 +150,7 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
     const subscription = await prisma.subscription.findFirst({
       where: {
         organizationId: body.organizationId,
-        status: { in: ['active', 'trialing'] },
+        status: { in: ['active', 'trialing', 'past_due'] },
       },
       include: { plan: true },
       orderBy: { createdAt: 'desc' },
@@ -135,6 +167,75 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
       if (count >= subscription.plan.maxProjects) {
         return reply.badRequest('Project limit reached for plan');
       }
+    }
+    const entitlements = getPlanEntitlements(subscription.plan.code);
+    const autoDeployEnabled = entitlements.autoDeploy ? body.autoDeployEnabled : false;
+    const previewDeploymentsEnabled =
+      entitlements.previewDeployments ? body.previewDeploymentsEnabled : false;
+    const repoIdentity = resolveRepoIdentity({
+      repoOwner: body.repoOwner,
+      repoName: body.repoName,
+      repoFullName: body.repoFullName,
+    });
+    let webhook:
+      | {
+          configured: true;
+          created: boolean;
+          hookId: number;
+          url: string;
+        }
+      | {
+          configured: false;
+          reason: string;
+        };
+
+    if (autoDeployEnabled && repoIdentity) {
+      if (!env.GITHUB_WEBHOOK_SECRET?.trim()) {
+        return reply.code(503).send({
+          message:
+            'GitHub webhook secret is not configured on the server. Set GITHUB_WEBHOOK_SECRET to enable automatic push deployments.',
+        });
+      }
+
+      const connection = await prisma.gitHubConnection.findUnique({
+        where: { userId: user.userId },
+      });
+      if (!connection) {
+        return reply.code(409).send({
+          message: 'Connect your GitHub account before enabling automatic push deployments.',
+        });
+      }
+
+      const accessToken = decryptSecret({
+        encryptedValue: connection.encryptedAccessToken,
+        iv: connection.iv,
+        authTag: connection.authTag,
+      });
+
+      try {
+        const ensured = await github.ensureRepositoryPushWebhook({
+          accessToken,
+          owner: repoIdentity.owner,
+          repo: repoIdentity.name,
+          webhookUrl: buildGitHubWebhookUrl(),
+          secret: env.GITHUB_WEBHOOK_SECRET,
+        });
+        webhook = {
+          configured: true,
+          created: ensured.created,
+          hookId: ensured.hookId,
+          url: buildGitHubWebhookUrl(),
+        };
+      } catch (error) {
+        return reply.code(400).send({
+          message: `GitHub webhook setup failed: ${(error as Error).message}`,
+        });
+      }
+    } else {
+      webhook = {
+        configured: false,
+        reason: autoDeployEnabled ? 'missing_repo_identity' : 'auto_deploy_disabled',
+      };
     }
 
     let project: Project;
@@ -157,13 +258,14 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
             ...(body.buildCommand && { buildCommand: body.buildCommand }),
             ...(body.startCommand && { startCommand: body.startCommand }),
             ...(body.rootDirectory && { rootDirectory: body.rootDirectory }),
-            ...(body.autoDeployEnabled !== undefined && { autoDeployEnabled: body.autoDeployEnabled }),
-            ...(body.previewDeploymentsEnabled !== undefined && { previewDeploymentsEnabled: body.previewDeploymentsEnabled }),
+            autoDeployEnabled,
+            previewDeploymentsEnabled,
             ...(body.targetPort && { targetPort: body.targetPort }),
             resourceRamMb: 128,
             resourceCpuMillicore: 100,
             resourceBandwidthGb: 1,
-            sleepEnabled: subscription.plan.code === 'free',
+            // Sleep mode is globally disabled; keep all projects always active.
+            sleepEnabled: false,
           },
         });
 
@@ -203,7 +305,7 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
       },
     });
 
-    return reply.code(201).send({ project });
+    return reply.code(201).send({ project, webhook });
   });
 
   app.patch('/projects/:projectId/resources', { preHandler: [app.authenticate] }, async (request, reply) => {

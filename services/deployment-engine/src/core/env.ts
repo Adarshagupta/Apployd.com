@@ -62,6 +62,9 @@ const schema = z.object({
   ENGINE_HEALTHCHECK_DELAY_MS: z.coerce.number().int().min(250).max(5000).default(1000),
   ENGINE_LOCAL_MODE: booleanFromEnv.optional(),
   ENGINE_CONTAINER_READ_ONLY: booleanFromEnv.optional(),
+  CONTROL_PLANE_INTERNAL_URL: z.string().url().default('http://127.0.0.1:4000'),
+  EDGE_WAKE_TOKEN: optionalString,
+  EDGE_WAKE_ENABLED: booleanFromEnv.optional(),
 });
 
 const parsed = schema.parse(process.env);
@@ -72,4 +75,5 @@ export const env = {
   PREVIEW_BASE_DOMAIN: parsed.PREVIEW_BASE_DOMAIN ?? parsed.BASE_DOMAIN,
   ENGINE_LOCAL_MODE: parsed.ENGINE_LOCAL_MODE ?? parsed.NODE_ENV !== 'production',
   ENGINE_CONTAINER_READ_ONLY: parsed.ENGINE_CONTAINER_READ_ONLY ?? false,
+  EDGE_WAKE_ENABLED: parsed.EDGE_WAKE_ENABLED ?? true,
 };

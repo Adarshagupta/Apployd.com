@@ -44,6 +44,12 @@ interface CustomDomainSummary {
   certificateIssuedAt?: string | null;
   createdAt: string;
 }
+interface AutoDomainSummary {
+  deploymentId: string;
+  domain: string;
+  environment: 'production' | 'preview';
+  status: string;
+}
 
 interface ProjectUsageMetricPoint {
   day: string;
@@ -55,6 +61,11 @@ interface CurrentSubscription {
   poolRamMb: number;
   poolCpuMillicores: number;
   poolBandwidthGb: number;
+  entitlements?: {
+    autoDeploy: boolean;
+    previewDeployments: boolean;
+    customDomains: boolean;
+  };
 }
 
 interface ProjectUsageDetails {
@@ -295,7 +306,7 @@ export default function ProjectDetailPage() {
     try {
       setDeploymentAction(deploymentId);
       await apiClient.post(`/deployments/${deploymentId}/rollback`, {});
-      setMessage('Rollback initiated — a new deployment will start from the previous image.');
+      setMessage('Rollback initiated â€” a new deployment will start from the previous image.');
       await loadDeployments();
     } catch (error) {
       setMessage(`Rollback failed: ${(error as Error).message}`);
@@ -308,7 +319,7 @@ export default function ProjectDetailPage() {
     try {
       setDeploymentAction(deploymentId);
       await apiClient.post(`/deployments/${deploymentId}/promote`, {});
-      setMessage('Promotion initiated — preview deployment will be redeployed to production.');
+      setMessage('Promotion initiated â€” preview deployment will be redeployed to production.');
       await loadDeployments();
     } catch (error) {
       setMessage(`Promote failed: ${(error as Error).message}`);
@@ -332,6 +343,8 @@ export default function ProjectDetailPage() {
     buildCommand: '',
     startCommand: '',
     targetPort: 3000,
+    wakeMessage: '',
+    wakeRetrySeconds: 5,
     autoDeployEnabled: true,
     serviceType: 'web_service' as 'web_service' | 'static_site' | 'python',
     outputDirectory: '',
@@ -348,6 +361,7 @@ export default function ProjectDetailPage() {
     }),
     [subscription],
   );
+  const autoDeployLocked = subscription?.entitlements?.autoDeploy === false;
 
   useEffect(() => {
     if (!project) return;
@@ -358,6 +372,8 @@ export default function ProjectDetailPage() {
       buildCommand: project.buildCommand ?? '',
       startCommand: project.startCommand ?? '',
       targetPort: project.targetPort ?? 3000,
+      wakeMessage: project.wakeMessage ?? '',
+      wakeRetrySeconds: Math.max(1, Math.min(60, project.wakeRetrySeconds ?? 5)),
       autoDeployEnabled: project.autoDeployEnabled,
       serviceType: (project.serviceType as 'web_service' | 'static_site' | 'python') ?? 'web_service',
       outputDirectory: project.outputDirectory ?? '',
@@ -397,6 +413,18 @@ export default function ProjectDetailPage() {
     }));
   }, [settingsResourceLimits]);
 
+  useEffect(() => {
+    if (!autoDeployLocked) {
+      return;
+    }
+
+    setProjectSettings((previous) =>
+      previous.autoDeployEnabled
+        ? { ...previous, autoDeployEnabled: false }
+        : previous,
+    );
+  }, [autoDeployLocked]);
+
   const saveProjectWorkspace = async () => {
     if (!projectId) return;
     try {
@@ -410,6 +438,8 @@ export default function ProjectDetailPage() {
           buildCommand: projectSettings.buildCommand || null,
           startCommand: projectSettings.startCommand || null,
           targetPort: Number(projectSettings.targetPort),
+          wakeMessage: projectSettings.wakeMessage.trim() || null,
+          wakeRetrySeconds: Math.max(1, Math.min(60, Number(projectSettings.wakeRetrySeconds) || 5)),
           autoDeployEnabled: projectSettings.autoDeployEnabled,
           serviceType: projectSettings.serviceType,
           outputDirectory: projectSettings.outputDirectory || null,
@@ -490,13 +520,19 @@ export default function ProjectDetailPage() {
   const [envSaving, setEnvSaving] = useState(false);
   const [envBulkSaving, setEnvBulkSaving] = useState(false);
   const [envDeletingKey, setEnvDeletingKey] = useState('');
+  const [envRevealingKey, setEnvRevealingKey] = useState('');
+  const [envEditingKey, setEnvEditingKey] = useState('');
   const [projectSecrets, setProjectSecrets] = useState<ProjectSecretSummary[]>([]);
+  const [revealedSecrets, setRevealedSecrets] = useState<Record<string, string>>({});
   const [envDraft, setEnvDraft] = useState({ key: '', value: '' });
   const [envBulkText, setEnvBulkText] = useState('');
 
   const loadProjectSecrets = useCallback(async () => {
     if (!projectId) {
       setProjectSecrets([]);
+      setRevealedSecrets({});
+      setEnvEditingKey('');
+      setEnvDraft({ key: '', value: '' });
       return;
     }
     try {
@@ -504,10 +540,22 @@ export default function ProjectDetailPage() {
       const data = (await apiClient.get(`/projects/${projectId}/secrets`)) as {
         secrets?: ProjectSecretSummary[];
       };
-      setProjectSecrets(data.secrets ?? []);
+      const secrets = data.secrets ?? [];
+      setProjectSecrets(secrets);
+      setRevealedSecrets((previous) => {
+        const next: Record<string, string> = {};
+        for (const secret of secrets) {
+          if (Object.prototype.hasOwnProperty.call(previous, secret.key)) {
+            next[secret.key] = previous[secret.key]!;
+          }
+        }
+        return next;
+      });
+      setEnvEditingKey((previous) => (secrets.some((secret) => secret.key === previous) ? previous : ''));
       setEnvMessage('');
     } catch (error) {
       setProjectSecrets([]);
+      setRevealedSecrets({});
       setEnvMessage((error as Error).message);
     } finally {
       setEnvLoading(false);
@@ -522,6 +570,7 @@ export default function ProjectDetailPage() {
     if (!projectId) return;
     const key = envDraft.key.trim().toUpperCase();
     const value = envDraft.value.trim();
+    const editingKey = envEditingKey;
     if (!key || !value) {
       setEnvMessage('Key and value are required.');
       return;
@@ -533,14 +582,94 @@ export default function ProjectDetailPage() {
     try {
       setEnvSaving(true);
       await apiClient.put(`/projects/${projectId}/secrets/${encodeURIComponent(key)}`, { value });
+      setRevealedSecrets((previous) => {
+        const next = { ...previous, [key]: value };
+        if (editingKey && editingKey !== key) {
+          delete next[editingKey];
+        }
+        return next;
+      });
       await loadProjectSecrets();
       setEnvDraft({ key: '', value: '' });
-      setEnvMessage(`${key} saved.`);
+      setEnvEditingKey('');
+      setEnvMessage(editingKey ? `${key} updated.` : `${key} saved.`);
     } catch (error) {
       setEnvMessage((error as Error).message);
     } finally {
       setEnvSaving(false);
     }
+  };
+
+  const revealProjectEnvVar = async (key: string) => {
+    if (!projectId) return;
+    try {
+      setEnvRevealingKey(key);
+      const result = (await apiClient.get(
+        `/projects/${projectId}/secrets/${encodeURIComponent(key)}/reveal`,
+      )) as { value?: string };
+      if (typeof result.value !== 'string') {
+        throw new Error(`Failed to reveal ${key}.`);
+      }
+      setRevealedSecrets((previous) => ({ ...previous, [key]: result.value! }));
+      setEnvMessage(`${key} revealed.`);
+    } catch (error) {
+      setEnvMessage((error as Error).message);
+    } finally {
+      setEnvRevealingKey('');
+    }
+  };
+
+  const hideProjectEnvVar = (key: string) => {
+    setRevealedSecrets((previous) => {
+      if (!Object.prototype.hasOwnProperty.call(previous, key)) {
+        return previous;
+      }
+      const next = { ...previous };
+      delete next[key];
+      return next;
+    });
+
+    if (envEditingKey === key) {
+      setEnvEditingKey('');
+      setEnvDraft({ key: '', value: '' });
+    }
+
+    setEnvMessage(`${key} hidden.`);
+  };
+
+  const editProjectEnvVar = async (key: string) => {
+    const cachedValue = revealedSecrets[key];
+    if (typeof cachedValue === 'string') {
+      setEnvDraft({ key, value: cachedValue });
+      setEnvEditingKey(key);
+      setEnvMessage(`${key} loaded for editing.`);
+      return;
+    }
+
+    if (!projectId) return;
+    try {
+      setEnvRevealingKey(key);
+      const result = (await apiClient.get(
+        `/projects/${projectId}/secrets/${encodeURIComponent(key)}/reveal`,
+      )) as { value?: string };
+      if (typeof result.value !== 'string') {
+        throw new Error(`Failed to load ${key} for editing.`);
+      }
+      setRevealedSecrets((previous) => ({ ...previous, [key]: result.value! }));
+      setEnvDraft({ key, value: result.value! });
+      setEnvEditingKey(key);
+      setEnvMessage(`${key} loaded for editing.`);
+    } catch (error) {
+      setEnvMessage((error as Error).message);
+    } finally {
+      setEnvRevealingKey('');
+    }
+  };
+
+  const cancelEditProjectEnvVar = () => {
+    setEnvEditingKey('');
+    setEnvDraft({ key: '', value: '' });
+    setEnvMessage('');
   };
 
   const importProjectEnvVars = async () => {
@@ -572,6 +701,18 @@ export default function ProjectDetailPage() {
       setEnvDeletingKey(key);
       await apiClient.delete(`/projects/${projectId}/secrets/${encodeURIComponent(key)}`);
       setProjectSecrets((prev) => prev.filter((s) => s.key !== key));
+      setRevealedSecrets((previous) => {
+        if (!Object.prototype.hasOwnProperty.call(previous, key)) {
+          return previous;
+        }
+        const next = { ...previous };
+        delete next[key];
+        return next;
+      });
+      if (envEditingKey === key) {
+        setEnvEditingKey('');
+        setEnvDraft({ key: '', value: '' });
+      }
       setEnvMessage(`${key} deleted.`);
     } catch (error) {
       setEnvMessage((error as Error).message);
@@ -587,11 +728,27 @@ export default function ProjectDetailPage() {
   const [domainVerifying, setDomainVerifying] = useState('');
   const [domainDeleting, setDomainDeleting] = useState('');
   const [customDomains, setCustomDomains] = useState<CustomDomainSummary[]>([]);
+  const [autoDomain, setAutoDomain] = useState<AutoDomainSummary | null>(null);
   const [domainDraft, setDomainDraft] = useState('');
   const [domainInstructions, setDomainInstructions] = useState<{
     cname: { host: string; value: string };
     txt: { host: string; value: string };
   } | null>(null);
+  const autoDomainUrl = useMemo(() => {
+    if (!autoDomain?.domain) {
+      return null;
+    }
+
+    if (/^https?:\/\//i.test(autoDomain.domain)) {
+      return autoDomain.domain;
+    }
+
+    if (/^(localhost|\d+\.\d+\.\d+\.\d+)(:\d+)?$/i.test(autoDomain.domain)) {
+      return `http://${autoDomain.domain}`;
+    }
+
+    return `https://${autoDomain.domain}`;
+  }, [autoDomain]);
 
   const loadDomains = useCallback(async () => {
     if (!projectId) return;
@@ -599,10 +756,14 @@ export default function ProjectDetailPage() {
       setDomainsLoading(true);
       const data = (await apiClient.get(`/projects/${projectId}/domains`)) as {
         domains?: CustomDomainSummary[];
+        autoDomain?: AutoDomainSummary | null;
       };
       setCustomDomains(data.domains ?? []);
+      setAutoDomain(data.autoDomain ?? null);
     } catch (error) {
       setDomainMessage((error as Error).message);
+      setCustomDomains([]);
+      setAutoDomain(null);
     } finally {
       setDomainsLoading(false);
     }
@@ -628,7 +789,7 @@ export default function ProjectDetailPage() {
       setCustomDomains((prev) => [result.domain, ...prev]);
       setDomainInstructions(result.instructions);
       setDomainDraft('');
-      setDomainMessage('Domain added — configure DNS records below, then verify.');
+      setDomainMessage('Domain added â€” configure DNS records below, then verify.');
     } catch (error) {
       setDomainMessage((error as Error).message);
     } finally {
@@ -650,7 +811,7 @@ export default function ProjectDetailPage() {
       );
       setDomainMessage(
         result.verification.verified
-          ? `✓ Domain verified! It may take a few minutes for SSL to propagate.`
+          ? `âœ“ Domain verified! It may take a few minutes for SSL to propagate.`
           : `DNS not verified yet: ${result.verification.detail}`,
       );
     } catch (error) {
@@ -713,9 +874,9 @@ export default function ProjectDetailPage() {
 
     return (
       <div className="section-band">
-        <p className="text-sm text-slate-600">Project not found or still loading…</p>
+        <p className="text-sm text-slate-600">Project not found or still loadingâ€¦</p>
         <Link href="/projects" className="mt-3 inline-block text-sm text-slate-900 hover:underline">
-          ← Back to projects
+          â† Back to projects
         </Link>
       </div>
     );
@@ -727,7 +888,7 @@ export default function ProjectDetailPage() {
       {/* ---- Breadcrumb + project header ---- */}
       <div className="section-band !pb-0">
         <Link href="/projects" className="text-xs text-slate-500 hover:text-slate-800 hover:underline">
-          ← All projects
+          â† All projects
         </Link>
 
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
@@ -763,10 +924,10 @@ export default function ProjectDetailPage() {
             </span>
             <p className="text-sm text-slate-800">
               <span className="font-medium">Deployment in progress</span>
-              {' — '}
+              {' â€” '}
               <span className="capitalize">{inProgressDeployment.status}</span>
               {inProgressDeployment.branch ? ` on ${inProgressDeployment.branch}` : ''}
-              {'. Runs server-side — safe to close the browser.'}
+              {'. Runs server-side â€” safe to close the browser.'}
             </p>
             <button
               type="button"
@@ -813,7 +974,7 @@ export default function ProjectDetailPage() {
               className="ml-3 text-slate-400 hover:text-slate-700"
               onClick={() => setMessage('')}
             >
-              ✕
+              âœ•
             </button>
           </div>
         )}
@@ -946,7 +1107,7 @@ export default function ProjectDetailPage() {
                             {new Date(dep.createdAt).toLocaleString()}
                             {dep.finishedAt && (
                               <span>
-                                {' · '}
+                                {' Â· '}
                                 {Math.round(
                                   (new Date(dep.finishedAt).getTime() -
                                     new Date(dep.createdAt).getTime()) /
@@ -968,7 +1129,7 @@ export default function ProjectDetailPage() {
                             rel="noreferrer"
                             className="rounded-md bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-200 transition"
                           >
-                            Visit →
+                            Visit â†’
                           </a>
                         )}
 
@@ -982,7 +1143,7 @@ export default function ProjectDetailPage() {
                               onClick={(e) => { e.stopPropagation(); handleRollback(dep.id); }}
                               disabled={deploymentAction === dep.id}
                             >
-                              {deploymentAction === dep.id ? '…' : 'Rollback'}
+                              {deploymentAction === dep.id ? 'â€¦' : 'Rollback'}
                             </button>
                           )}
 
@@ -993,7 +1154,7 @@ export default function ProjectDetailPage() {
                             onClick={(e) => { e.stopPropagation(); handlePromote(dep.id); }}
                             disabled={deploymentAction === dep.id}
                           >
-                            {deploymentAction === dep.id ? '…' : 'Promote'}
+                            {deploymentAction === dep.id ? 'â€¦' : 'Promote'}
                           </button>
                         )}
                       </div>
@@ -1110,6 +1271,22 @@ export default function ProjectDetailPage() {
                 />
               </label>
               <label>
+                <span className="field-label">Wake retry (seconds)</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={60}
+                  value={projectSettings.wakeRetrySeconds}
+                  onChange={(e) =>
+                    setProjectSettings((p) => ({
+                      ...p,
+                      wakeRetrySeconds: Math.max(1, Math.min(60, Number(e.target.value) || 5)),
+                    }))
+                  }
+                  className="field-input"
+                />
+              </label>
+              <label>
                 <span className="field-label">Build command</span>
                 <input
                   value={projectSettings.buildCommand}
@@ -1129,6 +1306,19 @@ export default function ProjectDetailPage() {
                   />
                 </label>
               )}
+              <label className="md:col-span-2">
+                <span className="field-label">Wake message (optional)</span>
+                <input
+                  value={projectSettings.wakeMessage}
+                  onChange={(e) => setProjectSettings((p) => ({ ...p, wakeMessage: e.target.value }))}
+                  className="field-input"
+                  maxLength={280}
+                  placeholder="This app was sleeping due to inactivity. We are waking it up now."
+                />
+                <span className="text-[10px] text-slate-400">
+                  Shown to visitors during cold start.
+                </span>
+              </label>
               {projectSettings.serviceType === 'static_site' && (
                 <label>
                   <span className="field-label">Output directory</span>
@@ -1146,9 +1336,15 @@ export default function ProjectDetailPage() {
                   type="checkbox"
                   checked={projectSettings.autoDeployEnabled}
                   onChange={(e) => setProjectSettings((p) => ({ ...p, autoDeployEnabled: e.target.checked }))}
+                  disabled={autoDeployLocked}
                 />
                 <span className="text-sm text-slate-700">Auto-deploy on push</span>
               </label>
+              {autoDeployLocked && (
+                <p className="md:col-span-2 text-xs text-slate-500">
+                  Auto deploy is available on Dev plan and above.
+                </p>
+              )}
             </div>
 
             <div className="space-y-4 border-t border-slate-200 pt-5">
@@ -1194,7 +1390,7 @@ export default function ProjectDetailPage() {
                 onClick={saveProjectWorkspace}
                 disabled={saving}
               >
-                {saving ? 'Saving…' : 'Save settings'}
+                {saving ? 'Savingâ€¦' : 'Save settings'}
               </button>
             </div>
 
@@ -1212,7 +1408,7 @@ export default function ProjectDetailPage() {
                 onClick={requestProjectDeleteOtp}
                 disabled={deleteOtpRequesting || deletingProject}
               >
-                {deleteOtpRequesting ? 'Sending OTP…' : 'Send delete OTP'}
+                {deleteOtpRequesting ? 'Sending OTPâ€¦' : 'Send delete OTP'}
               </button>
 
               {deleteOtpRequested ? (
@@ -1235,7 +1431,7 @@ export default function ProjectDetailPage() {
                       onClick={confirmProjectDelete}
                       disabled={deletingProject}
                     >
-                      {deletingProject ? 'Deleting…' : 'Delete project'}
+                      {deletingProject ? 'Deletingâ€¦' : 'Delete project'}
                     </button>
                   </div>
                 </div>
@@ -1258,6 +1454,34 @@ export default function ProjectDetailPage() {
               </p>
             </div>
 
+            <article className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Default Apployd Domain</p>
+                {autoDomain ? (
+                  <>
+                    <p className="mono mt-1 truncate text-sm font-medium text-slate-900">{autoDomain.domain}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Active {autoDomain.environment} deployment
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-1 text-sm text-slate-500">
+                    No active deployment domain yet. Trigger a deployment to generate one.
+                  </p>
+                )}
+              </div>
+              {autoDomainUrl ? (
+                <a
+                  href={autoDomainUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-white hover:bg-slate-700 transition"
+                >
+                  Visit default domain
+                </a>
+              ) : null}
+            </article>
+
             {/* Add domain form */}
             <div className="flex flex-wrap items-end gap-3">
               <label className="flex-1 min-w-[240px]">
@@ -1276,7 +1500,7 @@ export default function ProjectDetailPage() {
                 onClick={addDomain}
                 disabled={domainAdding || !domainDraft.trim()}
               >
-                {domainAdding ? 'Adding…' : 'Add domain'}
+                {domainAdding ? 'Addingâ€¦' : 'Add domain'}
               </button>
             </div>
 
@@ -1286,7 +1510,7 @@ export default function ProjectDetailPage() {
                 <p className="text-sm font-medium text-slate-900">Configure DNS records at your domain registrar:</p>
 
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-700">Option 1 — CNAME (recommended)</p>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-700">Option 1 â€” CNAME (recommended)</p>
                   <div className="grid gap-2 md:grid-cols-2 text-sm">
                     <div>
                       <span className="text-xs text-slate-600">Type</span>
@@ -1304,7 +1528,7 @@ export default function ProjectDetailPage() {
                 </div>
 
                 <div className="space-y-2 border-t border-slate-300 pt-3">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-700">Option 2 — TXT verification</p>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-700">Option 2 â€” TXT verification</p>
                   <div className="grid gap-2 md:grid-cols-2 text-sm">
                     <div>
                       <span className="text-xs text-slate-600">Type</span>
@@ -1372,9 +1596,9 @@ export default function ProjectDetailPage() {
                         </span>
                       </div>
                       <p className="mt-0.5 text-xs text-slate-500">
-                        CNAME → <span className="mono select-all">{d.cnameTarget}</span>
+                        CNAME â†’ <span className="mono select-all">{d.cnameTarget}</span>
                         {d.verifiedAt && (
-                          <span> · Verified {new Date(d.verifiedAt).toLocaleDateString()}</span>
+                          <span> Â· Verified {new Date(d.verifiedAt).toLocaleDateString()}</span>
                         )}
                       </p>
                     </div>
@@ -1386,7 +1610,7 @@ export default function ProjectDetailPage() {
                           onClick={() => verifyDomain(d.id)}
                           disabled={domainVerifying === d.id}
                         >
-                          {domainVerifying === d.id ? 'Checking…' : 'Verify DNS'}
+                          {domainVerifying === d.id ? 'Checkingâ€¦' : 'Verify DNS'}
                         </button>
                       )}
                       {d.status === 'active' && (
@@ -1396,7 +1620,7 @@ export default function ProjectDetailPage() {
                           rel="noreferrer"
                           className="rounded-md bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-200 transition"
                         >
-                          Visit →
+                          Visit â†’
                         </a>
                       )}
                       <button
@@ -1405,7 +1629,7 @@ export default function ProjectDetailPage() {
                         onClick={() => deleteDomain(d.id)}
                         disabled={domainDeleting === d.id}
                       >
-                        {domainDeleting === d.id ? 'Removing…' : 'Remove'}
+                        {domainDeleting === d.id ? 'Removingâ€¦' : 'Remove'}
                       </button>
                     </div>
                   </article>
@@ -1428,7 +1652,7 @@ export default function ProjectDetailPage() {
                   className="ml-3 text-slate-400 hover:text-slate-700"
                   onClick={() => setDomainMessage('')}
                 >
-                  ✕
+                  âœ•
                 </button>
               </div>
             )}
@@ -1450,9 +1674,12 @@ export default function ProjectDetailPage() {
                 <span className="field-label">Key</span>
                 <input
                   value={envDraft.key}
-                  onChange={(e) => setEnvDraft((p) => ({ ...p, key: e.target.value.toUpperCase() }))}
+                  onChange={(event) =>
+                    setEnvDraft((previous) => ({ ...previous, key: event.target.value.toUpperCase() }))
+                  }
                   className="field-input"
                   placeholder="DATABASE_URL"
+                  disabled={envSaving || Boolean(envEditingKey)}
                 />
               </label>
               <label>
@@ -1460,20 +1687,34 @@ export default function ProjectDetailPage() {
                 <input
                   type="password"
                   value={envDraft.value}
-                  onChange={(e) => setEnvDraft((p) => ({ ...p, value: e.target.value }))}
+                  onChange={(event) =>
+                    setEnvDraft((previous) => ({ ...previous, value: event.target.value }))
+                  }
                   className="field-input"
-                  placeholder="postgres://…"
+                  placeholder="postgres://..."
                 />
               </label>
               <div className="flex items-end">
-                <button
-                  className="btn-primary"
-                  type="button"
-                  onClick={saveProjectEnvVar}
-                  disabled={envSaving}
-                >
-                  {envSaving ? 'Saving…' : 'Add'}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    className="btn-primary"
+                    type="button"
+                    onClick={saveProjectEnvVar}
+                    disabled={envSaving}
+                  >
+                    {envSaving ? 'Saving...' : envEditingKey ? 'Save' : 'Add'}
+                  </button>
+                  {envEditingKey && (
+                    <button
+                      className="btn-secondary"
+                      type="button"
+                      onClick={cancelEditProjectEnvVar}
+                      disabled={envSaving}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1493,14 +1734,17 @@ export default function ProjectDetailPage() {
                 onClick={importProjectEnvVars}
                 disabled={envBulkSaving}
               >
-                {envBulkSaving ? 'Importing…' : 'Import .env'}
+                {envBulkSaving ? 'Importing...' : 'Import .env'}
               </button>
             </div>
 
             {envLoading ? (
               <div className="space-y-2">
                 {[0, 1, 2].map((placeholder) => (
-                  <article key={placeholder} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3">
+                  <article
+                    key={placeholder}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3"
+                  >
                     <div className="space-y-2">
                       <SkeletonBlock className="h-4 w-28 rounded" />
                       <SkeletonBlock className="h-3 w-52 rounded" />
@@ -1511,27 +1755,55 @@ export default function ProjectDetailPage() {
               </div>
             ) : projectSecrets.length ? (
               <div className="space-y-2">
-                {projectSecrets.map((secret) => (
-                  <article
-                    key={secret.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3"
-                  >
-                    <div>
-                      <p className="mono text-sm font-medium text-slate-900">{secret.key}</p>
-                      <p className="text-xs text-slate-500">
-                        Updated {new Date(secret.updatedAt).toLocaleString()}
-                      </p>
-                    </div>
-                    <button
-                      className="btn-danger"
-                      type="button"
-                      onClick={() => deleteProjectEnvVar(secret.key)}
-                      disabled={envDeletingKey === secret.key}
+                {projectSecrets.map((secret) => {
+                  const isRevealed = Object.prototype.hasOwnProperty.call(revealedSecrets, secret.key);
+                  return (
+                    <article
+                      key={secret.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 p-3"
                     >
-                      {envDeletingKey === secret.key ? 'Deleting…' : 'Delete'}
-                    </button>
-                  </article>
-                ))}
+                      <div className="min-w-0">
+                        <p className="mono text-sm font-medium text-slate-900">{secret.key}</p>
+                        <p className="text-xs text-slate-500">
+                          Updated {new Date(secret.updatedAt).toLocaleString()}
+                        </p>
+                        {isRevealed && (
+                          <p className="mono mt-1 break-all text-xs text-slate-700">
+                            {revealedSecrets[secret.key]}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          className="btn-secondary"
+                          type="button"
+                          onClick={() =>
+                            isRevealed ? hideProjectEnvVar(secret.key) : revealProjectEnvVar(secret.key)
+                          }
+                          disabled={envRevealingKey === secret.key}
+                        >
+                          {envRevealingKey === secret.key ? 'Loading...' : isRevealed ? 'Hide' : 'Show'}
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          type="button"
+                          onClick={() => editProjectEnvVar(secret.key)}
+                          disabled={envRevealingKey === secret.key}
+                        >
+                          {envEditingKey === secret.key ? 'Editing' : 'Edit'}
+                        </button>
+                        <button
+                          className="btn-danger"
+                          type="button"
+                          onClick={() => deleteProjectEnvVar(secret.key)}
+                          disabled={envDeletingKey === secret.key}
+                        >
+                          {envDeletingKey === secret.key ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             ) : (
               <div className="rounded-xl border border-dashed border-slate-300 px-6 py-8 text-center">
@@ -1542,7 +1814,6 @@ export default function ProjectDetailPage() {
             {envMessage && <p className="text-sm text-slate-700">{envMessage}</p>}
           </div>
         )}
-
         {/* ===== USAGE TAB ===== */}
         {activeTab === 'usage' && (
           <div className="space-y-5">
@@ -1750,4 +2021,3 @@ export default function ProjectDetailPage() {
     </div>
   );
 }
-

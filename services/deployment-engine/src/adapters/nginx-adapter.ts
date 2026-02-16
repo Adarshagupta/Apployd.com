@@ -12,6 +12,8 @@ interface ConfigureProxyInput {
   upstreamScheme?: 'http' | 'https';
   /** Additional server_name aliases (custom domains). */
   aliases?: string[];
+  /** Internal edge wake path (for example: /api/v1/edge/deployments/<id>/wake). */
+  wakePath?: string;
 }
 
 interface ConfigureTlsProxyInput extends ConfigureProxyInput {
@@ -52,6 +54,7 @@ export class NginxAdapter {
     const configPath = join(env.NGINX_SITES_PATH, `${domain}.conf`);
     const template = this.loadTemplate();
     const upstreamName = this.buildUpstreamName(domain);
+    const wakeConfig = this.buildWakeConfig(input.wakePath);
 
     const aliasString = aliases.join(' ');
 
@@ -61,11 +64,14 @@ export class NginxAdapter {
       .replaceAll('{{UPSTREAM_NAME}}', upstreamName)
       .replaceAll('{{UPSTREAM_SCHEME}}', upstreamScheme)
       .replaceAll('{{UPSTREAM_HOST}}', upstreamHost)
-      .replaceAll('{{UPSTREAM_PORT}}', String(input.upstreamPort));
+      .replaceAll('{{UPSTREAM_PORT}}', String(input.upstreamPort))
+      .replaceAll('{{WAKE_PROXY_DIRECTIVES}}', wakeConfig.proxyDirectives)
+      .replaceAll('{{WAKE_FALLBACK_LOCATION}}', wakeConfig.locationBlock);
     // Backward compatibility for template versions that still hardcode http://.
     if (!template.includes('{{UPSTREAM_SCHEME}}')) {
       rendered = rendered.replace(/proxy_pass\s+http:\/\//g, `proxy_pass ${upstreamScheme}://`);
     }
+    rendered = this.ensureWakeFallback(rendered, wakeConfig);
 
     writeFileSync(configPath, rendered, { encoding: 'utf8' });
 
@@ -96,6 +102,7 @@ export class NginxAdapter {
     const configPath = join(env.NGINX_SITES_PATH, `${domain}.conf`);
     const aliasString = aliases.join(' ');
     const upstreamName = this.buildUpstreamName(domain);
+    const wakeConfig = this.buildWakeConfig(input.wakePath);
     let rendered = this.buildTlsTemplate()
       .replaceAll('{{DOMAIN}}', domain)
       .replaceAll('{{ALIASES}}', aliasString)
@@ -104,8 +111,11 @@ export class NginxAdapter {
       .replaceAll('{{UPSTREAM_HOST}}', upstreamHost)
       .replaceAll('{{UPSTREAM_PORT}}', String(input.upstreamPort))
       .replaceAll('{{SSL_CERT_PATH}}', certPath)
-      .replaceAll('{{SSL_KEY_PATH}}', keyPath);
+      .replaceAll('{{SSL_KEY_PATH}}', keyPath)
+      .replaceAll('{{WAKE_PROXY_DIRECTIVES}}', wakeConfig.proxyDirectives)
+      .replaceAll('{{WAKE_FALLBACK_LOCATION}}', wakeConfig.locationBlock);
     rendered = rendered.replace(/proxy_pass\s+http:\/\//g, `proxy_pass ${upstreamScheme}://`);
+    rendered = this.ensureWakeFallback(rendered, wakeConfig);
 
     writeFileSync(configPath, rendered, { encoding: 'utf8' });
 
@@ -203,13 +213,21 @@ export class NginxAdapter {
       'server {',
       '    listen 80;',
       '    server_name {{DOMAIN}} {{ALIASES}};',
+      '    server_tokens off;',
+      '    add_header X-Frame-Options "SAMEORIGIN" always;',
+      '    add_header X-Content-Type-Options "nosniff" always;',
+      '    add_header Referrer-Policy "strict-origin-when-cross-origin" always;',
+      '    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;',
+      '    add_header Cross-Origin-Opener-Policy "same-origin" always;',
       '    location / {',
       '        proxy_http_version 1.1;',
       '        proxy_set_header Upgrade $http_upgrade;',
       '        proxy_set_header Connection "upgrade";',
       '        proxy_set_header Host $host;',
+      '{{WAKE_PROXY_DIRECTIVES}}',
       '        proxy_pass {{UPSTREAM_SCHEME}}://{{UPSTREAM_HOST}}:{{UPSTREAM_PORT}};',
       '    }',
+      '{{WAKE_FALLBACK_LOCATION}}',
       '}',
     ].join('\n');
   }
@@ -224,6 +242,12 @@ export class NginxAdapter {
       'server {',
       '  listen 80;',
       '  server_name {{DOMAIN}} {{ALIASES}};',
+      '  server_tokens off;',
+      '  add_header X-Frame-Options "SAMEORIGIN" always;',
+      '  add_header X-Content-Type-Options "nosniff" always;',
+      '  add_header Referrer-Policy "strict-origin-when-cross-origin" always;',
+      '  add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;',
+      '  add_header Cross-Origin-Opener-Policy "same-origin" always;',
       '',
       '  location /.well-known/acme-challenge/ {',
       '    root /var/www/html;',
@@ -242,6 +266,13 @@ export class NginxAdapter {
       'server {',
       '  listen 443 ssl http2;',
       '  server_name {{DOMAIN}} {{ALIASES}};',
+      '  server_tokens off;',
+      '  add_header X-Frame-Options "SAMEORIGIN" always;',
+      '  add_header X-Content-Type-Options "nosniff" always;',
+      '  add_header Referrer-Policy "strict-origin-when-cross-origin" always;',
+      '  add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;',
+      '  add_header Cross-Origin-Opener-Policy "same-origin" always;',
+      '  add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;',
       '',
       '  ssl_certificate {{SSL_CERT_PATH}};',
       '  ssl_certificate_key {{SSL_KEY_PATH}};',
@@ -260,8 +291,10 @@ export class NginxAdapter {
       '    proxy_set_header X-Forwarded-Proto $scheme;',
       '    proxy_read_timeout 300;',
       '    proxy_send_timeout 300;',
+      '{{WAKE_PROXY_DIRECTIVES}}',
       '    proxy_pass {{UPSTREAM_SCHEME}}://{{UPSTREAM_NAME}};',
       '  }',
+      '{{WAKE_FALLBACK_LOCATION}}',
       '}',
     ].join('\n');
   }
@@ -341,6 +374,156 @@ export class NginxAdapter {
     } catch {
       return '';
     }
+  }
+
+  private buildWakeConfig(wakePathInput?: string): {
+    proxyDirectives: string;
+    locationBlock: string;
+    wakeLocationBlock: string;
+    errorLocationBlock: string;
+  } {
+    const wakeInternalLocation = '/_apployd_wake';
+    const fallbackHtml = this.escapeNginxHeaderValue(this.buildEdgeErrorHtml());
+    const errorLocationBlock = [
+      '  location = /_apployd_error_fallback {',
+      '    internal;',
+      '    default_type text/html;',
+      '    add_header Cache-Control "no-store, no-cache, must-revalidate" always;',
+      `    return 503 "${fallbackHtml}";`,
+      '  }',
+    ].join('\n');
+
+    const wakeEnabled =
+      env.EDGE_WAKE_ENABLED &&
+      typeof wakePathInput === 'string' &&
+      wakePathInput.trim().length > 0;
+    if (!wakeEnabled) {
+      return {
+        proxyDirectives: [
+          'proxy_intercept_errors on;',
+          'error_page 502 503 504 =503 /_apployd_error_fallback;',
+        ]
+          .map((line) => `        ${line}`)
+          .join('\n'),
+        locationBlock: errorLocationBlock,
+        wakeLocationBlock: '',
+        errorLocationBlock,
+      };
+    }
+
+    const wakePath = wakePathInput!.trim().startsWith('/')
+      ? wakePathInput!.trim()
+      : `/${wakePathInput!.trim()}`;
+    const controlPlaneBase = env.CONTROL_PLANE_INTERNAL_URL.replace(/\/+$/, '');
+    const wakeUrl = `${controlPlaneBase}${wakePath}`;
+    const token = this.escapeNginxHeaderValue(env.EDGE_WAKE_TOKEN ?? '');
+
+    const proxyDirectives = [
+      'proxy_intercept_errors on;',
+      `error_page 502 503 504 = ${wakeInternalLocation};`,
+    ]
+      .map((line) => `        ${line}`)
+      .join('\n');
+
+    const wakeLocationBlock = [
+      `  location = ${wakeInternalLocation} {`,
+      '    internal;',
+      '    proxy_http_version 1.1;',
+      '    proxy_method GET;',
+      '    proxy_pass_request_body off;',
+      '    proxy_set_header Content-Length "";',
+      '    proxy_set_header Host $host;',
+      '    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;',
+      '    proxy_set_header X-Forwarded-Proto $scheme;',
+      `    proxy_set_header X-Apployd-Edge-Token "${token}";`,
+      '    proxy_set_header X-Apployd-Original-Uri $request_uri;',
+      '    proxy_set_header X-Apployd-Original-Method $request_method;',
+      '    proxy_set_header X-Apployd-Upstream-Status $upstream_status;',
+      '    proxy_intercept_errors on;',
+      '    error_page 500 502 503 504 =503 /_apployd_error_fallback;',
+      `    proxy_pass ${wakeUrl};`,
+      '  }',
+    ].join('\n');
+
+    return {
+      proxyDirectives,
+      locationBlock: `${wakeLocationBlock}\n\n${errorLocationBlock}`,
+      wakeLocationBlock,
+      errorLocationBlock,
+    };
+  }
+
+  private ensureWakeFallback(
+    renderedConfig: string,
+    wakeConfig: {
+      proxyDirectives: string;
+      locationBlock: string;
+      wakeLocationBlock: string;
+      errorLocationBlock: string;
+    },
+  ): string {
+    if (!wakeConfig.proxyDirectives) {
+      return renderedConfig;
+    }
+
+    let rendered = renderedConfig
+      .replaceAll('error_page 502 503 504 = @apployd_wake;', 'error_page 502 503 504 = /_apployd_wake;')
+      .replaceAll('location @apployd_wake {', 'location = /_apployd_wake {');
+
+    if (!rendered.includes('proxy_intercept_errors on;')) {
+      const proxyPassLine = rendered.match(/^(\s*)proxy_pass\s+[^\n;]+;$/m);
+      if (proxyPassLine && proxyPassLine.index !== undefined) {
+        const indent = proxyPassLine[1] ?? '';
+        const normalizedDirectives = wakeConfig.proxyDirectives
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line) => `${indent}${line}`)
+          .join('\n');
+
+        rendered =
+          rendered.slice(0, proxyPassLine.index) +
+          `${normalizedDirectives}\n` +
+          rendered.slice(proxyPassLine.index);
+      }
+    }
+
+    const blocksToAppend: string[] = [];
+    const hasWakeLocation =
+      rendered.includes('location = /_apployd_wake {') || rendered.includes('location @apployd_wake {');
+    if (wakeConfig.wakeLocationBlock && !hasWakeLocation) {
+      blocksToAppend.push(wakeConfig.wakeLocationBlock);
+    }
+    if (!rendered.includes('/_apployd_error_fallback')) {
+      blocksToAppend.push(wakeConfig.errorLocationBlock);
+    }
+
+    if (blocksToAppend.length > 0) {
+      const lastBraceIndex = rendered.lastIndexOf('}');
+      if (lastBraceIndex > 0) {
+        rendered =
+          `${rendered.slice(0, lastBraceIndex).trimEnd()}\n\n` +
+          `${blocksToAppend.join('\n\n')}\n` +
+          `${rendered.slice(lastBraceIndex)}`;
+      }
+    }
+
+    return rendered;
+  }
+
+  private buildEdgeErrorHtml(): string {
+    return (
+      "<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Temporarily unavailable</title><style>body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;background:#f8fafc;color:#0f172a;display:grid;min-height:100vh;place-items:center;padding:24px}main{max-width:560px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;box-shadow:0 10px 30px rgba(15,23,42,.07)}h1{margin:0 0 10px;font-size:20px}p{margin:0;color:#334155;line-height:1.5}a{display:inline-block;margin-top:16px;padding:8px 12px;border:1px solid #cbd5e1;border-radius:10px;color:#0f172a;text-decoration:none}a:hover{background:#f1f5f9}</style></head><body><main><h1>Temporarily unavailable</h1><p>This service is waking up or restarting. Please try again in a few seconds.</p><a href='javascript:location.reload()'>Retry</a></main></body></html>"
+    );
+  }
+
+  private escapeNginxHeaderValue(value: string): string {
+    return value
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\$/g, '\\$')
+      .replace(/\r/g, '')
+      .replace(/\n/g, '');
   }
 
   private normalizeUpstreamScheme(scheme?: 'http' | 'https'): 'http' | 'https' {

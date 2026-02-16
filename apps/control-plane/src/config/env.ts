@@ -67,12 +67,15 @@ const envSchema = z.object({
   PREVIEW_BASE_DOMAIN: z.string().min(3).optional(),
   PREVIEW_DOMAIN_STYLE: z.enum(['project', 'project_ref']).default('project_ref'),
   DEFAULT_REGION: z.string().default('fsn1'),
+  ALLOW_PRIVATE_GIT_HOSTS: booleanFromEnv.optional(),
   AUTO_PROVISION_DEV_SERVER: booleanFromEnv.optional(),
   DEV_SERVER_NAME: z.string().min(2).default('local-dev-1'),
   DEV_SERVER_IPV4: z.string().ip({ version: 'v4' }).default('127.0.0.1'),
   DEV_SERVER_TOTAL_RAM_MB: z.coerce.number().int().min(128).default(8192),
   DEV_SERVER_TOTAL_CPU_MILLICORES: z.coerce.number().int().min(100).default(4000),
   DEV_SERVER_TOTAL_BANDWIDTH_GB: z.coerce.number().int().min(1).default(1000),
+  EDGE_WAKE_TOKEN: optionalString,
+  EDGE_WAKE_RETRY_SECONDS: z.coerce.number().int().min(1).max(60).default(5),
 });
 
 const parsedEnv = envSchema.parse(process.env);
@@ -81,6 +84,7 @@ export const env = {
   ...parsedEnv,
   SMTP_SECURE: parsedEnv.SMTP_SECURE ?? parsedEnv.SMTP_PORT === 465,
   PREVIEW_BASE_DOMAIN: parsedEnv.PREVIEW_BASE_DOMAIN ?? parsedEnv.BASE_DOMAIN,
+  ALLOW_PRIVATE_GIT_HOSTS: parsedEnv.ALLOW_PRIVATE_GIT_HOSTS ?? false,
   AUTO_PROVISION_DEV_SERVER:
     parsedEnv.AUTO_PROVISION_DEV_SERVER ?? parsedEnv.NODE_ENV !== 'production',
 };
