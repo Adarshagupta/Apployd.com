@@ -166,7 +166,7 @@
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 0.6rem;
-  width: min(860px, calc(100% - 2.2rem));
+  width: min(1200px, calc(100% - 2rem));
   margin: 0 auto;
   border-radius: 999px;
   border: 1px solid rgba(196, 203, 230, 0.18);
@@ -220,6 +220,7 @@
   color: rgba(235, 239, 250, 0.82);
   font-size: 0.97rem;
   padding: 0.58rem 0.95rem;
+  white-space: nowrap;
   transition: border-color 0.22s ease, color 0.22s ease;
 }
 
@@ -229,6 +230,9 @@
 }
 
 .navButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 999px;
   border: 1px solid rgba(216, 222, 245, 0.34);
   background: #000000;
@@ -236,6 +240,8 @@
   font-size: 0.95rem;
   font-weight: 600;
   padding: 0.7rem 1.1rem;
+  line-height: 1;
+  white-space: nowrap;
   transition: transform 0.2s ease;
 }
 
@@ -243,6 +249,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
+  flex-shrink: 0;
+  min-width: max-content;
 }
 
 .themeToggle {
@@ -258,6 +266,8 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 0.53rem 0.72rem;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: border-color 0.2s ease, transform 0.2s ease;
 }
 

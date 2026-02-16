@@ -23,6 +23,9 @@ interface Repository {
 interface GitHubStatus {
   configured: boolean;
   connected: boolean;
+  oauthRedirectUri?: string;
+  webhookConfigured?: boolean;
+  webhookUrl?: string;
   connection: {
     username: string;
     avatarUrl: string | null;
@@ -158,9 +161,13 @@ export default function IntegrationsPage() {
       setMessage('Select both a project and repository.');
       return;
     }
+    if (!selectedRepo.canAdmin) {
+      setMessage('Selected repository does not grant admin/push permissions for webhook setup.');
+      return;
+    }
 
     try {
-      await apiClient.patch(`/projects/${selectedProjectId}/git-settings`, {
+      const result = await apiClient.patch(`/projects/${selectedProjectId}/git-settings`, {
         repoUrl: `${selectedRepo.htmlUrl}.git`,
         repoOwner: selectedRepo.owner,
         repoName: selectedRepo.name,
@@ -170,7 +177,17 @@ export default function IntegrationsPage() {
       });
 
       await refresh();
-      setMessage(`Linked ${selectedRepo.fullName} to ${selectedProject?.name ?? 'project'}.`);
+      const webhookCreated = result?.webhook?.created === true;
+      const webhookConfigured = result?.webhook?.configured === true;
+      if (webhookConfigured) {
+        setMessage(
+          `Linked ${selectedRepo.fullName} to ${selectedProject?.name ?? 'project'} and ${
+            webhookCreated ? 'created' : 'updated'
+          } the GitHub push webhook.`,
+        );
+      } else {
+        setMessage(`Linked ${selectedRepo.fullName} to ${selectedProject?.name ?? 'project'}.`);
+      }
     } catch (error) {
       setMessage((error as Error).message);
     }
@@ -190,13 +207,24 @@ export default function IntegrationsPage() {
                 <SkeletonBlock className="h-4 w-56 rounded" />
               </div>
             ) : (
-              <p className="text-sm text-slate-600">
-                {!status?.configured
-                  ? 'GitHub OAuth not configured on server'
-                  : status.connected
-                    ? `Connected as @${status.connection?.username}`
-                    : 'Not connected'}
-              </p>
+              <div className="space-y-1">
+                <p className="text-sm text-slate-600">
+                  {!status?.configured
+                    ? 'GitHub OAuth not configured on server'
+                    : status.connected
+                      ? `Connected as @${status.connection?.username}`
+                      : 'Not connected'}
+                </p>
+                <p className="text-xs text-slate-500">
+                  OAuth callback: <span className="mono">{status?.oauthRedirectUri ?? '-'}</span>
+                </p>
+                <p className="text-xs text-slate-500">
+                  Push webhook: <span className="mono">{status?.webhookUrl ?? '-'}</span>
+                </p>
+                <p className="text-xs text-slate-500">
+                  Webhook secret: <span className="font-medium">{status?.webhookConfigured ? 'configured' : 'missing'}</span>
+                </p>
+              </div>
             )}
           </div>
           <div className="flex gap-2">
@@ -262,6 +290,11 @@ export default function IntegrationsPage() {
                 <p className="text-xs text-slate-600">
                   default branch: {repo.defaultBranch} | {repo.private ? 'private' : 'public'}
                 </p>
+                {!repo.canAdmin ? (
+                  <p className="text-xs text-amber-700">
+                    Limited permissions. Admin/push access is required for automatic webhook setup.
+                  </p>
+                ) : null}
               </button>
             ))}
           </div>
@@ -287,7 +320,12 @@ export default function IntegrationsPage() {
               ))}
             </select>
           </label>
-          <button className="btn-primary self-end" type="button" onClick={linkRepoToProject}>
+          <button
+            className="btn-primary self-end disabled:cursor-not-allowed disabled:opacity-60"
+            type="button"
+            onClick={linkRepoToProject}
+            disabled={!selectedRepo || !selectedProjectId || !selectedRepo.canAdmin}
+          >
             Link repository
           </button>
         </div>
