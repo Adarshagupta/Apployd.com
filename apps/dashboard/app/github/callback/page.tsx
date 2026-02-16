@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 
 import { apiClient } from '../../../lib/api';
 
@@ -27,7 +27,7 @@ const safePath = (value: string | null | undefined, fallback: string): string =>
   return fallback;
 };
 
-export default function GitHubCallbackPage() {
+function GitHubCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [state, setState] = useState<CallbackState>('processing');
@@ -75,6 +75,10 @@ export default function GitHubCallbackPage() {
     });
   }, [router, searchParams]);
 
+  return <GitHubCallbackCard state={state} message={message} />;
+}
+
+function GitHubCallbackCard({ state, message }: { state: CallbackState; message: string }) {
   return (
     <main className="grid min-h-screen place-items-center px-4">
       <article className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
@@ -97,5 +101,13 @@ export default function GitHubCallbackPage() {
         )}
       </article>
     </main>
+  );
+}
+
+export default function GitHubCallbackPage() {
+  return (
+    <Suspense fallback={<GitHubCallbackCard state="processing" message="Finalizing GitHub sign-in..." />}>
+      <GitHubCallbackContent />
+    </Suspense>
   );
 }
