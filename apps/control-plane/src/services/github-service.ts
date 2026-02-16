@@ -50,6 +50,10 @@ interface GitHubWebhookApiItem {
   };
 }
 
+interface GitHubCommitApiItem {
+  sha?: string;
+}
+
 export interface GitHubRepoSummary {
   id: string;
   name: string;
@@ -194,6 +198,35 @@ export class GitHubService {
     };
   }
 
+  async getBranchHeadCommitSha(input: {
+    owner: string;
+    repo: string;
+    branch: string;
+    accessToken?: string;
+  }): Promise<string> {
+    const owner = input.owner.trim();
+    const repo = input.repo.trim();
+    const branch = input.branch.trim();
+
+    if (!owner || !repo || !branch) {
+      throw new Error('Repository owner, repository name, and branch are required.');
+    }
+
+    const response = await this.githubRequest(
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${encodeURIComponent(branch)}`,
+      input.accessToken,
+      { method: 'GET' },
+    );
+
+    const payload = (await response.json()) as GitHubCommitApiItem;
+    const sha = payload.sha?.trim();
+    if (!sha) {
+      throw new Error('GitHub did not return a commit SHA for this branch.');
+    }
+
+    return sha;
+  }
+
   async ensureRepositoryPushWebhook(input: {
     accessToken: string;
     owner: string;
@@ -269,12 +302,14 @@ export class GitHubService {
     }
   }
 
-  private async githubRequest(url: string, accessToken: string, init: RequestInit): Promise<Response> {
+  private async githubRequest(url: string, accessToken: string | undefined, init: RequestInit): Promise<Response> {
     const headers = new Headers(init.headers ?? {});
     headers.set('Accept', 'application/vnd.github+json');
-    headers.set('Authorization', `Bearer ${accessToken}`);
     headers.set('User-Agent', 'apployd-control-plane');
     headers.set('X-GitHub-Api-Version', '2022-11-28');
+    if (accessToken?.trim()) {
+      headers.set('Authorization', `Bearer ${accessToken}`);
+    }
     if (init.body && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json');
     }
@@ -300,9 +335,15 @@ export class GitHubService {
     }
 
     if (response.status === 401 || response.status === 403) {
+      if (!accessToken) {
+        throw new Error('GitHub access denied. Connect GitHub to access private repositories.');
+      }
       throw new Error(`GitHub access denied (${response.status}). Reconnect GitHub and ensure repo admin access.`);
     }
     if (response.status === 404) {
+      if (!accessToken) {
+        throw new Error('Repository or branch not found. Connect GitHub to access private repositories.');
+      }
       throw new Error('Repository not found or webhook API unavailable for your token.');
     }
     if (response.status === 422) {

@@ -13,6 +13,7 @@ import {
   IconOverview,
   IconProfile,
   IconProjects,
+  IconShield,
   IconSettings,
   IconTeam,
   IconUsage,
@@ -47,6 +48,11 @@ const accountItems = [
     href: '/usage',
     label: 'Usage',
     icon: <IconUsage title="Usage" />,
+  },
+  {
+    href: '/security',
+    label: 'Security',
+    icon: <IconShield title="Security" />,
   },
   {
     href: '/billing',

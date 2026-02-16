@@ -132,6 +132,15 @@ export function IconSettings(props: IconProps) {
   );
 }
 
+export function IconShield(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <path d="M10 2.8 4.3 4.9v4.3c0 3.8 2 6.1 5.7 7.9 3.7-1.8 5.7-4.1 5.7-7.9V4.9L10 2.8z" />
+      <path d="m7.6 10 1.7 1.8 3.1-3.3" />
+    </Glyph>
+  );
+}
+
 export function IconHelp(props: IconProps) {
   return (
     <Glyph {...props}>

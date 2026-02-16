@@ -60,4 +60,40 @@ describe('NginxAdapter wake fallback config', () => {
     expect(normalized).not.toContain('error_page 502 503 504 = @apployd_wake;');
     expect(normalized).not.toContain('location @apployd_wake {');
   });
+
+  it('renders attack mode directives with rate limit and connection caps', () => {
+    const adapter = new NginxAdapter() as any;
+    const config = adapter.buildAttackModeConfig('demo.example.com', true);
+
+    expect(config.enabled).toBe(true);
+    expect(config.httpDirectives).toContain('limit_req_zone $binary_remote_addr');
+    expect(config.httpDirectives).toContain('limit_conn_zone $binary_remote_addr');
+    expect(config.locationDirectives).toContain('limit_req zone=');
+    expect(config.locationDirectives).toContain('limit_conn');
+    expect(config.locationDirectives).toContain('limit_req_status 429;');
+  });
+
+  it('keeps templates clean when attack mode is disabled', () => {
+    const adapter = new NginxAdapter() as any;
+    const normalized = adapter.ensureAttackModeFallback(
+      [
+        '{{ATTACK_MODE_HTTP_DIRECTIVES}}',
+        'server {',
+        '  location / {',
+        '{{ATTACK_MODE_LOCATION_DIRECTIVES}}',
+        '    proxy_pass http://demo_upstream;',
+        '  }',
+        '}',
+      ].join('\n'),
+      {
+        enabled: false,
+        httpDirectives: '',
+        locationDirectives: '',
+      },
+    );
+
+    expect(normalized).not.toContain('{{ATTACK_MODE_HTTP_DIRECTIVES}}');
+    expect(normalized).not.toContain('{{ATTACK_MODE_LOCATION_DIRECTIVES}}');
+    expect(normalized).toContain('proxy_pass http://demo_upstream;');
+  });
 });

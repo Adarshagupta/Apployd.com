@@ -27,6 +27,7 @@ export interface WorkspaceProject {
   wakeMessage?: string | null;
   wakeRetrySeconds?: number;
   autoDeployEnabled: boolean;
+  attackModeEnabled?: boolean;
   activeDeploymentId: string | null;
   resourceRamMb: number;
   resourceCpuMillicore: number;

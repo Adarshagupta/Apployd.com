@@ -11,6 +11,7 @@ import {
   IconPlus,
   IconProfile,
   IconProjects,
+  IconShield,
   IconSettings,
   IconUsage,
 } from '../../components/dashboard-icons';
@@ -34,6 +35,10 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/usage': {
     title: 'Usage',
     subtitle: 'Metered consumption against pooled subscription limits.',
+  },
+  '/security': {
+    title: 'Security',
+    subtitle: 'Anomaly detection for DDoS and abuse patterns with attack mode controls.',
   },
   '/billing': {
     title: 'Billing',
@@ -265,6 +270,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                       <Link href="/usage" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
                         <IconUsage size={16} />
                         <span>Usage</span>
+                      </Link>
+                      <Link href="/security" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                        <IconShield size={16} />
+                        <span>Security</span>
                       </Link>
                       <Link href="/billing" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
                         <IconBilling size={16} />

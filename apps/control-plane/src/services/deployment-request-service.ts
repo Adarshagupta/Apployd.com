@@ -13,6 +13,7 @@ import { isSerializableRetryableError } from '../lib/transaction-retry.js';
 import { getPlanEntitlements } from '../domain/plan-entitlements.js';
 import { AuditLogService } from './audit-log-service.js';
 import { DeployQueueService } from './deploy-queue-service.js';
+import { GitHubService } from './github-service.js';
 import { ResourcePolicyService } from './resource-policy-service.js';
 import { ServerSchedulerService, ServerSchedulingError } from './server-scheduler-service.js';
 
@@ -100,6 +101,8 @@ export class DeploymentRequestService {
 
   private readonly audit = new AuditLogService();
 
+  private readonly github = new GitHubService();
+
   async create(input: CreateDeploymentInput): Promise<QueuedDeploymentResult> {
     const project = await prisma.project.findUnique({
       where: { id: input.projectId },
@@ -122,7 +125,8 @@ export class DeploymentRequestService {
     }
 
     const resolvedGitUrl = input.gitUrl ?? project.repoUrl ?? undefined;
-    const resolvedBranch = input.branch ?? project.branch ?? 'main';
+    const branchCandidate = (input.branch ?? project.branch ?? 'main').trim();
+    const resolvedBranch = branchCandidate || 'main';
     const resolvedRootDirectory = input.rootDirectory ?? project.rootDirectory ?? undefined;
     const resolvedStartCommand = input.startCommand ?? project.startCommand ?? undefined;
     const resolvedBuildCommand = input.buildCommand ?? project.buildCommand ?? undefined;
@@ -134,18 +138,6 @@ export class DeploymentRequestService {
       ? normalizeRequestedDomain(input.domain)
       : undefined;
 
-    // Preview deployments get a unique subdomain; production gets the canonical domain
-    const resolvedDomain = requestedDomain
-      ?? (resolvedEnvironment === 'preview'
-        ? buildPreviewDomain({
-            projectSlug: project.slug,
-            organizationSlug: project.organization.slug,
-            baseDomain: env.PREVIEW_BASE_DOMAIN,
-            ref: input.commitSha ?? input.branch ?? 'preview',
-            style: env.PREVIEW_DOMAIN_STYLE,
-          })
-        : `${sanitizeDomainLabel(project.slug, 'project')}.${sanitizeDomainLabel(project.organization.slug, 'org')}.${env.BASE_DOMAIN}`);
-
     if (!resolvedGitUrl) {
       throw new DeploymentRequestError(
         'Repository is not configured. Link a GitHub repository or provide gitUrl.',
@@ -153,6 +145,31 @@ export class DeploymentRequestService {
       );
     }
     assertSafeGitUrl(resolvedGitUrl);
+
+    const providedCommitSha = normalizeCommitSha(input.commitSha);
+    const resolvedCommitSha = providedCommitSha
+      ?? await this.resolveLatestGitHubCommitSha({
+        gitProvider: project.gitProvider,
+        repoOwner: project.repoOwner,
+        repoName: project.repoName,
+        repoFullName: project.repoFullName,
+        gitUrl: resolvedGitUrl,
+        branch: resolvedBranch,
+        ...(input.actorUserId && { actorUserId: input.actorUserId }),
+        projectOwnerUserId: project.createdById,
+      });
+
+    // Preview deployments get a unique subdomain; production gets the canonical domain
+    const resolvedDomain = requestedDomain
+      ?? (resolvedEnvironment === 'preview'
+        ? buildPreviewDomain({
+            projectSlug: project.slug,
+            organizationSlug: project.organization.slug,
+            baseDomain: env.PREVIEW_BASE_DOMAIN,
+            ref: resolvedCommitSha ?? resolvedBranch,
+            style: env.PREVIEW_DOMAIN_STYLE,
+          })
+        : `${sanitizeDomainLabel(project.slug, 'project')}.${sanitizeDomainLabel(project.organization.slug, 'org')}.${env.BASE_DOMAIN}`);
 
     const activeSubscription = project.organization.subscriptions[0];
     if (!activeSubscription) {
@@ -268,7 +285,7 @@ export class DeploymentRequestService {
             environment: resolvedEnvironment,
             gitUrl: resolvedGitUrl,
             branch: resolvedBranch,
-            commitSha: input.commitSha ?? null,
+            commitSha: resolvedCommitSha ?? null,
             imageTag: input.imageTag ?? null,
             domain: resolvedDomain,
             capacityReserved: false,
@@ -283,7 +300,7 @@ export class DeploymentRequestService {
             environment: resolvedEnvironment,
             gitUrl: resolvedGitUrl,
             branch: resolvedBranch,
-            commitSha: input.commitSha ?? null,
+            commitSha: resolvedCommitSha ?? null,
             imageTag: input.imageTag ?? null,
             domain: resolvedDomain,
             capacityReserved: true,
@@ -344,7 +361,7 @@ export class DeploymentRequestService {
       projectId: project.id,
       gitUrl: resolvedGitUrl,
       ...(resolvedBranch && { branch: resolvedBranch }),
-      ...(input.commitSha && { commitSha: input.commitSha }),
+      ...(resolvedCommitSha && { commitSha: resolvedCommitSha }),
       ...(resolvedRootDirectory && { rootDirectory: resolvedRootDirectory }),
       ...(resolvedBuildCommand && { buildCommand: resolvedBuildCommand }),
       ...(resolvedStartCommand && { startCommand: resolvedStartCommand }),
@@ -431,6 +448,7 @@ export class DeploymentRequestService {
         serverId: server.id,
         domain: deployment.domain,
         branch: resolvedBranch,
+        ...(resolvedCommitSha && { commitSha: resolvedCommitSha }),
       },
     });
 
@@ -457,6 +475,78 @@ export class DeploymentRequestService {
       domain: input.domain,
       capacityReserved: input.capacityReserved,
     };
+  }
+
+  private async resolveLatestGitHubCommitSha(input: {
+    gitProvider: string | null;
+    repoOwner: string | null;
+    repoName: string | null;
+    repoFullName: string | null;
+    gitUrl: string;
+    branch: string;
+    actorUserId?: string;
+    projectOwnerUserId: string;
+  }): Promise<string | undefined> {
+    const repoIdentity = resolveGitHubRepoIdentity({
+      gitProvider: input.gitProvider,
+      repoOwner: input.repoOwner,
+      repoName: input.repoName,
+      repoFullName: input.repoFullName,
+      gitUrl: input.gitUrl,
+    });
+
+    if (!repoIdentity) {
+      return undefined;
+    }
+
+    const userIds = [input.actorUserId, input.projectOwnerUserId]
+      .map((value) => value?.trim() ?? '')
+      .filter((value, index, values) => Boolean(value) && values.indexOf(value) === index);
+
+    let accessToken: string | undefined;
+    for (const userId of userIds) {
+      const connection = await prisma.gitHubConnection.findUnique({
+        where: { userId },
+        select: {
+          encryptedAccessToken: true,
+          iv: true,
+          authTag: true,
+        },
+      });
+      if (!connection) {
+        continue;
+      }
+
+      accessToken = decryptSecret({
+        encryptedValue: connection.encryptedAccessToken,
+        iv: connection.iv,
+        authTag: connection.authTag,
+      });
+      break;
+    }
+
+    try {
+      return await this.github.getBranchHeadCommitSha({
+        owner: repoIdentity.owner,
+        repo: repoIdentity.name,
+        branch: input.branch,
+        ...(accessToken && { accessToken }),
+      });
+    } catch {
+      if (!accessToken) {
+        return undefined;
+      }
+    }
+
+    try {
+      return await this.github.getBranchHeadCommitSha({
+        owner: repoIdentity.owner,
+        repo: repoIdentity.name,
+        branch: input.branch,
+      });
+    } catch {
+      return undefined;
+    }
   }
 
   private async createDeploymentWithAtomicCapacityReservation(
@@ -602,6 +692,75 @@ const buildPreviewDomain = (input: {
   const previewLabel = buildPreviewLabel(input.projectSlug, input.ref);
   const organizationLabel = sanitizeDomainLabel(input.organizationSlug, 'org');
   return `${previewLabel}.${organizationLabel}.${input.baseDomain}`;
+};
+
+const normalizeCommitSha = (value?: string | null): string | undefined => {
+  const normalized = value?.trim();
+  return normalized || undefined;
+};
+
+const resolveGitHubRepoIdentity = (input: {
+  gitProvider?: string | null;
+  repoOwner?: string | null;
+  repoName?: string | null;
+  repoFullName?: string | null;
+  gitUrl?: string | null;
+}): { owner: string; name: string } | null => {
+  const provider = input.gitProvider?.trim().toLowerCase();
+  if (provider && provider !== 'github') {
+    return null;
+  }
+
+  if (input.repoOwner?.trim() && input.repoName?.trim()) {
+    return {
+      owner: input.repoOwner.trim(),
+      name: input.repoName.trim(),
+    };
+  }
+
+  if (input.repoFullName?.trim()) {
+    const [owner, name] = input.repoFullName.trim().split('/').filter(Boolean);
+    if (owner && name) {
+      return { owner, name };
+    }
+  }
+
+  return parseGitHubRepoFromGitUrl(input.gitUrl ?? '');
+};
+
+const parseGitHubRepoFromGitUrl = (value: string): { owner: string; name: string } | null => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const sshMatch = trimmed.match(/^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/i);
+  if (sshMatch) {
+    const owner = sshMatch[1]?.trim();
+    const name = sshMatch[2]?.trim();
+    if (owner && name) {
+      return { owner, name };
+    }
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+
+  if (!/^(?:www\.)?github\.com$/i.test(parsed.hostname)) {
+    return null;
+  }
+
+  const [owner, repoSegment] = parsed.pathname.split('/').filter(Boolean);
+  const name = repoSegment?.replace(/\.git$/i, '');
+  if (!owner || !name) {
+    return null;
+  }
+
+  return { owner, name };
 };
 
 const isPrivateIpv4 = (host: string): boolean => {

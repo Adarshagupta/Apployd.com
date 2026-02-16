@@ -10,6 +10,7 @@ interface ConfigureProxyInput {
   upstreamHost: string;
   upstreamPort: number;
   upstreamScheme?: 'http' | 'https';
+  attackModeEnabled?: boolean;
   /** Additional server_name aliases (custom domains). */
   aliases?: string[];
   /** Internal edge wake path (for example: /api/v1/edge/deployments/<id>/wake). */
@@ -55,6 +56,7 @@ export class NginxAdapter {
     const template = this.loadTemplate();
     const upstreamName = this.buildUpstreamName(domain);
     const wakeConfig = this.buildWakeConfig(input.wakePath);
+    const attackMode = this.buildAttackModeConfig(domain, input.attackModeEnabled === true);
 
     const aliasString = aliases.join(' ');
 
@@ -66,12 +68,15 @@ export class NginxAdapter {
       .replaceAll('{{UPSTREAM_HOST}}', upstreamHost)
       .replaceAll('{{UPSTREAM_PORT}}', String(input.upstreamPort))
       .replaceAll('{{WAKE_PROXY_DIRECTIVES}}', wakeConfig.proxyDirectives)
-      .replaceAll('{{WAKE_FALLBACK_LOCATION}}', wakeConfig.locationBlock);
+      .replaceAll('{{WAKE_FALLBACK_LOCATION}}', wakeConfig.locationBlock)
+      .replaceAll('{{ATTACK_MODE_HTTP_DIRECTIVES}}', attackMode.httpDirectives)
+      .replaceAll('{{ATTACK_MODE_LOCATION_DIRECTIVES}}', attackMode.locationDirectives);
     // Backward compatibility for template versions that still hardcode http://.
     if (!template.includes('{{UPSTREAM_SCHEME}}')) {
       rendered = rendered.replace(/proxy_pass\s+http:\/\//g, `proxy_pass ${upstreamScheme}://`);
     }
     rendered = this.ensureWakeFallback(rendered, wakeConfig);
+    rendered = this.ensureAttackModeFallback(rendered, attackMode);
 
     writeFileSync(configPath, rendered, { encoding: 'utf8' });
 
@@ -103,6 +108,7 @@ export class NginxAdapter {
     const aliasString = aliases.join(' ');
     const upstreamName = this.buildUpstreamName(domain);
     const wakeConfig = this.buildWakeConfig(input.wakePath);
+    const attackMode = this.buildAttackModeConfig(domain, input.attackModeEnabled === true);
     let rendered = this.buildTlsTemplate()
       .replaceAll('{{DOMAIN}}', domain)
       .replaceAll('{{ALIASES}}', aliasString)
@@ -113,9 +119,12 @@ export class NginxAdapter {
       .replaceAll('{{SSL_CERT_PATH}}', certPath)
       .replaceAll('{{SSL_KEY_PATH}}', keyPath)
       .replaceAll('{{WAKE_PROXY_DIRECTIVES}}', wakeConfig.proxyDirectives)
-      .replaceAll('{{WAKE_FALLBACK_LOCATION}}', wakeConfig.locationBlock);
+      .replaceAll('{{WAKE_FALLBACK_LOCATION}}', wakeConfig.locationBlock)
+      .replaceAll('{{ATTACK_MODE_HTTP_DIRECTIVES}}', attackMode.httpDirectives)
+      .replaceAll('{{ATTACK_MODE_LOCATION_DIRECTIVES}}', attackMode.locationDirectives);
     rendered = rendered.replace(/proxy_pass\s+http:\/\//g, `proxy_pass ${upstreamScheme}://`);
     rendered = this.ensureWakeFallback(rendered, wakeConfig);
+    rendered = this.ensureAttackModeFallback(rendered, attackMode);
 
     writeFileSync(configPath, rendered, { encoding: 'utf8' });
 
@@ -210,6 +219,7 @@ export class NginxAdapter {
     }
     
     return [
+      '{{ATTACK_MODE_HTTP_DIRECTIVES}}',
       'server {',
       '    listen 80;',
       '    server_name {{DOMAIN}} {{ALIASES}};',
@@ -224,6 +234,7 @@ export class NginxAdapter {
       '        proxy_set_header Upgrade $http_upgrade;',
       '        proxy_set_header Connection "upgrade";',
       '        proxy_set_header Host $host;',
+      '{{ATTACK_MODE_LOCATION_DIRECTIVES}}',
       '{{WAKE_PROXY_DIRECTIVES}}',
       '        proxy_pass {{UPSTREAM_SCHEME}}://{{UPSTREAM_HOST}}:{{UPSTREAM_PORT}};',
       '    }',
@@ -234,6 +245,7 @@ export class NginxAdapter {
 
   private buildTlsTemplate(): string {
     return [
+      '{{ATTACK_MODE_HTTP_DIRECTIVES}}',
       'upstream {{UPSTREAM_NAME}} {',
       '  server {{UPSTREAM_HOST}}:{{UPSTREAM_PORT}};',
       '  keepalive 64;',
@@ -291,6 +303,7 @@ export class NginxAdapter {
       '    proxy_set_header X-Forwarded-Proto $scheme;',
       '    proxy_read_timeout 300;',
       '    proxy_send_timeout 300;',
+      '{{ATTACK_MODE_LOCATION_DIRECTIVES}}',
       '{{WAKE_PROXY_DIRECTIVES}}',
       '    proxy_pass {{UPSTREAM_SCHEME}}://{{UPSTREAM_NAME}};',
       '  }',
@@ -511,6 +524,84 @@ export class NginxAdapter {
     return rendered;
   }
 
+  private buildAttackModeConfig(
+    domain: string,
+    enabled: boolean,
+  ): {
+    enabled: boolean;
+    httpDirectives: string;
+    locationDirectives: string;
+  } {
+    if (!enabled) {
+      return {
+        enabled: false,
+        httpDirectives: '',
+        locationDirectives: '',
+      };
+    }
+
+    const normalizedPrefix = this.buildUpstreamName(domain).replace(/_upstream$/, '') || 'project';
+    const suffix = this.shortDomainHash(domain);
+    const prefix = `${normalizedPrefix.slice(0, 24)}_${suffix}`;
+    const requestZone = `${prefix}_req`;
+    const connectionZone = `${prefix}_conn`;
+    const httpDirectives = [
+      `limit_req_zone $binary_remote_addr zone=${requestZone}:10m rate=15r/s;`,
+      `limit_conn_zone $binary_remote_addr zone=${connectionZone}:10m;`,
+    ].join('\n');
+
+    const locationDirectives = [
+      `limit_req zone=${requestZone} burst=30 nodelay;`,
+      `limit_conn ${connectionZone} 20;`,
+      'limit_req_status 429;',
+      'limit_conn_status 429;',
+    ]
+      .map((line) => `        ${line}`)
+      .join('\n');
+
+    return {
+      enabled: true,
+      httpDirectives,
+      locationDirectives,
+    };
+  }
+
+  private ensureAttackModeFallback(
+    renderedConfig: string,
+    attackMode: {
+      enabled: boolean;
+      httpDirectives: string;
+      locationDirectives: string;
+    },
+  ): string {
+    if (!attackMode.enabled) {
+      return renderedConfig
+        .replaceAll('{{ATTACK_MODE_HTTP_DIRECTIVES}}', '')
+        .replaceAll('{{ATTACK_MODE_LOCATION_DIRECTIVES}}', '');
+    }
+
+    let rendered = renderedConfig
+      .replaceAll('{{ATTACK_MODE_HTTP_DIRECTIVES}}', attackMode.httpDirectives)
+      .replaceAll('{{ATTACK_MODE_LOCATION_DIRECTIVES}}', attackMode.locationDirectives);
+
+    if (!rendered.includes('limit_req_zone $binary_remote_addr')) {
+      rendered = `${attackMode.httpDirectives}\n${rendered}`;
+    }
+
+    if (!rendered.includes('limit_req zone=')) {
+      const locationMatch = rendered.match(/location\s+\/\s*\{/);
+      if (locationMatch && locationMatch.index !== undefined) {
+        const insertionPoint = locationMatch.index + locationMatch[0].length;
+        rendered =
+          `${rendered.slice(0, insertionPoint)}\n` +
+          `${attackMode.locationDirectives}\n` +
+          `${rendered.slice(insertionPoint)}`;
+      }
+    }
+
+    return rendered;
+  }
+
   private buildEdgeErrorHtml(): string {
     return (
       "<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Temporarily unavailable</title><style>body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;background:#f8fafc;color:#0f172a;display:grid;min-height:100vh;place-items:center;padding:24px}main{max-width:560px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;box-shadow:0 10px 30px rgba(15,23,42,.07)}h1{margin:0 0 10px;font-size:20px}p{margin:0;color:#334155;line-height:1.5}a{display:inline-block;margin-top:16px;padding:8px 12px;border:1px solid #cbd5e1;border-radius:10px;color:#0f172a;text-decoration:none}a:hover{background:#f1f5f9}</style></head><body><main><h1>Temporarily unavailable</h1><p>This service is waking up or restarting. Please try again in a few seconds.</p><a href='javascript:location.reload()'>Retry</a></main></body></html>"
@@ -538,5 +629,13 @@ export class NginxAdapter {
       .replace(/^_+|_+$/g, '');
     const short = normalized.slice(0, 40);
     return `${short || 'project'}_upstream`;
+  }
+
+  private shortDomainHash(value: string): string {
+    let hash = 0;
+    for (let index = 0; index < value.length; index += 1) {
+      hash = ((hash * 31) + value.charCodeAt(index)) >>> 0;
+    }
+    return hash.toString(16).padStart(8, '0').slice(0, 6);
   }
 }

@@ -93,6 +93,8 @@ model User {
   avatarUrl      String?
   oauthProvider  String?
   oauthSubject   String?
+  onboardingCompletedAt DateTime?
+  onboardingAnswers Json?
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
   projects       Project[]
@@ -158,6 +160,7 @@ model Project {
   rootDirectory        String?
   autoDeployEnabled    Boolean      @default(true)
   previewDeploymentsEnabled Boolean @default(true)
+  attackModeEnabled    Boolean      @default(false)
   sleepEnabled         Boolean      @default(false)
   sleepAfterSeconds    Int          @default(900)
   wakeMessage          String?

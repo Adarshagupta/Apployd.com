@@ -18,9 +18,11 @@ import { logRoutes } from './modules/logs/routes.js';
 import { auditRoutes } from './modules/audit/routes.js';
 import { metricRoutes } from './modules/metrics/routes.js';
 import { observabilityRoutes } from './modules/metrics/prometheus-routes.js';
+import { onboardingRoutes } from './modules/onboarding/routes.js';
 import { organizationRoutes } from './modules/organizations/routes.js';
 import { planRoutes } from './modules/plans/routes.js';
 import { projectRoutes } from './modules/projects/routes.js';
+import { securityRoutes } from './modules/security/routes.js';
 import { secretRoutes } from './modules/secrets/routes.js';
 import { serverRoutes } from './modules/servers/routes.js';
 import { teamRoutes } from './modules/teams/routes.js';
@@ -98,9 +100,11 @@ export const buildApp = () => {
   app.register(async (api) => {
     api.register(authRoutes);
     api.register(organizationRoutes);
+    api.register(onboardingRoutes);
     api.register(teamRoutes);
     api.register(planRoutes);
     api.register(projectRoutes);
+    api.register(securityRoutes);
     api.register(secretRoutes);
     api.register(deploymentRoutes);
     api.register(containerRoutes);
