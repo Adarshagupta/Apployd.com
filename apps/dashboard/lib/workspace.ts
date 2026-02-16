@@ -7,7 +7,7 @@ import { apiClient } from './api';
 export interface WorkspaceOrganization {
   id: string;
   name: string;
-  role: string;
+  role: 'owner' | 'admin' | 'developer' | 'viewer';
 }
 
 export interface WorkspaceProject {

@@ -10,6 +10,7 @@ import { prisma } from '../../lib/prisma.js';
 import { redis } from '../../lib/redis.js';
 import { EmailVerificationError, EmailVerificationService } from '../../services/email-verification-service.js';
 import { GitHubService } from '../../services/github-service.js';
+import { OrganizationInviteService } from '../../services/organization-invite-service.js';
 
 const signupSchema = z.object({
   email: z.string().email(),
@@ -60,6 +61,8 @@ const githubExchangePayloadSchema = z.object({
     name: z.string().nullable(),
   }),
   redirectTo: z.string().optional(),
+  acceptedInvites: z.number().int().nonnegative().optional(),
+  acceptedOrganizationIds: z.array(z.string().cuid()).optional(),
 });
 
 const OAUTH_STATE_PREFIX = 'apployd:oauth:github:';
@@ -69,6 +72,7 @@ const LOGIN_CHALLENGE_PREFIX = 'apployd:auth:login-challenge:';
 export const authRoutes: FastifyPluginAsync = async (app) => {
   const github = new GitHubService();
   const emailVerification = new EmailVerificationService();
+  const inviteService = new OrganizationInviteService();
 
   app.post('/auth/signup', async (request, reply) => {
     const body = signupSchema.parse(request.body);
@@ -306,6 +310,10 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     if (body.loginChallengeId) {
       await redis.del(loginChallengeKey(body.loginChallengeId));
     }
+    const inviteSync = await inviteService.syncInvitesForUser({
+      userId: user.id,
+      email: user.email,
+    });
 
     const token = app.jwt.sign({ userId: user.id, email: user.email });
     return {
@@ -316,6 +324,8 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         name: user.name,
       },
       verified: true,
+      acceptedInvites: inviteSync.acceptedCount,
+      acceptedOrganizationIds: inviteSync.acceptedOrganizationIds,
     };
   });
 

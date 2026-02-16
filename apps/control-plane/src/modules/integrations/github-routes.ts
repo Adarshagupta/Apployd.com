@@ -12,6 +12,7 @@ import { decryptSecret, encryptSecret } from '../../lib/secrets.js';
 import { AccessService } from '../../services/access-service.js';
 import { DeploymentRequestError, DeploymentRequestService } from '../../services/deployment-request-service.js';
 import { GitHubService } from '../../services/github-service.js';
+import { OrganizationInviteService } from '../../services/organization-invite-service.js';
 
 const connectQuerySchema = z.object({
   redirectTo: z.string().optional(),
@@ -72,6 +73,7 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
   const github = new GitHubService();
   const access = new AccessService();
   const deploymentService = new DeploymentRequestService();
+  const inviteService = new OrganizationInviteService();
 
   app.get('/integrations/github/status', { preHandler: [app.authenticate] }, async (request) => {
     const user = request.user as { userId: string; email: string };
@@ -221,6 +223,10 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
         iv: encrypted.iv,
         authTag: encrypted.authTag,
       });
+      const inviteSync = await inviteService.syncInvitesForUser({
+        userId: loginUser.id,
+        email: loginUser.email,
+      });
 
       const token = app.jwt.sign({
         userId: loginUser.id,
@@ -238,6 +244,8 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
             name: loginUser.name,
           },
           redirectTo: statePayload.redirectTo,
+          acceptedInvites: inviteSync.acceptedCount,
+          acceptedOrganizationIds: inviteSync.acceptedOrganizationIds,
         }),
         'EX',
         60 * 5,

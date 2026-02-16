@@ -100,6 +100,8 @@ model User {
   projects       Project[]
   ownedOrganizations Organization[] @relation("OrganizationOwner")
   memberships    OrganizationMember[]
+  sentOrganizationInvites OrganizationInvite[] @relation("OrganizationInviteSender")
+  acceptedOrganizationInvites OrganizationInvite[] @relation("OrganizationInviteAccepter")
   auditLogs      AuditLog[]
   githubConnection GitHubConnection?
 
@@ -116,6 +118,7 @@ model Organization {
   updatedAt         DateTime              @updatedAt
   owner             User                  @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   memberships       OrganizationMember[]
+  invites           OrganizationInvite[]
   projects          Project[]
   subscriptions     Subscription[]
   usageRecords      UsageRecord[]
@@ -137,6 +140,29 @@ model OrganizationMember {
   @@unique([organizationId, userId])
   @@index([userId, role])
   @@map("organization_members")
+}
+
+model OrganizationInvite {
+  id                String        @id @default(cuid())
+  organizationId    String
+  email             String
+  role              OrgRole
+  token             String        @unique
+  invitedById       String
+  acceptedByUserId  String?
+  expiresAt         DateTime
+  acceptedAt        DateTime?
+  revokedAt         DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy         User          @relation("OrganizationInviteSender", fields: [invitedById], references: [id], onDelete: Cascade)
+  acceptedBy        User?         @relation("OrganizationInviteAccepter", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, email])
+  @@index([email, expiresAt])
+  @@index([organizationId, createdAt])
+  @@map("organization_invites")
 }
 
 model Project {
