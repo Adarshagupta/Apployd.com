@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { env } from './core/env.js';
 import { prisma } from './core/prisma.js';
 import { redis } from './core/redis.js';
+import { startActiveContainerRecoveryLoop } from './monitoring/container-recovery.js';
 import { metricsRegistry } from './monitoring/metrics.js';
 import { startStatsCollector } from './monitoring/stats-collector.js';
 import { ContainerActionConsumer } from './queue/container-action-consumer.js';
@@ -61,6 +62,7 @@ const start = async () => {
   const consumer = new DeployQueueConsumer();
   const containerActionConsumer = new ContainerActionConsumer();
   startStatsCollector();
+  startActiveContainerRecoveryLoop();
   console.log(`Deployment engine started in region ${env.ENGINE_REGION}`);
 
   const heartbeatInterval = setInterval(() => {

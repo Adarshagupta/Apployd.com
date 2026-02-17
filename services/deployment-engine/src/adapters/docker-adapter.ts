@@ -678,8 +678,8 @@ export class DockerAdapter {
     const cmd = [
       'docker run -d',
       `--name apployd-${input.deploymentId}`,
-      // Keep restart disabled until health-check passes so crash loops are visible.
-      '--restart no',
+      // Keep containers resilient across process crashes and host restarts.
+      '--restart unless-stopped',
 
       ...filesystemFlags,
 
@@ -839,6 +839,10 @@ export class DockerAdapter {
     }
 
     return parts.join(', ');
+  }
+
+  async getContainerRuntimeState(containerNameOrId: string): Promise<ContainerRuntimeState | null> {
+    return this.inspectContainerState(containerNameOrId);
   }
 
   private async containerProbe(containerId: string, containerPort: number): Promise<boolean> {

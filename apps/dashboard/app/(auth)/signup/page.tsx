@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { LandingThreeBackground } from '../../../components/landing-three-background';
 import { SectionThreeBackground } from '../../../components/landing-section-three';
@@ -35,13 +35,32 @@ export default function SignupPage() {
   const [githubSubmitting, setGithubSubmitting] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const nextPath = useMemo(() => {
+    const nextRaw = searchParams?.get('next') ?? null;
+    return nextRaw && nextRaw.startsWith('/') && !nextRaw.startsWith('//')
+      ? nextRaw
+      : '/overview';
+  }, [searchParams]);
 
   useEffect(() => {
     const token = window.localStorage.getItem('apployd_token');
     if (token) {
-      router.replace('/overview');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      router.replace(nextPath as any);
     }
-  }, [router]);
+  }, [nextPath, router]);
+
+  useEffect(() => {
+    const emailFromQuery = searchParams?.get('email')?.trim() ?? '';
+    if (!emailFromQuery) {
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      email: prev.email || emailFromQuery,
+    }));
+  }, [searchParams]);
 
   const update = (key: keyof typeof form, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -56,7 +75,8 @@ export default function SignupPage() {
       const data = await apiClient.post('/auth/signup', form);
       if (data.token) {
         window.localStorage.setItem('apployd_token', data.token);
-        router.push('/overview');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        router.push(nextPath as any);
         return;
       }
 
@@ -87,7 +107,8 @@ export default function SignupPage() {
         code: verificationCode,
       });
       window.localStorage.setItem('apployd_token', data.token);
-      router.push('/overview');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      router.push(nextPath as any);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -117,9 +138,6 @@ export default function SignupPage() {
     setGithubSubmitting(true);
 
     try {
-      const nextRaw = searchParams?.get('next') ?? null;
-      const nextPath =
-        nextRaw && nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : '/overview';
       const data = await apiClient.get(
         `/auth/github/login-url?next=${encodeURIComponent(nextPath)}`,
       );

@@ -49,6 +49,13 @@ export default function LoginPage() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    const emailFromQuery = searchParams?.get('email')?.trim() ?? '';
+    if (emailFromQuery) {
+      setEmail((current) => current || emailFromQuery);
+    }
+  }, [searchParams]);
+
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');

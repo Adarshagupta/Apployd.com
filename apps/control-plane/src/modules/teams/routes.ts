@@ -3,7 +3,9 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { z } from 'zod';
 
+import { env } from '../../config/env.js';
 import { AccessService } from '../../services/access-service.js';
+import { OrganizationInviteEmailService } from '../../services/organization-invite-email-service.js';
 import { prisma } from '../../lib/prisma.js';
 
 const inviteSchema = z.object({
@@ -19,6 +21,7 @@ const inviteParamsSchema = z.object({
 export const teamRoutes: FastifyPluginAsync = async (app) => {
   const access = new AccessService();
   const invites = new OrganizationInviteService();
+  const inviteEmail = new OrganizationInviteEmailService();
 
   app.get('/teams/:organizationId/members', { preHandler: [app.authenticate] }, async (request, reply) => {
     const user = request.user as { userId: string; email: string };
@@ -112,12 +115,41 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
       role: body.role,
       invitedByUserId: reqUser.userId,
     });
+    const links = buildInvitationLinks(invitation.id, normalizedEmail);
+    const emailDelivery = await inviteEmail.sendInvite({
+      toEmail: normalizedEmail,
+      organizationName: invitation.organization.name,
+      role: body.role,
+      invitedByName: invitation.invitedBy.name,
+      invitedByEmail: invitation.invitedBy.email,
+      loginUrl: links.loginUrl,
+      signupUrl: links.signupUrl,
+      expiresAt: invitation.expiresAt,
+    });
+    if (!emailDelivery.delivered) {
+      app.log.warn(
+        {
+          organizationId: body.organizationId,
+          email: normalizedEmail,
+          reason: emailDelivery.reason ?? 'unknown',
+        },
+        'Team invitation email was not delivered',
+      );
+    }
 
     return reply.code(202).send({
       member: null,
       invitation,
+      emailDelivery: {
+        delivered: emailDelivery.delivered,
+        reason: emailDelivery.reason ?? null,
+        loginUrl: links.loginUrl,
+        signupUrl: links.signupUrl,
+      },
       delivery: 'invite_pending_signup',
-      message: 'Invitation saved. When this email signs up, they can accept and join with this role.',
+      message: emailDelivery.delivered
+        ? 'Invitation email sent. The user can join from the invite link.'
+        : 'Invitation saved. Email delivery is not configured or failed; share the invite link manually.',
     });
   });
 
@@ -173,4 +205,26 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
       return reply.badRequest((error as Error).message);
     }
   });
+};
+
+const buildInvitationLinks = (
+  inviteId: string,
+  email: string,
+): {
+  loginUrl: string;
+  signupUrl: string;
+} => {
+  const nextPath = `/team?invite=${encodeURIComponent(inviteId)}`;
+  const loginUrl = new URL('/login', env.DASHBOARD_BASE_URL);
+  loginUrl.searchParams.set('next', nextPath);
+  loginUrl.searchParams.set('email', email);
+
+  const signupUrl = new URL('/signup', env.DASHBOARD_BASE_URL);
+  signupUrl.searchParams.set('next', nextPath);
+  signupUrl.searchParams.set('email', email);
+
+  return {
+    loginUrl: loginUrl.toString(),
+    signupUrl: signupUrl.toString(),
+  };
 };

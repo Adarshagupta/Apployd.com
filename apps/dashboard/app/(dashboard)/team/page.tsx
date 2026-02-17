@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 import { SectionCard } from '../../../components/section-card';
 import { apiClient } from '../../../lib/api';
@@ -22,6 +23,7 @@ function SkeletonBlock({ className }: { className: string }) {
 
 export default function TeamPage() {
   const { selectedOrganizationId, selectedOrganization, refresh } = useWorkspaceContext();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('developer');
   const [members, setMembers] = useState<Member[]>([]);
@@ -60,6 +62,11 @@ export default function TeamPage() {
   >([]);
   const [canManageInvites, setCanManageInvites] = useState(false);
   const [inviteActionId, setInviteActionId] = useState('');
+  const handledInviteFromQuery = useRef('');
+  const [manualInviteLinks, setManualInviteLinks] = useState<{
+    loginUrl: string;
+    signupUrl: string;
+  } | null>(null);
   const [loading, setLoading] = useState(Boolean(selectedOrganizationId));
   const [message, setMessage] = useState('Manage organization RBAC.');
 
@@ -114,6 +121,27 @@ export default function TeamPage() {
         email,
         role,
       });
+      const emailDelivery = data.emailDelivery as
+        | {
+            delivered?: boolean;
+            loginUrl?: string;
+            signupUrl?: string;
+          }
+        | undefined;
+
+      if (
+        emailDelivery?.delivered === false
+        && emailDelivery.loginUrl
+        && emailDelivery.signupUrl
+      ) {
+        setManualInviteLinks({
+          loginUrl: emailDelivery.loginUrl,
+          signupUrl: emailDelivery.signupUrl,
+        });
+      } else {
+        setManualInviteLinks(null);
+      }
+
       setEmail('');
       setMessage(data.message ?? 'Invitation processed.');
       await loadMembers();
@@ -152,6 +180,22 @@ export default function TeamPage() {
       setInviteActionId('');
     }
   };
+
+  useEffect(() => {
+    const inviteId = searchParams?.get('invite')?.trim() ?? '';
+    if (!inviteId || handledInviteFromQuery.current === inviteId) {
+      return;
+    }
+
+    const pendingInvite = myInvites.find((invite) => invite.id === inviteId);
+    if (!pendingInvite) {
+      return;
+    }
+
+    handledInviteFromQuery.current = inviteId;
+    acceptInvite(inviteId).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myInvites, searchParams]);
 
   return (
     <div className="space-y-4">
@@ -227,6 +271,21 @@ export default function TeamPage() {
         {!canManageInvites ? (
           <p className="mt-2 text-xs text-slate-600">
             Only owner/admin can invite members. Your role in this workspace is {selectedOrganization?.role ?? 'unknown'}.
+          </p>
+        ) : null}
+        {manualInviteLinks ? (
+          <p className="mt-2 text-xs text-slate-700">
+            Email delivery is unavailable right now.
+            {' '}
+            <a className="underline" href={manualInviteLinks.loginUrl}>
+              Login invite link
+            </a>
+            {' '}
+            |
+            {' '}
+            <a className="underline" href={manualInviteLinks.signupUrl}>
+              Signup invite link
+            </a>
           </p>
         ) : null}
       </SectionCard>

@@ -202,10 +202,6 @@ export class DeploymentPipeline {
         );
       }
 
-      await this.docker.setRestartPolicy(run.dockerContainerId, 'unless-stopped').catch((error) => {
-        onLog(`Warning: failed to enable restart policy: ${(error as Error).message}`);
-      });
-
       await this.assertDeploymentCanContinue(payload.deploymentId);
 
       // ── Domain resolution ──────────────────────────────────────
