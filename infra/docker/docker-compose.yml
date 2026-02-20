@@ -1,8 +1,7 @@
 services:
   redis:
+    # Internal-only: reachable by other compose services over the Docker network.
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
 
   control-plane:
     build:

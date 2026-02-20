@@ -28,6 +28,8 @@ interface DeploymentSummary {
   environment: string;
   branch?: string | null;
   commitSha?: string | null;
+  gitUrl?: string | null;
+  createdByName?: string | null;
   domain?: string | null;
   imageTag?: string | null;
   createdAt: string;
@@ -118,6 +120,53 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'usage', label: 'Usage' },
   { key: 'realtime-logs', label: 'Realtime Logs' },
 ];
+
+const IN_PROGRESS_DEPLOYMENT_STATUSES = new Set(['queued', 'building', 'deploying']);
+
+const DEPLOYMENT_STATUS_UI: Record<string, { label: string; dotClass: string; textClass: string }> = {
+  ready: { label: 'Ready', dotClass: 'bg-emerald-500', textClass: 'text-slate-900' },
+  failed: { label: 'Error', dotClass: 'bg-red-500', textClass: 'text-slate-900' },
+  queued: { label: 'Queued', dotClass: 'bg-amber-500', textClass: 'text-slate-800' },
+  building: { label: 'Building', dotClass: 'bg-blue-500', textClass: 'text-slate-800' },
+  deploying: { label: 'Deploying', dotClass: 'bg-blue-500', textClass: 'text-slate-800' },
+  rolled_back: { label: 'Rolled Back', dotClass: 'bg-slate-500', textClass: 'text-slate-800' },
+};
+
+function formatDeploymentDuration(startIso: string, endIso?: string | null): string {
+  const start = new Date(startIso).getTime();
+  const end = endIso ? new Date(endIso).getTime() : Date.now();
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    return '-';
+  }
+
+  const totalSeconds = Math.max(1, Math.round((end - start) / 1000));
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`;
+  }
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}m ${seconds}s`;
+}
+
+function formatDeploymentDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function resolveRepoLabel(repoFullName: string | null, gitUrl: string | null, fallback: string): string {
+  if (repoFullName) {
+    const pieces = repoFullName.split('/');
+    return pieces[pieces.length - 1] ?? repoFullName;
+  }
+
+  if (gitUrl) {
+    const normalized = gitUrl.replace(/\.git$/i, '').replace(/\/+$/, '');
+    const pieces = normalized.split('/');
+    return pieces[pieces.length - 1] ?? fallback;
+  }
+
+  return fallback;
+}
 
 function SkeletonBlock({ className }: { className: string }) {
   return <div aria-hidden="true" className={`skeleton ${className}`} />;
@@ -1023,113 +1072,122 @@ export default function ProjectDetailPage() {
             {deploymentsLoading ? (
               <div className="space-y-2">
                 {[0, 1, 2].map((placeholder) => (
-                  <article key={placeholder} className="rounded-xl border border-slate-200 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <SkeletonBlock className="h-5 w-14 rounded-full" />
-                        <SkeletonBlock className="h-5 w-20 rounded-full" />
-                        <SkeletonBlock className="h-4 w-44 rounded" />
+                  <article key={placeholder} className="rounded-xl border border-slate-200 px-4 py-4">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-[1.2fr_0.9fr_1fr_1fr_0.9fr_auto] md:items-center">
+                      <div className="space-y-2">
+                        <SkeletonBlock className="h-5 w-28 rounded" />
+                        <SkeletonBlock className="h-4 w-24 rounded-full" />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <SkeletonBlock className="h-8 w-20 rounded-lg" />
-                        <SkeletonBlock className="h-8 w-20 rounded-lg" />
+                      <SkeletonBlock className="h-5 w-20 rounded" />
+                      <SkeletonBlock className="h-5 w-28 rounded" />
+                      <div className="space-y-2">
+                        <SkeletonBlock className="h-4 w-24 rounded" />
+                        <SkeletonBlock className="h-4 w-28 rounded" />
                       </div>
+                      <SkeletonBlock className="h-5 w-24 rounded" />
+                      <SkeletonBlock className="h-8 w-20 rounded-md" />
                     </div>
                   </article>
                 ))}
               </div>
             ) : deployments.length ? (
-              <div className="space-y-2">
-                {deployments.map((dep) => {
+              <div className="overflow-hidden rounded-xl border border-slate-200">
+                {deployments.map((dep, index) => {
                   const isActive = project.activeDeploymentId === dep.id;
+                  const repoLabel = resolveRepoLabel(project.repoFullName, dep.gitUrl ?? project.repoUrl, project.name);
+                  const statusUi = DEPLOYMENT_STATUS_UI[dep.status] ?? {
+                    label: dep.status.replace('_', ' '),
+                    dotClass: 'bg-slate-400',
+                    textClass: 'text-slate-800',
+                  };
+                  const durationLabel = formatDeploymentDuration(dep.createdAt, dep.finishedAt);
+                  const branchLabel = dep.branch ?? project.branch ?? 'main';
+                  const createdByLabel = dep.createdByName ?? 'workspace';
+
                   return (
-                    <div
+                    <article
                       key={dep.id}
                       role="button"
                       tabIndex={0}
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      onClick={() => router.push(`/projects/${projectId}/deployments/${dep.id}` as any)}
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/projects/${projectId}/deployments/${dep.id}` as any); }}
+                      onClick={() => router.push(`/projects/${projectId}/deployments/${dep.id}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          router.push(`/projects/${projectId}/deployments/${dep.id}`);
+                        }
+                      }}
+                      className={`group grid cursor-pointer grid-cols-1 gap-3 px-4 py-4 transition md:grid-cols-[1.2fr_0.9fr_1fr_1fr_0.9fr_auto] md:items-center ${
+                        index !== deployments.length - 1 ? 'border-b border-slate-200' : ''
+                      } ${isActive ? 'bg-slate-100' : 'bg-white hover:bg-slate-50'}`}
                     >
-                    <article
-                      className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 transition cursor-pointer ${
-                        isActive ? 'border-slate-900 bg-slate-100' : 'border-slate-200 hover:border-slate-300 hover:shadow-sm'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        {/* Environment badge */}
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-                            dep.environment === 'production'
-                              ? 'bg-slate-900 text-white'
-                              : 'bg-slate-700 text-white'
-                          }`}
-                        >
-                          {dep.environment === 'production' ? 'prod' : 'preview'}
-                        </span>
-
-                        {/* Status badge */}
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                            dep.status === 'ready'
-                              ? 'bg-slate-200 text-slate-900'
-                              : dep.status === 'failed'
-                                ? 'bg-slate-900 text-white'
-                                : dep.status === 'rolled_back'
-                                  ? 'bg-slate-700 text-white'
-                                  : 'bg-slate-100 text-slate-700'
-                          }`}
-                        >
-                          {['queued', 'building', 'deploying'].includes(dep.status) && (
-                            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-slate-900 animate-pulse" />
-                          )}
-                          {dep.status}
-                        </span>
-
-                        {isActive && (
-                          <span className="inline-flex items-center rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-white">
-                            LIVE
+                      <div className="min-w-0">
+                        <p className="mono truncate text-lg font-semibold text-slate-900">{dep.id.slice(0, 9)}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                              dep.environment === 'production' ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-800'
+                            }`}
+                          >
+                            {dep.environment}
                           </span>
-                        )}
-
-                        <div className="min-w-0">
-                          <p className="text-sm text-slate-800 font-medium truncate">
-                            {dep.branch ?? 'unknown'}
-                            {dep.commitSha ? (
-                              <span className="font-normal text-slate-500">
-                                {' '}
-                                @ {dep.commitSha.slice(0, 7)}
-                              </span>
-                            ) : null}
-                          </p>
-                          <p className="text-[11px] text-slate-500">
-                            {new Date(dep.createdAt).toLocaleString()}
-                            {dep.finishedAt && (
-                              <span>
-                                {' Â· '}
-                                {Math.round(
-                                  (new Date(dep.finishedAt).getTime() -
-                                    new Date(dep.createdAt).getTime()) /
-                                    1000,
-                                )}
-                                s
-                              </span>
-                            )}
-                          </p>
+                          {isActive && (
+                            <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                              Current
+                            </span>
+                          )}
                         </div>
                       </div>
 
+                      <div className="min-w-0">
+                        <p className={`flex items-center gap-2 text-sm font-medium ${statusUi.textClass}`}>
+                          <span
+                            className={`inline-flex h-2.5 w-2.5 rounded-full ${statusUi.dotClass} ${
+                              IN_PROGRESS_DEPLOYMENT_STATUSES.has(dep.status) ? 'animate-pulse' : ''
+                            }`}
+                          />
+                          {statusUi.label}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">{durationLabel}</p>
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-900">{repoLabel}</p>
+                        <p className="mt-1 text-xs text-slate-500">{project.repoFullName ?? project.repoUrl ? 'Repository' : 'Manual deployment'}</p>
+                      </div>
+
+                      <div className="min-w-0 space-y-1">
+                        <p className="flex items-center gap-2 text-sm text-slate-900">
+                          <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3.5 w-3.5 text-slate-500">
+                            <path
+                              d="M5 2a2 2 0 1 0 0 4h1v4a2 2 0 1 0 2 0V8h3a2 2 0 1 0 0-2H7V4a2 2 0 0 0-2-2z"
+                              fill="currentColor"
+                            />
+                          </svg>
+                          <span className="mono truncate">{branchLabel}</span>
+                        </p>
+                        <p className="flex items-center gap-2 text-sm text-slate-700">
+                          <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3.5 w-3.5 text-slate-500">
+                            <circle cx="8" cy="8" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                          </svg>
+                          <span className="mono">{dep.commitSha ? dep.commitSha.slice(0, 7) : 'manual'}</span>
+                        </p>
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="text-sm text-slate-700">{formatDeploymentDate(dep.createdAt)}</p>
+                        <p className="mt-1 truncate text-xs text-slate-500">by {createdByLabel}</p>
+                      </div>
+
                       {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-2 md:justify-end" onClick={(e) => e.stopPropagation()}>
                         {dep.domain && dep.status === 'ready' && (
                           <a
                             href={dep.domain.startsWith('http') ? dep.domain : `https://${dep.domain}`}
                             target="_blank"
                             rel="noreferrer"
-                            className="rounded-md bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-200 transition"
+                            className="rounded-md bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-700 transition hover:bg-slate-200"
                           >
-                            Visit â†’
+                            Visit
                           </a>
                         )}
 
@@ -1139,27 +1197,32 @@ export default function ProjectDetailPage() {
                           !isActive && (
                             <button
                               type="button"
-                              className="rounded-md bg-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-900 hover:bg-slate-300 transition"
-                              onClick={(e) => { e.stopPropagation(); handleRollback(dep.id); }}
+                              className="rounded-md bg-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-900 transition hover:bg-slate-300"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRollback(dep.id);
+                              }}
                               disabled={deploymentAction === dep.id}
                             >
-                              {deploymentAction === dep.id ? 'â€¦' : 'Rollback'}
+                              {deploymentAction === dep.id ? '...' : 'Rollback'}
                             </button>
                           )}
 
                         {dep.environment === 'preview' && dep.status === 'ready' && (
                           <button
                             type="button"
-                            className="rounded-md bg-slate-700 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-slate-800 transition"
-                            onClick={(e) => { e.stopPropagation(); handlePromote(dep.id); }}
+                            className="rounded-md bg-slate-700 px-2.5 py-1 text-[11px] font-medium text-white transition hover:bg-slate-800"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePromote(dep.id);
+                            }}
                             disabled={deploymentAction === dep.id}
                           >
-                            {deploymentAction === dep.id ? 'â€¦' : 'Promote'}
+                            {deploymentAction === dep.id ? '...' : 'Promote'}
                           </button>
                         )}
                       </div>
                     </article>
-                    </div>
                   );
                 })}
               </div>

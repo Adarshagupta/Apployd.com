@@ -91,7 +91,7 @@ The platform runs 7 Docker containers:
 | Dashboard | 3000 | Next.js frontend |
 | Control Plane | 4000 | Node.js API server |
 | Deployment Engine | 9102 | Container orchestration |
-| Redis | 6379 | Cache & queue |
+| Redis | internal only | Cache & queue |
 | Prometheus | 9090 | Metrics collection |
 | Grafana | 3001 | Monitoring dashboards |
 | Node Exporter | 9100 | System metrics |
@@ -225,6 +225,7 @@ sudo bash setup.sh
 - [ ] Change default Grafana password
 - [ ] Restrict Prometheus/Grafana to VPN or IP whitelist
 - [ ] Enable firewall (ufw) and only allow 80, 443, 22
+- [ ] Keep Redis internal-only (no public `6379` port mapping)
 - [ ] Setup automated backups for database
 - [ ] Enable Docker log rotation
 - [ ] Setup monitoring alerts

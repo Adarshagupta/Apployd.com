@@ -159,7 +159,9 @@ export class DeploymentRequestService {
         projectOwnerUserId: project.createdById,
       });
 
-    // Preview deployments get a unique subdomain; production gets the canonical domain
+    // Preview deployments keep existing style behavior.
+    // Production deployments now default to a unique single-label domain while
+    // keeping the legacy project.workspace domain as an alias in the runtime edge layer.
     const resolvedDomain = requestedDomain
       ?? (resolvedEnvironment === 'preview'
         ? buildPreviewDomain({
@@ -169,7 +171,11 @@ export class DeploymentRequestService {
             ref: resolvedCommitSha ?? resolvedBranch,
             style: env.PREVIEW_DOMAIN_STYLE,
           })
-        : `${sanitizeDomainLabel(project.slug, 'project')}.${sanitizeDomainLabel(project.organization.slug, 'org')}.${env.BASE_DOMAIN}`);
+        : buildUniqueProjectDomain({
+            projectSlug: project.slug,
+            organizationSlug: project.organization.slug,
+            baseDomain: env.BASE_DOMAIN,
+          }));
 
     const activeSubscription = project.organization.subscriptions[0];
     if (!activeSubscription) {
@@ -692,6 +698,26 @@ const buildPreviewDomain = (input: {
   const previewLabel = buildPreviewLabel(input.projectSlug, input.ref);
   const organizationLabel = sanitizeDomainLabel(input.organizationSlug, 'org');
   return `${previewLabel}.${organizationLabel}.${input.baseDomain}`;
+};
+
+const buildUniqueProjectLabel = (projectSlug: string, organizationSlug: string): string => {
+  const projectPart = sanitizeDomainLabel(projectSlug, 'project').slice(0, 28);
+  const orgPart = sanitizeDomainLabel(organizationSlug, 'org').slice(0, 18);
+  const suffix = createHash('sha1')
+    .update(`${projectSlug}:${organizationSlug}`)
+    .digest('hex')
+    .slice(0, 6);
+
+  return sanitizeDomainLabel(`${projectPart}-${orgPart}-${suffix}`, 'project');
+};
+
+const buildUniqueProjectDomain = (input: {
+  projectSlug: string;
+  organizationSlug: string;
+  baseDomain: string;
+}): string => {
+  const uniqueLabel = buildUniqueProjectLabel(input.projectSlug, input.organizationSlug);
+  return `${uniqueLabel}.${input.baseDomain}`;
 };
 
 const normalizeCommitSha = (value?: string | null): string | undefined => {

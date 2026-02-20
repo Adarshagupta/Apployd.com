@@ -141,7 +141,15 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
 
     const project = await prisma.project.findUnique({
       where: { id: query.projectId },
-      select: { organizationId: true },
+      select: {
+        organizationId: true,
+        createdBy: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
     });
 
     if (!project) {
@@ -160,7 +168,14 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
       take: 50,
     });
 
-    return { deployments };
+    const createdByName = project.createdBy?.name ?? project.createdBy?.email ?? null;
+
+    return {
+      deployments: deployments.map((deployment) => ({
+        ...deployment,
+        createdByName,
+      })),
+    };
   });
 
   app.get('/deployments/:deploymentId', { preHandler: [app.authenticate] }, async (request, reply) => {

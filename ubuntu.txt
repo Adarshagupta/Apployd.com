@@ -16,4 +16,6 @@ Adarsh@800850
 
 ssh root@95.216.165.119 "cd /root/Apployd.com && git pull origin main && bash infra/scripts/deploy-stack.sh"
 
+ssh root@95.216.179.64 "cd /root/Apployd.com && git pull origin main && bash infra/scripts/deploy-stack.sh"
+
 code --extensionDevelopmentPath "c:\Users\adasg\Videos\Apployd\apps\vscode-extension"

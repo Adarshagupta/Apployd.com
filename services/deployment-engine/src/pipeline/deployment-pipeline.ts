@@ -214,8 +214,19 @@ export class DeploymentPipeline {
             ref: payload.request.commitSha ?? payload.request.branch ?? 'preview',
           });
 
-      // Collect verified custom domain aliases for this project
+      const autoAliases = env.ENGINE_LOCAL_MODE
+        ? []
+        : buildAutomaticDomainAliases({
+            environment: payload.environment,
+            primaryDomain: domain,
+            projectSlug: deployment.project.slug,
+            organizationSlug: deployment.project.organization.slug,
+            baseDomain: env.BASE_DOMAIN,
+          });
+
+      // Collect verified custom domain aliases for this project.
       const customAliases = (deployment.project.customDomains ?? []).map((d: { domain: string }) => d.domain);
+      const routeAliases = Array.from(new Set([...autoAliases, ...customAliases])).filter((alias) => alias !== domain);
 
       // ── DNS + Reverse proxy + SSL ──────────────────────────────
       if (!env.ENGINE_LOCAL_MODE) {
@@ -225,6 +236,12 @@ export class DeploymentPipeline {
             () => this.cloudflare!.upsertARecord(domain, deployment.server!.ipv4),
             { retries: 2, delayMs: 1000 },
           );
+          for (const autoAlias of autoAliases) {
+            await withRetry(
+              () => this.cloudflare!.upsertARecord(autoAlias, deployment.server!.ipv4),
+              { retries: 2, delayMs: 1000 },
+            );
+          }
           onLog('DNS configured');
         }
 
@@ -261,7 +278,7 @@ export class DeploymentPipeline {
               upstreamPort: run.hostPort,
               upstreamScheme,
               attackModeEnabled: deployment.project.attackModeEnabled,
-              aliases: customAliases,
+              aliases: routeAliases,
               wakePath: `/api/v1/edge/deployments/${deployment.id}/wake`,
             }),
           { retries: 2, delayMs: 1000 },
@@ -269,7 +286,7 @@ export class DeploymentPipeline {
         onLog('Reverse proxy configured');
 
         onLog('Provisioning SSL certificate...');
-        await withRetry(() => this.ssl.ensureCertificate(domain, customAliases), {
+        await withRetry(() => this.ssl.ensureCertificate(domain, routeAliases), {
           retries: 1,
           delayMs: 3000,
         });
@@ -285,7 +302,7 @@ export class DeploymentPipeline {
               upstreamPort: run.hostPort,
               upstreamScheme,
               attackModeEnabled: deployment.project.attackModeEnabled,
-              aliases: customAliases,
+              aliases: routeAliases,
               wakePath: `/api/v1/edge/deployments/${deployment.id}/wake`,
             }),
           { retries: 2, delayMs: 1000 },
@@ -617,6 +634,61 @@ const buildPreviewLabel = (projectSlug: string, ref: string): string => {
   return sanitizeDomainLabel(`${projectPart}-${refPart}-${suffix}`, 'preview');
 };
 
+const buildLegacyProjectDomain = (input: {
+  projectSlug: string;
+  organizationSlug: string;
+  baseDomain: string;
+}): string => {
+  const project = sanitizeDomainLabel(input.projectSlug, 'project');
+  const org = sanitizeDomainLabel(input.organizationSlug, 'org');
+  return `${project}.${org}.${input.baseDomain}`;
+};
+
+const buildUniqueProjectLabel = (projectSlug: string, organizationSlug: string): string => {
+  const projectPart = sanitizeDomainLabel(projectSlug, 'project').slice(0, 28);
+  const orgPart = sanitizeDomainLabel(organizationSlug, 'org').slice(0, 18);
+  const suffix = createHash('sha1')
+    .update(`${projectSlug}:${organizationSlug}`)
+    .digest('hex')
+    .slice(0, 6);
+
+  return sanitizeDomainLabel(`${projectPart}-${orgPart}-${suffix}`, 'project');
+};
+
+const buildUniqueProjectDomain = (input: {
+  projectSlug: string;
+  organizationSlug: string;
+  baseDomain: string;
+}): string => {
+  const label = buildUniqueProjectLabel(input.projectSlug, input.organizationSlug);
+  return `${label}.${input.baseDomain}`;
+};
+
+const buildAutomaticDomainAliases = (input: {
+  environment: 'production' | 'preview';
+  primaryDomain: string;
+  projectSlug: string;
+  organizationSlug: string;
+  baseDomain: string;
+}): string[] => {
+  if (input.environment !== 'production') {
+    return [];
+  }
+
+  const legacyDomain = buildLegacyProjectDomain({
+    projectSlug: input.projectSlug,
+    organizationSlug: input.organizationSlug,
+    baseDomain: input.baseDomain,
+  });
+  const uniqueDomain = buildUniqueProjectDomain({
+    projectSlug: input.projectSlug,
+    organizationSlug: input.organizationSlug,
+    baseDomain: input.baseDomain,
+  });
+
+  return Array.from(new Set([legacyDomain, uniqueDomain])).filter((domain) => domain !== input.primaryDomain);
+};
+
 const buildFallbackDomain = (input: {
   environment: 'production' | 'preview';
   projectSlug: string;
@@ -634,6 +706,9 @@ const buildFallbackDomain = (input: {
     return `${previewLabel}.${org}.${env.PREVIEW_BASE_DOMAIN}`;
   }
 
-  const project = sanitizeDomainLabel(input.projectSlug, 'project');
-  return `${project}.${org}.${env.BASE_DOMAIN}`;
+  return buildUniqueProjectDomain({
+    projectSlug: input.projectSlug,
+    organizationSlug: input.organizationSlug,
+    baseDomain: env.BASE_DOMAIN,
+  });
 };
