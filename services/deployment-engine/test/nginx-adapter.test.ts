@@ -96,4 +96,16 @@ describe('NginxAdapter wake fallback config', () => {
     expect(normalized).not.toContain('{{ATTACK_MODE_LOCATION_DIRECTIVES}}');
     expect(normalized).toContain('proxy_pass http://demo_upstream;');
   });
+
+  it('keeps https redirects for direct HTTP while allowing proxied HTTPS on port 80', () => {
+    const adapter = new NginxAdapter() as any;
+    const tlsTemplate = adapter.buildTlsTemplate() as string;
+
+    expect(tlsTemplate).toContain('set $apployd_forwarded_proto $scheme;');
+    expect(tlsTemplate).toContain('if ($http_x_forwarded_proto ~* "^https$") {');
+    expect(tlsTemplate).toContain('if ($apployd_forwarded_proto != "https") {');
+    expect(tlsTemplate).toContain('return 301 https://$host$request_uri;');
+    expect(tlsTemplate).toContain('proxy_set_header X-Forwarded-Proto $apployd_forwarded_proto;');
+    expect(tlsTemplate).toContain('proxy_pass {{UPSTREAM_SCHEME}}://{{UPSTREAM_NAME}};');
+  });
 });

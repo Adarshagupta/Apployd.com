@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Apployd | Page Not Found</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Segoe UI", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+        background:
+          radial-gradient(1100px 600px at 15% -10%, rgba(0, 170, 255, 0.16), transparent 60%),
+          radial-gradient(1000px 580px at 100% 100%, rgba(64, 132, 255, 0.16), transparent 62%),
+          #070b14;
+        color: #e8eefc;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+
+      .card {
+        width: min(720px, 100%);
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        border-radius: 20px;
+        background: rgba(8, 13, 24, 0.82);
+        backdrop-filter: blur(6px);
+        padding: 36px 34px;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.11em;
+        color: #93c5fd;
+        margin-bottom: 14px;
+      }
+
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #38bdf8;
+        box-shadow: 0 0 0 5px rgba(56, 189, 248, 0.2);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(31px, 5vw, 44px);
+        line-height: 1.06;
+        letter-spacing: -0.03em;
+      }
+
+      p {
+        margin: 14px 0 0;
+        color: #b3c0d7;
+        line-height: 1.55;
+      }
+
+      .actions {
+        margin-top: 26px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 11px;
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        padding: 11px 15px;
+        color: #e8eefc;
+        text-decoration: none;
+        font-size: 14px;
+        transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+      }
+
+      .btn:hover {
+        border-color: rgba(125, 211, 252, 0.85);
+        background: rgba(56, 189, 248, 0.12);
+        transform: translateY(-1px);
+      }
+
+      .btn-primary {
+        border-color: rgba(56, 189, 248, 0.45);
+        background: rgba(56, 189, 248, 0.16);
+      }
+
+      .meta {
+        margin-top: 20px;
+        font-size: 12px;
+        color: #7f91af;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <span class="badge">
+        <span class="dot"></span>
+        Apployd Edge
+      </span>
+      <h1>Page Not Found</h1>
+      <p>
+        The requested domain or path is not configured on this Apployd edge yet.
+        Check your URL, DNS records, or deployment routing configuration.
+      </p>
+      <div class="actions">
+        <a class="btn btn-primary" href="/">Open Dashboard</a>
+        <a class="btn" href="/health">Health Check</a>
+      </div>
+      <p class="meta">Reference: APPLYD_EDGE_404</p>
+    </main>
+  </body>
+</html>
