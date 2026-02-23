@@ -10,6 +10,8 @@ interface ConfigureProxyInput {
   upstreamHost: string;
   upstreamPort: number;
   upstreamScheme?: 'http' | 'https';
+  /** Mark route as non-indexable (used for preview deployments). */
+  noIndex?: boolean;
   attackModeEnabled?: boolean;
   /** Additional server_name aliases (custom domains). */
   aliases?: string[];
@@ -57,6 +59,12 @@ export class NginxAdapter {
     const upstreamName = this.buildUpstreamName(domain);
     const wakeConfig = this.buildWakeConfig(input.wakePath);
     const attackMode = this.buildAttackModeConfig(domain, input.attackModeEnabled === true);
+    const seoConfig = this.buildSeoConfig({
+      domain,
+      noIndex: input.noIndex === true,
+      upstreamPassTarget: `${upstreamScheme}://${upstreamHost}:${input.upstreamPort}`,
+      indent: '    ',
+    });
 
     const aliasString = aliases.join(' ');
 
@@ -70,7 +78,10 @@ export class NginxAdapter {
       .replaceAll('{{WAKE_PROXY_DIRECTIVES}}', wakeConfig.proxyDirectives)
       .replaceAll('{{WAKE_FALLBACK_LOCATION}}', wakeConfig.locationBlock)
       .replaceAll('{{ATTACK_MODE_HTTP_DIRECTIVES}}', attackMode.httpDirectives)
-      .replaceAll('{{ATTACK_MODE_LOCATION_DIRECTIVES}}', attackMode.locationDirectives);
+      .replaceAll('{{ATTACK_MODE_LOCATION_DIRECTIVES}}', attackMode.locationDirectives)
+      .replaceAll('{{SEO_SERVER_DIRECTIVES}}', seoConfig.serverDirectives)
+      .replaceAll('{{SEO_LOCATION_BLOCKS}}', seoConfig.locationBlocks)
+      .replaceAll('{{SEO_FALLBACK_LOCATIONS}}', seoConfig.fallbackLocations);
     // Backward compatibility for template versions that still hardcode http://.
     if (!template.includes('{{UPSTREAM_SCHEME}}')) {
       rendered = rendered.replace(/proxy_pass\s+http:\/\//g, `proxy_pass ${upstreamScheme}://`);
@@ -109,6 +120,15 @@ export class NginxAdapter {
     const upstreamName = this.buildUpstreamName(domain);
     const wakeConfig = this.buildWakeConfig(input.wakePath);
     const attackMode = this.buildAttackModeConfig(domain, input.attackModeEnabled === true);
+    const seoConfig = this.buildSeoConfig({
+      domain,
+      noIndex: input.noIndex === true,
+      upstreamPassTarget: `${upstreamScheme}://${upstreamName}`,
+      indent: '  ',
+    });
+    const seoRedirectDirectives = input.noIndex === true
+      ? '  add_header X-Robots-Tag "noindex, nofollow, noarchive, nosnippet" always;'
+      : '';
     let rendered = this.buildTlsTemplate()
       .replaceAll('{{DOMAIN}}', domain)
       .replaceAll('{{ALIASES}}', aliasString)
@@ -121,7 +141,11 @@ export class NginxAdapter {
       .replaceAll('{{WAKE_PROXY_DIRECTIVES}}', wakeConfig.proxyDirectives)
       .replaceAll('{{WAKE_FALLBACK_LOCATION}}', wakeConfig.locationBlock)
       .replaceAll('{{ATTACK_MODE_HTTP_DIRECTIVES}}', attackMode.httpDirectives)
-      .replaceAll('{{ATTACK_MODE_LOCATION_DIRECTIVES}}', attackMode.locationDirectives);
+      .replaceAll('{{ATTACK_MODE_LOCATION_DIRECTIVES}}', attackMode.locationDirectives)
+      .replaceAll('{{SEO_REDIRECT_SERVER_DIRECTIVES}}', seoRedirectDirectives)
+      .replaceAll('{{SEO_SERVER_DIRECTIVES}}', seoConfig.serverDirectives)
+      .replaceAll('{{SEO_LOCATION_BLOCKS}}', seoConfig.locationBlocks)
+      .replaceAll('{{SEO_FALLBACK_LOCATIONS}}', seoConfig.fallbackLocations);
     rendered = rendered.replace(/proxy_pass\s+http:\/\//g, `proxy_pass ${upstreamScheme}://`);
     rendered = this.ensureWakeFallback(rendered, wakeConfig);
     rendered = this.ensureAttackModeFallback(rendered, attackMode);
@@ -229,6 +253,8 @@ export class NginxAdapter {
       '    add_header Referrer-Policy "strict-origin-when-cross-origin" always;',
       '    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;',
       '    add_header Cross-Origin-Opener-Policy "same-origin" always;',
+      '{{SEO_SERVER_DIRECTIVES}}',
+      '{{SEO_LOCATION_BLOCKS}}',
       '    location / {',
       '        proxy_http_version 1.1;',
       '        proxy_set_header Upgrade $http_upgrade;',
@@ -238,6 +264,7 @@ export class NginxAdapter {
       '{{WAKE_PROXY_DIRECTIVES}}',
       '        proxy_pass {{UPSTREAM_SCHEME}}://{{UPSTREAM_HOST}}:{{UPSTREAM_PORT}};',
       '    }',
+      '{{SEO_FALLBACK_LOCATIONS}}',
       '{{WAKE_FALLBACK_LOCATION}}',
       '}',
     ].join('\n');
@@ -260,6 +287,7 @@ export class NginxAdapter {
       '  add_header Referrer-Policy "strict-origin-when-cross-origin" always;',
       '  add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;',
       '  add_header Cross-Origin-Opener-Policy "same-origin" always;',
+      '{{SEO_REDIRECT_SERVER_DIRECTIVES}}',
       '',
       '  location /.well-known/acme-challenge/ {',
       '    root /var/www/html;',
@@ -300,10 +328,12 @@ export class NginxAdapter {
       '  add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;',
       '  add_header Cross-Origin-Opener-Policy "same-origin" always;',
       '  add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;',
+      '{{SEO_SERVER_DIRECTIVES}}',
       '',
       '  ssl_certificate {{SSL_CERT_PATH}};',
       '  ssl_certificate_key {{SSL_KEY_PATH}};',
       '',
+      '{{SEO_LOCATION_BLOCKS}}',
       '  location /healthz {',
       "    access_log off;",
       "    return 200 'ok';",
@@ -322,6 +352,7 @@ export class NginxAdapter {
       '{{WAKE_PROXY_DIRECTIVES}}',
       '    proxy_pass {{UPSTREAM_SCHEME}}://{{UPSTREAM_NAME}};',
       '  }',
+      '{{SEO_FALLBACK_LOCATIONS}}',
       '{{WAKE_FALLBACK_LOCATION}}',
       '}',
     ].join('\n');
@@ -402,6 +433,112 @@ export class NginxAdapter {
     } catch {
       return '';
     }
+  }
+
+  private buildSeoConfig(input: {
+    domain: string;
+    noIndex: boolean;
+    upstreamPassTarget: string;
+    indent: string;
+  }): {
+    serverDirectives: string;
+    locationBlocks: string;
+    fallbackLocations: string;
+  } {
+    const line = (value: string): string => `${input.indent}${value}`;
+    const noIndexHeaderLine = line(
+      'add_header X-Robots-Tag "noindex, nofollow, noarchive, nosnippet" always;',
+    );
+
+    if (input.noIndex) {
+      const robotsBody = this.escapeNginxReturnBody('User-agent: *\nDisallow: /\n');
+      const sitemapBody = this.escapeNginxReturnBody(
+        '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>\n',
+      );
+
+      const robotsLocation = [
+        line('location = /robots.txt {'),
+        line('  access_log off;'),
+        line('  default_type text/plain;'),
+        line('  add_header Cache-Control "no-store" always;'),
+        line(`  return 200 "${robotsBody}";`),
+        line('}'),
+      ].join('\n');
+
+      const sitemapLocation = [
+        line('location = /sitemap.xml {'),
+        line('  access_log off;'),
+        line('  default_type application/xml;'),
+        line('  add_header Cache-Control "no-store" always;'),
+        line(`  return 200 "${sitemapBody}";`),
+        line('}'),
+      ].join('\n');
+
+      return {
+        serverDirectives: noIndexHeaderLine,
+        locationBlocks: `${robotsLocation}\n\n${sitemapLocation}`,
+        fallbackLocations: '',
+      };
+    }
+
+    const defaultRobotsBody = this.escapeNginxReturnBody(
+      `User-agent: *\nAllow: /\nSitemap: https://${input.domain}/sitemap.xml\n`,
+    );
+    const defaultSitemapBody = this.escapeNginxReturnBody(
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+        `  <url><loc>https://${input.domain}/</loc></url>`,
+        '</urlset>',
+        '',
+      ].join('\n'),
+    );
+
+    const robotsLocation = [
+      line('location = /robots.txt {'),
+      line('  proxy_http_version 1.1;'),
+      line('  proxy_set_header Host $host;'),
+      line('  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;'),
+      line('  proxy_set_header X-Forwarded-Proto $scheme;'),
+      line('  proxy_intercept_errors on;'),
+      line('  error_page 404 =200 /_apployd_default_robots;'),
+      line(`  proxy_pass ${input.upstreamPassTarget}/robots.txt;`),
+      line('}'),
+    ].join('\n');
+
+    const sitemapLocation = [
+      line('location = /sitemap.xml {'),
+      line('  proxy_http_version 1.1;'),
+      line('  proxy_set_header Host $host;'),
+      line('  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;'),
+      line('  proxy_set_header X-Forwarded-Proto $scheme;'),
+      line('  proxy_intercept_errors on;'),
+      line('  error_page 404 =200 /_apployd_default_sitemap;'),
+      line(`  proxy_pass ${input.upstreamPassTarget}/sitemap.xml;`),
+      line('}'),
+    ].join('\n');
+
+    const fallbackLocations = [
+      line('location = /_apployd_default_robots {'),
+      line('  internal;'),
+      line('  default_type text/plain;'),
+      line('  add_header Cache-Control "public, max-age=300" always;'),
+      line(`  return 200 "${defaultRobotsBody}";`),
+      line('}'),
+      '',
+      line('location = /_apployd_default_sitemap {'),
+      line('  internal;'),
+      line('  default_type application/xml;'),
+      line('  add_header Cache-Control "public, max-age=300" always;'),
+      line(`  return 200 "${defaultSitemapBody}";`),
+      line('}'),
+    ].join('\n');
+
+    return {
+      serverDirectives: '',
+      locationBlocks: `${robotsLocation}\n\n${sitemapLocation}`,
+      fallbackLocations,
+    };
   }
 
   private buildWakeConfig(wakePathInput?: string): {
@@ -630,6 +767,14 @@ export class NginxAdapter {
       .replace(/\$/g, '\\$')
       .replace(/\r/g, '')
       .replace(/\n/g, '');
+  }
+
+  private escapeNginxReturnBody(value: string): string {
+    return value
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\r/g, '')
+      .replace(/\n/g, '\\n');
   }
 
   private normalizeUpstreamScheme(scheme?: 'http' | 'https'): 'http' | 'https' {
