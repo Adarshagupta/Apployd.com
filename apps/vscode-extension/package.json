@@ -33,12 +33,12 @@
       "properties": {
         "apployd.apiBaseUrl": {
           "type": "string",
-          "default": "https://sylicaai.com/api/v1",
+          "default": "https://apployd.com/api/v1",
           "description": "Base URL for the Apployd control-plane API."
         },
         "apployd.dashboardBaseUrl": {
           "type": "string",
-          "default": "https://sylicaai.com",
+          "default": "https://apployd.com",
           "description": "Base URL for the Apployd dashboard UI."
         }
       }

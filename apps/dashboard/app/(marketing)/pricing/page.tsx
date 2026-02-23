@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { buildPageMetadata } from '../../../lib/seo';
+import { buildPageMetadata, SITE_NAME, siteUrl } from '../../../lib/seo';
 import styles from '../../landing.module.css';
 
 export const metadata: Metadata = buildPageMetadata({
@@ -180,9 +180,38 @@ const quickViewRows = [
   { feature: 'Support', free: 'Community', dev: 'Email', pro: 'Priority', max: '24/7', enterprise: 'Dedicated' },
 ];
 
+const normalizedPrice = (value: string): string => {
+  const numeric = value.replace(/[^0-9.]/g, '');
+  return numeric.length > 0 ? numeric : '0';
+};
+
+const pricingJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: SITE_NAME,
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'Linux',
+  url: `${siteUrl}/pricing`,
+  description:
+    'Transparent plans for Apployd with project limits, resource pools, and upgrade paths for teams at every stage.',
+  offers: plans.map((plan) => ({
+    '@type': 'Offer',
+    name: `${plan.name} plan`,
+    price: normalizedPrice(plan.price),
+    priceCurrency: 'USD',
+    availability: 'https://schema.org/InStock',
+    url: `${siteUrl}${plan.href}`,
+    category: 'SoftwareSubscription',
+  })),
+};
+
 export default function PricingPage() {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(pricingJsonLd) }}
+      />
       <section className={styles.section} style={{ borderTop: 'none', paddingTop: '2rem' }}>
         <div className={styles.container} style={{ textAlign: 'center' }}>
           <p className={styles.sectionLabel}>Pricing</p>

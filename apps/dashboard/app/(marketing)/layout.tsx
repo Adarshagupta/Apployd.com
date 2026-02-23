@@ -36,9 +36,9 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
           </nav>
           <div className={styles.navActions}>
             <LandingThemeToggle className={styles.themeToggle} />
-            <a href="/signup" className={styles.navButton}>
+            <Link href="/signup" className={styles.navButton}>
               Get Started
-            </a>
+            </Link>
           </div>
         </div>
       </header>

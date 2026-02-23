@@ -77,7 +77,7 @@ Important:
 - `BASE_DOMAIN` controls generated deployment hostnames (for example `project.org.BASE_DOMAIN`).
 - `PREVIEW_BASE_DOMAIN` controls preview deployment hostnames.
 - `PREVIEW_DOMAIN_STYLE` controls preview hostname pattern:
-  - `project`: `<project>.<PREVIEW_BASE_DOMAIN>` (recommended for `sylicaai.com`)
+  - `project`: `<project>.<PREVIEW_BASE_DOMAIN>` (recommended for `apployd.com`)
   - `project_ref`: `<project>-<ref>-<hash>.<organization>.<PREVIEW_BASE_DOMAIN>`
 - Deploy API supports optional `domain` override per request for custom hostnames.
 - Control plane now rejects deploy requests when no active deployment-engine worker heartbeat is present.
@@ -157,11 +157,11 @@ Use the domain-driven script so URLs are not hardcoded:
 
 ```bash
 bash infra/scripts/deploy-ubuntu.sh \
-  --public-domain sylicaai.com \
-  --base-domain sylicaai.com \
-  --preview-base-domain sylicaai.com \
+  --public-domain apployd.com \
+  --base-domain apployd.com \
+  --preview-base-domain apployd.com \
   --preview-domain-style project \
-  --certbot-email ops@sylicaai.com \
+  --certbot-email ops@apployd.com \
   --cloudflare-api-token <your-cloudflare-token> \
   --cloudflare-zone-id <your-cloudflare-zone-id> \
   --with-provision \
@@ -176,9 +176,9 @@ This script:
 - uses host Nginx by default (Docker Nginx service is skipped unless `DEPLOY_WITH_NGINX_CONTAINER=true`).
 
 DNS records to create:
-- `sylicaai.com` -> your server public IP
-- `*.sylicaai.com` -> your server public IP
-- `*.preview.sylicaai.com` -> your server public IP (only if preview base differs)
+- `apployd.com` -> your server public IP
+- `*.apployd.com` -> your server public IP
+- `*.preview.apployd.com` -> your server public IP (only if preview base differs)
 
 Generated deployment URL patterns:
 - Production: `<project>.<organization>.<BASE_DOMAIN>`

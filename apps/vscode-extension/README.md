@@ -15,8 +15,8 @@ Manage Apployd resources from your IDE:
 
 Set these in VS Code settings:
 
-- `apployd.apiBaseUrl` (default: `https://sylicaai.com/api/v1`)
-- `apployd.dashboardBaseUrl` (default: `https://sylicaai.com`)
+- `apployd.apiBaseUrl` (default: `https://apployd.com/api/v1`)
+- `apployd.dashboardBaseUrl` (default: `https://apployd.com`)
 
 ## Commands
 

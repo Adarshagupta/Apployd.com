@@ -4,7 +4,16 @@ import type { Metadata } from 'next';
 import { Space_Grotesk, IBM_Plex_Mono } from 'next/font/google';
 
 import { LandingThemeSync } from '../components/landing-theme-sync';
-import { siteMetadataBase } from '../lib/seo';
+import {
+  indexRobots,
+  organizationJsonLd,
+  siteMetadataBase,
+  siteUrl,
+  softwareApplicationJsonLd,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  websiteJsonLd,
+} from '../lib/seo';
 
 import './globals.css';
 
@@ -19,17 +28,36 @@ const mono = IBM_Plex_Mono({
   weight: ['400', '500'],
 });
 
+const metadataVerification: Metadata['verification'] = {
+  google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
+  yandex: process.env.NEXT_PUBLIC_YANDEX_VERIFICATION,
+  yahoo: process.env.NEXT_PUBLIC_YAHOO_SITE_VERIFICATION,
+  other: process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION
+    ? { 'msvalidate.01': process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION }
+    : undefined,
+};
+
 export const metadata: Metadata = {
   metadataBase: siteMetadataBase,
   title: {
-    default: 'Apployd | Self-Hosted Deployment Platform',
-    template: '%s | Apployd',
+    default: `${SITE_NAME} | Self-Hosted Deployment Platform`,
+    template: `%s | ${SITE_NAME}`,
   },
-  description:
-    'Self-hosted deployment platform for backend teams. Ship faster with pooled resources, secure secrets, and real-time observability.',
-  applicationName: 'Apployd',
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  authors: [{ name: SITE_NAME, url: siteUrl }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  referrer: 'origin-when-cross-origin',
+  formatDetection: {
+    telephone: false,
+    address: false,
+    email: false,
+  },
+  category: 'technology',
+  verification: metadataVerification,
   keywords: [
-    'Apployd',
+    SITE_NAME,
     'self-hosted deployment platform',
     'backend hosting',
     'docker deployment',
@@ -38,46 +66,57 @@ export const metadata: Metadata = {
   ],
   alternates: {
     canonical: '/',
+    types: {
+      'application/rss+xml': `${siteUrl}/feed.xml`,
+    },
   },
   openGraph: {
-    siteName: 'Apployd',
+    siteName: SITE_NAME,
     locale: 'en_US',
     type: 'website',
     url: '/',
-    title: 'Apployd | Self-Hosted Deployment Platform',
-    description:
-      'Self-hosted deployment platform for backend teams. Ship faster with pooled resources, secure secrets, and real-time observability.',
+    title: `${SITE_NAME} | Self-Hosted Deployment Platform`,
+    description: SITE_DESCRIPTION,
     images: [
       {
-        url: '/icon.png',
-        width: 512,
-        height: 512,
-        alt: 'Apployd',
+        url: '/opengraph-image',
+        width: 1200,
+        height: 630,
+        alt: `${SITE_NAME} social preview`,
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Apployd | Self-Hosted Deployment Platform',
-    description:
-      'Self-hosted deployment platform for backend teams. Ship faster with pooled resources, secure secrets, and real-time observability.',
-    images: ['/icon.png'],
+    title: `${SITE_NAME} | Self-Hosted Deployment Platform`,
+    description: SITE_DESCRIPTION,
+    images: ['/twitter-image'],
   },
-  robots: {
-    index: true,
-    follow: true,
-  },
+  robots: indexRobots,
   icons: {
     icon: '/icon.png',
     shortcut: '/icon.png',
     apple: '/icon.png',
   },
+  manifest: '/manifest.webmanifest',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${heading.variable} ${mono.variable}`} suppressHydrationWarning>
       <body className="font-[var(--font-heading)]" suppressHydrationWarning>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareApplicationJsonLd) }}
+        />
         <LandingThemeSync />
         {children}
       </body>

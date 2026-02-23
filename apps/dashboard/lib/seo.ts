@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 
 const DEFAULT_SITE_URL = 'https://apployd.com';
+export const SITE_NAME = 'Apployd';
+export const SITE_DESCRIPTION =
+  'Self-hosted deployment platform for backend teams. Ship faster with pooled resources, secure secrets, and real-time observability.';
 const rawSiteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ??
   process.env.NEXT_PUBLIC_APP_URL ??
@@ -13,13 +16,68 @@ const normalizedSiteUrl = rawSiteUrl.startsWith('http://') || rawSiteUrl.startsW
 export const siteUrl = normalizedSiteUrl.replace(/\/+$/, '');
 export const siteMetadataBase = new URL(siteUrl);
 
-const defaultOgImage = '/icon.png';
+const defaultOgImage = '/opengraph-image';
+const defaultTwitterImage = '/twitter-image';
 
 const normalizePath = (path: string): string => (path.startsWith('/') ? path : `/${path}`);
 
 export const noIndexRobots: NonNullable<Metadata['robots']> = {
   index: false,
   follow: false,
+  nocache: true,
+  googleBot: {
+    index: false,
+    follow: false,
+    noimageindex: true,
+    'max-video-preview': 0,
+    'max-image-preview': 'none',
+    'max-snippet': 0,
+  },
+};
+
+export const indexRobots: NonNullable<Metadata['robots']> = {
+  index: true,
+  follow: true,
+  nocache: false,
+  googleBot: {
+    index: true,
+    follow: true,
+    noimageindex: false,
+    'max-video-preview': -1,
+    'max-image-preview': 'large',
+    'max-snippet': -1,
+  },
+};
+
+export const websiteJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: SITE_NAME,
+  url: siteUrl,
+  description: SITE_DESCRIPTION,
+};
+
+export const organizationJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: SITE_NAME,
+  url: siteUrl,
+  logo: `${siteUrl}/icon.png`,
+};
+
+export const softwareApplicationJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: SITE_NAME,
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'Linux',
+  offers: {
+    '@type': 'Offer',
+    price: '0',
+    priceCurrency: 'USD',
+  },
+  description: SITE_DESCRIPTION,
+  url: siteUrl,
 };
 
 type BuildPageMetadataOptions = {
@@ -47,20 +105,23 @@ export function buildPageMetadata({
     keywords,
     alternates: {
       canonical: canonicalPath,
+      languages: {
+        'en-US': canonicalPath,
+      },
     },
     openGraph: {
       title,
       description,
       url: canonicalPath,
       type,
-      siteName: 'Apployd',
+      siteName: SITE_NAME,
       locale: 'en_US',
       images: [
         {
           url: defaultOgImage,
-          width: 512,
-          height: 512,
-          alt: 'Apployd',
+          width: 1200,
+          height: 630,
+          alt: `${SITE_NAME} social preview`,
         },
       ],
     },
@@ -68,8 +129,8 @@ export function buildPageMetadata({
       card: 'summary_large_image',
       title,
       description,
-      images: [defaultOgImage],
+      images: [defaultTwitterImage],
     },
-    robots: noIndex ? noIndexRobots : { index: true, follow: true },
+    robots: noIndex ? noIndexRobots : indexRobots,
   };
 }

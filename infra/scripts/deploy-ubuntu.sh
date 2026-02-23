@@ -9,16 +9,16 @@ Provision and deploy Apployd on Ubuntu with configurable domain settings.
 
 Usage:
   bash infra/scripts/deploy-ubuntu.sh \
-    --public-domain sylicaai.com \
-    --base-domain sylicaai.com \
-    --preview-base-domain sylicaai.com \
+    --public-domain apployd.com \
+    --base-domain apployd.com \
+    --preview-base-domain apployd.com \
     --preview-domain-style project \
-    --certbot-email ops@sylicaai.com \
+    --certbot-email ops@apployd.com \
     --with-provision \
     --run-certbot
 
 Required flags:
-  --public-domain         Public dashboard domain (for example: sylicaai.com)
+  --public-domain         Public dashboard domain (for example: apployd.com)
   --certbot-email         Email used by certbot
 
 Optional flags:

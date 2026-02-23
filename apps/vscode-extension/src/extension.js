@@ -2,8 +2,8 @@ const vscode = require('vscode');
 
 const SECRET_TOKEN_KEY = 'apployd.authToken';
 const SELECTED_ORGANIZATION_KEY = 'apployd.selectedOrganizationId';
-const DEFAULT_API_BASE_URL = 'https://sylicaai.com/api/v1';
-const DEFAULT_DASHBOARD_BASE_URL = 'https://sylicaai.com';
+const DEFAULT_API_BASE_URL = 'https://apployd.com/api/v1';
+const DEFAULT_DASHBOARD_BASE_URL = 'https://apployd.com';
 
 class ApiError extends Error {
   constructor(message, statusCode) {

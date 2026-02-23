@@ -2,26 +2,45 @@ services:
   redis:
     # Internal-only: reachable by other compose services over the Docker network.
     image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
   control-plane:
     build:
       context: ../../
       dockerfile: apps/control-plane/Dockerfile
+    restart: unless-stopped
+    init: true
     env_file:
       - ../../apps/control-plane/.env
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     ports:
       - "4000:4000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:4000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
 
   deployment-engine:
     build:
       context: ../../
       dockerfile: services/deployment-engine/Dockerfile
+    restart: unless-stopped
+    init: true
     env_file:
       - ../../services/deployment-engine/.env
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     privileged: true
     pid: host
     volumes:
@@ -29,21 +48,38 @@ services:
       - ./nginx/templates:/opt/apployd/nginx/templates
       - /etc/nginx/sites-enabled:/etc/nginx/sites-enabled
       - /etc/letsencrypt:/etc/letsencrypt
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9102/metrics || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
 
   dashboard:
     build:
       context: ../../
       dockerfile: apps/dashboard/Dockerfile
+    restart: unless-stopped
+    init: true
     env_file:
       - ../../apps/dashboard/.env.local
     ports:
       - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
 
   nginx:
     image: nginx:1.27-alpine
+    restart: unless-stopped
     depends_on:
-      - dashboard
-      - control-plane
+      dashboard:
+        condition: service_healthy
+      control-plane:
+        condition: service_healthy
     ports:
       - "80:80"
       - "443:443"
@@ -55,6 +91,7 @@ services:
 
   prometheus:
     image: prom/prometheus:v2.55.0
+    restart: unless-stopped
     volumes:
       - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
@@ -62,6 +99,7 @@ services:
 
   grafana:
     image: grafana/grafana:11.3.1
+    restart: unless-stopped
     ports:
       - "3001:3000"
     volumes:
@@ -70,6 +108,7 @@ services:
 
   node-exporter:
     image: prom/node-exporter:v1.8.2
+    restart: unless-stopped
     ports:
       - "9100:9100"
 

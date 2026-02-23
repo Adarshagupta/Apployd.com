@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { buildPageMetadata } from '../../../lib/seo';
+import { buildPageMetadata, SITE_NAME, siteUrl } from '../../../lib/seo';
 import styles from '../../landing.module.css';
 
 export const metadata: Metadata = buildPageMetadata({
@@ -49,9 +49,49 @@ const faq = [
   },
 ];
 
+const faqJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faq.map((entry) => ({
+    '@type': 'Question',
+    name: entry.question,
+    acceptedAnswer: {
+      '@type': 'Answer',
+      text: entry.answer,
+    },
+  })),
+};
+
+const breadcrumbJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    {
+      '@type': 'ListItem',
+      position: 1,
+      name: SITE_NAME,
+      item: siteUrl,
+    },
+    {
+      '@type': 'ListItem',
+      position: 2,
+      name: 'Help',
+      item: `${siteUrl}/help`,
+    },
+  ],
+};
+
 export default function HelpPage() {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
       <section className={styles.section} style={{ borderTop: 'none', paddingTop: '2rem' }}>
         <div className={styles.container} style={{ textAlign: 'center' }}>
           <p className={styles.sectionLabel}>Help</p>

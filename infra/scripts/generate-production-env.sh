@@ -10,14 +10,14 @@ Generate production env files for Ubuntu/GCP deployments.
 
 Usage:
   bash infra/scripts/generate-production-env.sh \
-    --public-domain sylicaai.com \
-    --base-domain sylicaai.com \
-    --preview-base-domain sylicaai.com \
+    --public-domain apployd.com \
+    --base-domain apployd.com \
+    --preview-base-domain apployd.com \
     --preview-domain-style project \
-    --certbot-email ops@sylicaai.com
+    --certbot-email ops@apployd.com
 
 Required flags:
-  --public-domain         Public dashboard domain (for example: sylicaai.com)
+  --public-domain         Public dashboard domain (for example: apployd.com)
   --certbot-email         Email used by certbot
 
 Optional flags:
@@ -218,6 +218,10 @@ EMAIL_VERIFICATION_MAX_ATTEMPTS_VALUE="${EMAIL_VERIFICATION_MAX_ATTEMPTS:-5}"
 GITHUB_CLIENT_ID_VALUE="${GITHUB_CLIENT_ID:-}"
 GITHUB_CLIENT_SECRET_VALUE="${GITHUB_CLIENT_SECRET:-}"
 GITHUB_WEBHOOK_SECRET_VALUE="${GITHUB_WEBHOOK_SECRET:-}"
+NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION_VALUE="${NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION:-}"
+NEXT_PUBLIC_BING_SITE_VERIFICATION_VALUE="${NEXT_PUBLIC_BING_SITE_VERIFICATION:-}"
+NEXT_PUBLIC_YANDEX_VERIFICATION_VALUE="${NEXT_PUBLIC_YANDEX_VERIFICATION:-}"
+NEXT_PUBLIC_YAHOO_SITE_VERIFICATION_VALUE="${NEXT_PUBLIC_YAHOO_SITE_VERIFICATION:-}"
 
 CONTROL_PLANE_ENV="$ROOT_DIR/apps/control-plane/.env"
 ENGINE_ENV="$ROOT_DIR/services/deployment-engine/.env"
@@ -292,6 +296,11 @@ EOF
 
 cat >"$DASHBOARD_ENV" <<EOF
 NEXT_PUBLIC_API_URL=${API_BASE_URL%/}/api/v1
+NEXT_PUBLIC_SITE_URL=${DASHBOARD_BASE_URL%/}
+NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION=$NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION_VALUE
+NEXT_PUBLIC_BING_SITE_VERIFICATION=$NEXT_PUBLIC_BING_SITE_VERIFICATION_VALUE
+NEXT_PUBLIC_YANDEX_VERIFICATION=$NEXT_PUBLIC_YANDEX_VERIFICATION_VALUE
+NEXT_PUBLIC_YAHOO_SITE_VERIFICATION=$NEXT_PUBLIC_YAHOO_SITE_VERIFICATION_VALUE
 EOF
 
 echo "Generated:"

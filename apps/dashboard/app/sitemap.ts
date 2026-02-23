@@ -8,6 +8,7 @@ const publicRoutes = [
   '/blog',
   '/contact',
   '/docs',
+  '/feed.xml',
   '/help',
   '/legal/compliance',
   '/pricing',
@@ -19,7 +20,9 @@ const publicRoutes = [
 const priorityByRoute: Partial<Record<(typeof publicRoutes)[number], number>> = {
   '/': 1,
   '/pricing': 0.9,
-  '/docs': 0.8,
+  '/docs': 0.9,
+  '/blog': 0.85,
+  '/feed.xml': 0.5,
 };
 
 export default function sitemap(): MetadataRoute.Sitemap {
@@ -28,7 +31,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return publicRoutes.map((route) => ({
     url: `${siteUrl}${route}`,
     lastModified,
-    changeFrequency: route === '/' ? 'weekly' : 'monthly',
+    changeFrequency:
+      route === '/'
+        ? 'weekly'
+        : route === '/blog' || route === '/docs' || route === '/feed.xml'
+          ? 'weekly'
+          : 'monthly',
     priority: priorityByRoute[route] ?? 0.7,
   }));
 }

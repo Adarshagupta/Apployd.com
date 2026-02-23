@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { buildPageMetadata } from '../../../lib/seo';
+import { buildPageMetadata, SITE_NAME, siteUrl } from '../../../lib/seo';
 import styles from '../../landing.module.css';
 
 export const metadata: Metadata = buildPageMetadata({
@@ -73,9 +73,28 @@ const apiEndpoints = [
   'POST /deployments',
 ];
 
+const docsJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: `${SITE_NAME} Documentation`,
+  description:
+    'Technical documentation, architecture references, and setup guides for operating Apployd in production.',
+  url: `${siteUrl}/docs`,
+  hasPart: docsIndex.map((doc) => ({
+    '@type': 'TechArticle',
+    headline: doc.title,
+    description: doc.description,
+    url: `${siteUrl}/docs#${doc.file.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+  })),
+};
+
 export default function DocsPage() {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(docsJsonLd) }}
+      />
       <section className={styles.section} style={{ borderTop: 'none', paddingTop: '2rem' }}>
         <div className={styles.container} style={{ textAlign: 'center' }}>
           <p className={styles.sectionLabel}>Docs</p>
