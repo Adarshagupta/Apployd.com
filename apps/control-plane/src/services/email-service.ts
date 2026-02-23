@@ -2,6 +2,11 @@ import nodemailer, { type Transporter } from 'nodemailer';
 
 import { env } from '../config/env.js';
 
+export interface EmailConfigurationStatus {
+  configured: boolean;
+  missing: string[];
+}
+
 export interface EmailMessageInput {
   to: string | string[];
   subject: string;
@@ -14,6 +19,8 @@ export class EmailService {
 
   private readonly fromAddress: string | null;
 
+  private readonly configurationStatus: EmailConfigurationStatus;
+
   constructor() {
     this.fromAddress = env.SMTP_FROM_EMAIL
       ? env.SMTP_FROM_NAME
@@ -21,7 +28,26 @@ export class EmailService {
         : env.SMTP_FROM_EMAIL
       : null;
 
-    if (!env.SMTP_HOST || !this.fromAddress) {
+    const missing: string[] = [];
+    if (!env.SMTP_HOST) {
+      missing.push('SMTP_HOST');
+    }
+    if (!this.fromAddress) {
+      missing.push('SMTP_FROM_EMAIL');
+    }
+
+    const hasUser = Boolean(env.SMTP_USER);
+    const hasPass = Boolean(env.SMTP_PASS);
+    if (hasUser !== hasPass) {
+      missing.push('SMTP_USER/SMTP_PASS');
+    }
+
+    this.configurationStatus = {
+      configured: missing.length === 0,
+      missing,
+    };
+
+    if (!this.configurationStatus.configured) {
       this.transporter = null;
       return;
     }
@@ -30,7 +56,7 @@ export class EmailService {
       host: env.SMTP_HOST,
       port: env.SMTP_PORT,
       secure: env.SMTP_SECURE,
-      ...(env.SMTP_USER
+      ...(hasUser && hasPass
         ? {
             auth: {
               user: env.SMTP_USER,
@@ -42,7 +68,14 @@ export class EmailService {
   }
 
   isConfigured(): boolean {
-    return this.transporter !== null && this.fromAddress !== null;
+    return this.configurationStatus.configured && this.transporter !== null && this.fromAddress !== null;
+  }
+
+  getConfigurationStatus(): EmailConfigurationStatus {
+    return {
+      configured: this.isConfigured(),
+      missing: [...this.configurationStatus.missing],
+    };
   }
 
   async send(input: EmailMessageInput): Promise<void> {

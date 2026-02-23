@@ -66,6 +66,21 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
       return reply.forbidden((error as Error).message);
     }
 
+    const [organization, inviter] = await Promise.all([
+      prisma.organization.findUnique({
+        where: { id: body.organizationId },
+        select: { id: true, name: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: reqUser.userId },
+        select: { id: true, name: true, email: true },
+      }),
+    ]);
+
+    if (!organization) {
+      return reply.notFound('Organization not found.');
+    }
+
     const normalizedEmail = normalizeInviteEmail(body.email);
     const user = await prisma.user.findFirst({
       where: {
@@ -101,11 +116,40 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
         userId: user.id,
       });
 
+      const teamUrl = buildTeamUrl();
+      const emailDelivery = await inviteEmail.sendMembershipAdded({
+        toEmail: normalizedEmail,
+        organizationName: organization.name,
+        role: body.role,
+        invitedByEmail: inviter?.email ?? reqUser.email,
+        teamUrl,
+        ...(inviter ? { invitedByName: inviter.name } : {}),
+      });
+      if (!emailDelivery.delivered) {
+        app.log.warn(
+          {
+            organizationId: body.organizationId,
+            email: normalizedEmail,
+            reason: emailDelivery.reason ?? 'unknown',
+            errorMessage: emailDelivery.errorMessage ?? null,
+          },
+          'Team membership notification email was not delivered',
+        );
+      }
+
       return reply.code(201).send({
         member,
         invitation: null,
+        emailDelivery: {
+          delivered: emailDelivery.delivered,
+          reason: emailDelivery.reason ?? null,
+          errorMessage: emailDelivery.errorMessage ?? null,
+          teamUrl,
+        },
         delivery: 'member_added',
-        message: 'User exists, membership has been applied immediately.',
+        message: emailDelivery.delivered
+          ? 'User exists, membership has been applied immediately and a notification email was sent.'
+          : 'User exists, membership has been applied immediately. Notification email failed to send.',
       });
     }
 
@@ -118,13 +162,13 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
     const links = buildInvitationLinks(invitation.id, normalizedEmail);
     const emailDelivery = await inviteEmail.sendInvite({
       toEmail: normalizedEmail,
-      organizationName: invitation.organization.name,
+      organizationName: organization.name,
       role: body.role,
-      invitedByName: invitation.invitedBy.name,
-      invitedByEmail: invitation.invitedBy.email,
+      invitedByEmail: inviter?.email ?? reqUser.email,
       loginUrl: links.loginUrl,
       signupUrl: links.signupUrl,
       expiresAt: invitation.expiresAt,
+      ...(inviter ? { invitedByName: inviter.name } : {}),
     });
     if (!emailDelivery.delivered) {
       app.log.warn(
@@ -132,6 +176,7 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
           organizationId: body.organizationId,
           email: normalizedEmail,
           reason: emailDelivery.reason ?? 'unknown',
+          errorMessage: emailDelivery.errorMessage ?? null,
         },
         'Team invitation email was not delivered',
       );
@@ -143,6 +188,7 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
       emailDelivery: {
         delivered: emailDelivery.delivered,
         reason: emailDelivery.reason ?? null,
+        errorMessage: emailDelivery.errorMessage ?? null,
         loginUrl: links.loginUrl,
         signupUrl: links.signupUrl,
       },
@@ -228,3 +274,6 @@ const buildInvitationLinks = (
     signupUrl: signupUrl.toString(),
   };
 };
+
+const buildTeamUrl = (): string =>
+  new URL('/team', env.DASHBOARD_BASE_URL).toString();

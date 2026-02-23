@@ -124,6 +124,8 @@ export default function TeamPage() {
       const emailDelivery = data.emailDelivery as
         | {
             delivered?: boolean;
+            reason?: string;
+            errorMessage?: string;
             loginUrl?: string;
             signupUrl?: string;
           }
@@ -143,7 +145,15 @@ export default function TeamPage() {
       }
 
       setEmail('');
-      setMessage(data.message ?? 'Invitation processed.');
+      if (emailDelivery?.delivered === false) {
+        const detail = emailDelivery.errorMessage
+          ?? (emailDelivery.reason === 'smtp_not_configured'
+            ? 'SMTP is not configured.'
+            : 'Unable to send email at the moment.');
+        setMessage(`${data.message ?? 'Invitation processed.'} ${detail}`.trim());
+      } else {
+        setMessage(data.message ?? 'Invitation processed.');
+      }
       await loadMembers();
       await loadMyInvites();
     } catch (error) {
