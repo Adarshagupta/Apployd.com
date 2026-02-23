@@ -84,7 +84,7 @@ Once complete, visit:
 
 ## Services & Architecture
 
-The platform runs 8 Docker containers:
+The platform runs 9 Docker containers:
 
 | Service | Port | Description |
 |---------|------|-------------|
@@ -93,6 +93,7 @@ The platform runs 8 Docker containers:
 | Deployment Engine | 9102 | Container orchestration |
 | Redis | internal only | Cache & queue |
 | Prometheus | 9090 | Metrics collection |
+| Alertmanager | 9093 | Alert routing & deduplication |
 | Grafana | 3001 | Monitoring dashboards |
 | Node Exporter | 9100 | System metrics |
 | cAdvisor | internal only | Container-level metrics |
@@ -211,6 +212,9 @@ Access monitoring dashboards:
 - **Prometheus**: http://your-server-ip:9090
   - Recording rules: `infra/monitoring/prometheus/rules/apployd-recording-rules.yml`
   - Alert rules: `infra/monitoring/prometheus/rules/apployd-alerts.yml`
+- **Alertmanager**: http://your-server-ip:9093
+  - Routing config: `infra/monitoring/alertmanager/alertmanager.yml`
+  - Set your Slack webhook + PagerDuty integration key in that file before production use.
 
 ## Updating the Platform
 

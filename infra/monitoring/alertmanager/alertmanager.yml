@@ -1,0 +1,58 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: "null"
+  group_by: ["alertname", "service", "severity"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 2h
+  routes:
+    - receiver: "pagerduty-critical"
+      matchers:
+        - severity="critical"
+      continue: true
+    - receiver: "slack-primary"
+      matchers:
+        - severity=~"warning|critical"
+
+inhibit_rules:
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: ["alertname", "service", "instance"]
+
+receivers:
+  - name: "null"
+
+  - name: "slack-primary"
+    slack_configs:
+      - send_resolved: true
+        api_url: "https://hooks.slack.com/services/REPLACE/SLACK/WEBHOOK"
+        channel: "#alerts"
+        username: "apployd-alertmanager"
+        icon_emoji: ":rotating_light:"
+        title: "[{{ .CommonLabels.severity | toUpper }}] {{ .CommonLabels.alertname }}"
+        text: >-
+          {{ range .Alerts -}}
+          *Service:* {{ .Labels.service }}
+          *Summary:* {{ .Annotations.summary }}
+          *Details:* {{ .Annotations.description }}
+          *Status:* {{ .Status }}
+          *Starts:* {{ .StartsAt }}
+          {{ end }}
+
+  - name: "pagerduty-critical"
+    pagerduty_configs:
+      - send_resolved: true
+        routing_key: "REPLACE_WITH_PAGERDUTY_EVENTS_V2_INTEGRATION_KEY"
+        severity: '{{ if eq .CommonLabels.severity "critical" }}critical{{ else }}warning{{ end }}'
+        class: "apployd"
+        component: '{{ .CommonLabels.service }}'
+        group: "platform"
+        summary: '{{ .CommonLabels.alertname }} - {{ .CommonAnnotations.summary }}'
+        details:
+          description: '{{ .CommonAnnotations.description }}'
+          service: '{{ .CommonLabels.service }}'
+          severity: '{{ .CommonLabels.severity }}'

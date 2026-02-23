@@ -120,6 +120,10 @@ Important:
 - Prometheus recording + alert rules:
   - `infra/monitoring/prometheus/rules/apployd-recording-rules.yml`
   - `infra/monitoring/prometheus/rules/apployd-alerts.yml`
+- Alert routing:
+  - Prometheus -> Alertmanager (`infra/monitoring/alertmanager/alertmanager.yml`)
+  - Warnings/Critical -> Slack
+  - Critical -> PagerDuty (plus Slack)
 - Usage API:
   - `GET /api/v1/projects?organizationId=<id>` now includes per-project usage snapshots.
   - `GET /api/v1/usage/projects?organizationId=<id>` returns detailed usage for all projects.

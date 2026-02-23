@@ -98,6 +98,17 @@ services:
     ports:
       - "127.0.0.1:9090:9090"
 
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ../monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "127.0.0.1:9093:9093"
+
   grafana:
     image: grafana/grafana:11.3.1
     restart: unless-stopped
