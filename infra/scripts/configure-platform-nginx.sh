@@ -28,6 +28,7 @@ API_UPSTREAM="http://127.0.0.1:4000"
 DEFAULT_404_SOURCE="$SCRIPT_DIR/../nginx/default-404.html"
 DEFAULT_404_TARGET_DIR="/var/www/apployd"
 DEFAULT_404_TARGET_FILE="$DEFAULT_404_TARGET_DIR/default-404.html"
+LETSENCRYPT_DIR_BASE="/etc/letsencrypt/live"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -59,6 +60,13 @@ if [[ -z "$DOMAIN" ]]; then
   echo "Missing required flag: --domain"
   usage
   exit 1
+fi
+
+SSL_CERT_PATH="$LETSENCRYPT_DIR_BASE/$DOMAIN/fullchain.pem"
+SSL_KEY_PATH="$LETSENCRYPT_DIR_BASE/$DOMAIN/privkey.pem"
+HAS_TLS_CERT=false
+if [[ -f "$SSL_CERT_PATH" && -f "$SSL_KEY_PATH" ]]; then
+  HAS_TLS_CERT=true
 fi
 
 if [[ ! -f "$DEFAULT_404_SOURCE" ]]; then
@@ -131,6 +139,52 @@ server {
 }
 EOF
 
+if [[ "$HAS_TLS_CERT" == "true" ]]; then
+  cat >>"$TMP_FILE" <<EOF
+server {
+  listen 443 ssl http2;
+  listen [::]:443 ssl http2;
+  server_name $DOMAIN;
+  client_max_body_size 50m;
+  server_tokens off;
+
+  ssl_certificate $SSL_CERT_PATH;
+  ssl_certificate_key $SSL_KEY_PATH;
+
+  location /api/ {
+    proxy_http_version 1.1;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_pass $API_UPSTREAM;
+  }
+
+  location /ws/ {
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_read_timeout 300;
+    proxy_send_timeout 300;
+    proxy_pass $API_UPSTREAM;
+  }
+
+  location / {
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_pass $DASHBOARD_UPSTREAM;
+  }
+}
+EOF
+fi
+
 sudo cp "$TMP_FILE" /etc/nginx/conf.d/apployd-platform.conf
 rm -f "$TMP_FILE"
 
@@ -138,4 +192,8 @@ sudo nginx -t
 sudo systemctl reload nginx
 
 echo "Configured /etc/nginx/conf.d/apployd-platform.conf for $DOMAIN"
-echo "Next step (TLS): sudo certbot --nginx -d $DOMAIN"
+if [[ "$HAS_TLS_CERT" == "true" ]]; then
+  echo "TLS certificate found for $DOMAIN; generated both HTTP and HTTPS server blocks."
+else
+  echo "Next step (TLS): sudo certbot --nginx -d $DOMAIN"
+fi

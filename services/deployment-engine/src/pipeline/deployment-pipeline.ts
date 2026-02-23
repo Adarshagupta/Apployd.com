@@ -213,6 +213,18 @@ export class DeploymentPipeline {
             organizationSlug: deployment.project.organization.slug,
             ref: payload.request.commitSha ?? payload.request.branch ?? 'preview',
           });
+      const protectedPlatformDomains = env.ENGINE_LOCAL_MODE
+        ? new Set<string>()
+        : buildProtectedPlatformDomains({
+            baseDomain: env.BASE_DOMAIN,
+            previewBaseDomain: env.PREVIEW_BASE_DOMAIN,
+            dashboardBaseUrl: env.DASHBOARD_BASE_URL,
+          });
+      if (!env.ENGINE_LOCAL_MODE && protectedPlatformDomains.has(normalizeHostname(domain))) {
+        throw new Error(
+          `Refusing deployment routing for reserved platform domain "${domain}". Use a project/preview hostname or custom domain instead.`,
+        );
+      }
 
       const autoAliases = env.ENGINE_LOCAL_MODE
         ? []
@@ -226,7 +238,12 @@ export class DeploymentPipeline {
 
       // Collect verified custom domain aliases for this project.
       const customAliases = (deployment.project.customDomains ?? []).map((d: { domain: string }) => d.domain);
-      const routeAliases = Array.from(new Set([...autoAliases, ...customAliases])).filter((alias) => alias !== domain);
+      const allRouteAliases = Array.from(new Set([...autoAliases, ...customAliases])).filter((alias) => alias !== domain);
+      const blockedAliases = allRouteAliases.filter((alias) => protectedPlatformDomains.has(normalizeHostname(alias)));
+      const routeAliases = allRouteAliases.filter((alias) => !protectedPlatformDomains.has(normalizeHostname(alias)));
+      if (blockedAliases.length > 0) {
+        onLog(`Skipping reserved platform alias(es): ${blockedAliases.join(', ')}`);
+      }
 
       // ── DNS + Reverse proxy + SSL ──────────────────────────────
       if (!env.ENGINE_LOCAL_MODE) {
@@ -625,6 +642,62 @@ const sanitizeDomainLabel = (value: string, fallback: string): string => {
   }
 
   return normalized.slice(0, 63).replace(/-+$/g, '') || fallback;
+};
+
+const normalizeHostname = (value: string): string =>
+  value.trim().toLowerCase().replace(/\.$/, '');
+
+const hostnameFromUrl = (value: string): string | null => {
+  try {
+    return normalizeHostname(new URL(value).hostname);
+  } catch {
+    return null;
+  }
+};
+
+const maybeAddCompanionWww = (host: string, target: Set<string>): void => {
+  if (!host || host.includes(':')) {
+    return;
+  }
+
+  if (host.startsWith('www.')) {
+    const apex = host.slice(4);
+    if (apex) {
+      target.add(apex);
+    }
+    return;
+  }
+
+  const labels = host.split('.');
+  if (labels.length === 2) {
+    target.add(`www.${host}`);
+  }
+};
+
+const buildProtectedPlatformDomains = (input: {
+  baseDomain: string;
+  previewBaseDomain: string;
+  dashboardBaseUrl: string;
+}): Set<string> => {
+  const protectedDomains = new Set<string>();
+
+  const addHost = (value?: string | null): void => {
+    if (!value) {
+      return;
+    }
+    const normalized = normalizeHostname(value);
+    if (!normalized) {
+      return;
+    }
+    protectedDomains.add(normalized);
+    maybeAddCompanionWww(normalized, protectedDomains);
+  };
+
+  addHost(input.baseDomain);
+  addHost(input.previewBaseDomain);
+  addHost(hostnameFromUrl(input.dashboardBaseUrl));
+
+  return protectedDomains;
 };
 
 const buildPreviewLabel = (projectSlug: string, ref: string): string => {

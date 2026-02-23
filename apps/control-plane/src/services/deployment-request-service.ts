@@ -7,6 +7,7 @@ import { setTimeout as sleep } from 'timers/promises';
 import { env } from '../config/env.js';
 import { resolveDeploymentWebsocketUrl } from '../lib/deployment-websocket-url.js';
 import { prisma } from '../lib/prisma.js';
+import { isProtectedPlatformDomain } from '../lib/protected-platform-domains.js';
 import { redis } from '../lib/redis.js';
 import { decryptSecret } from '../lib/secrets.js';
 import { isSerializableRetryableError } from '../lib/transaction-retry.js';
@@ -137,6 +138,13 @@ export class DeploymentRequestService {
     const requestedDomain = input.domain
       ? normalizeRequestedDomain(input.domain)
       : undefined;
+
+    if (requestedDomain && isProtectedPlatformDomain(requestedDomain)) {
+      throw new DeploymentRequestError(
+        `Domain "${requestedDomain}" is reserved for platform routing and cannot be used for a deployment.`,
+        400,
+      );
+    }
 
     if (!resolvedGitUrl) {
       throw new DeploymentRequestError(

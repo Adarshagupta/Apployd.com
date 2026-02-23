@@ -9,6 +9,7 @@ import { AuditLogService } from '../../services/audit-log-service.js';
 import { DeploymentRequestError, DeploymentRequestService } from '../../services/deployment-request-service.js';
 import { DomainVerificationService } from '../../services/domain-verification-service.js';
 import { prisma } from '../../lib/prisma.js';
+import { isProtectedPlatformDomain } from '../../lib/protected-platform-domains.js';
 
 /* ── Validation schemas ────────────────────────────────────────── */
 
@@ -223,6 +224,9 @@ export const domainRoutes: FastifyPluginAsync = async (app) => {
     });
     if (existing) {
       return reply.conflict('This domain is already registered on Apployd.');
+    }
+    if (isProtectedPlatformDomain(body.domain)) {
+      return reply.badRequest('This domain is reserved for the Apployd platform and cannot be attached to a project.');
     }
 
     const cnameTarget = DomainVerificationService.buildCnameTarget(
