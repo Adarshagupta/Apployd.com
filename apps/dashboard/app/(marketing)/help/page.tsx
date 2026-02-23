@@ -40,7 +40,7 @@ const faq = [
     answer: 'Start with the Docs page for architecture, networking, and deployment runbooks.',
   },
   {
-    question: 'Can you help with self-hosted deployment issues?',
+    question: 'Can you help with managed deployment issues?',
     answer: 'Yes. Include your deployment logs, runtime details, and reproduction steps in the request.',
   },
   {

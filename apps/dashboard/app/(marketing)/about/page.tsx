@@ -6,9 +6,9 @@ import styles from '../../landing.module.css';
 export const metadata: Metadata = buildPageMetadata({
   title: 'About',
   description:
-    'Learn how Apployd helps engineering teams own their infrastructure with secure, developer-first deployment workflows.',
+    'Learn how Apployd helps SaaS engineering teams ship faster with secure, developer-first managed deployment workflows.',
   path: '/about',
-  keywords: ['about Apployd', 'deployment platform company', 'developer-first infrastructure'],
+  keywords: ['about Apployd', 'managed deployment platform company', 'developer-first SaaS infrastructure'],
 });
 
 const stats = [
@@ -25,13 +25,13 @@ const values = [
     icon: '⌘',
   },
   {
-    title: 'Open by Default',
-    body: 'Apployd is source-available. Inspect every line. Fork it, extend it, contribute back. No black boxes.',
+    title: 'SaaS Reliability',
+    body: 'Teams trust us for stable deploy pipelines, predictable performance, and zero-surprise operations.',
     icon: '◇',
   },
   {
-    title: 'Own Your Infrastructure',
-    body: 'Your servers, your data, your rules. We give you the tools — you keep the control.',
+    title: 'Scale Without Ops Overhead',
+    body: 'From first deploy to production scale, we remove operational complexity so teams can focus on product velocity.',
     icon: '⬡',
   },
   {
@@ -60,7 +60,7 @@ export default function AboutPage() {
             Deployment should be boring
           </h1>
           <p style={{ maxWidth: 600, margin: '1rem auto 0', fontSize: '1.05rem', color: 'rgba(212,221,244,0.7)' }}>
-            We&apos;re building the deployment platform we always wanted — one that runs on your servers, respects your data, and just works.
+            We&apos;re building the deployment platform we always wanted: managed, fast, secure, and ready for modern SaaS teams.
           </p>
         </div>
       </section>
@@ -99,7 +99,7 @@ export default function AboutPage() {
             <div>
               <p className={styles.sectionLabel}>Mission</p>
               <h2 className={styles.sectionTitle} style={{ fontSize: 'clamp(1.5rem, 3vw, 2.2rem)' }}>
-                Give every team Render-level DX on infrastructure they own
+                Give every team Vercel-style DX with predictable pricing
               </h2>
             </div>
             <div style={{ fontSize: '0.95rem', color: 'rgba(212,221,244,0.7)', lineHeight: 1.7 }}>
@@ -108,8 +108,8 @@ export default function AboutPage() {
                 But they come with trade-offs: vendor lock-in, unpredictable pricing, and zero visibility into where your code actually runs.
               </p>
               <p style={{ marginTop: '1rem' }}>
-                Apployd bridges that gap. We package the best deployment UX into a self-hosted platform that runs on any Linux server.
-                You bring the machines; we handle the rest — builds, routing, TLS, scaling, and monitoring.
+                Apployd bridges that gap. We package the best deployment UX into a managed platform for SaaS products.
+                We handle builds, routing, TLS, scaling, observability, and rollback so teams can ship faster.
               </p>
             </div>
           </div>
@@ -206,14 +206,15 @@ export default function AboutPage() {
             Join us on this journey
           </h2>
           <p style={{ maxWidth: 480, margin: '0.8rem auto 0', fontSize: '1rem', color: 'rgba(212,221,244,0.7)' }}>
-            Whether you contribute code, file issues, or just deploy your next project — you&apos;re part of the story.
+            Whether you are launching an MVP or scaling production workloads, Apployd is built to support your growth.
           </p>
           <div className={styles.heroActions} style={{ justifyContent: 'center', marginTop: '1.6rem' }}>
             <a href="/signup" className={styles.primaryButton}>Get Started</a>
-            <a href="https://github.com" className={styles.secondaryButton}>View on GitHub</a>
+            <a href="/contact" className={styles.secondaryButton}>Talk to Sales</a>
           </div>
         </div>
       </section>
     </>
   );
 }
+

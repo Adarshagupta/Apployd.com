@@ -55,7 +55,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
                 <span>Apployd</span>
               </p>
               <p className={styles.footerCopy}>
-                Self-hosted deployment platform for backend teams.
+                Managed deployment platform for modern SaaS teams.
               </p>
             </div>
             <div>

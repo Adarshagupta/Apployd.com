@@ -9,7 +9,7 @@ export const metadata: Metadata = buildPageMetadata({
   description:
     'Technical documentation, architecture references, and setup guides for operating Apployd in production.',
   path: '/docs',
-  keywords: ['Apployd docs', 'deployment documentation', 'self-hosted platform guides'],
+  keywords: ['Apployd docs', 'managed deployment platform guides', 'cloud deployment documentation'],
 });
 
 const quickStartSteps = [

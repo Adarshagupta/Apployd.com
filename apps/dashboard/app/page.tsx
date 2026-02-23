@@ -13,15 +13,16 @@ import { buildPageMetadata } from '../lib/seo';
 import styles from './landing.module.css';
 
 export const metadata: Metadata = buildPageMetadata({
-  title: 'Self-Hosted Deployment Platform',
+  title: 'Managed Deployment Platform for SaaS Teams',
   description:
-    'Deploy backend apps on your own infrastructure with pooled resources, secure secret management, and real-time operational visibility.',
+    'Deploy web apps and APIs with preview deployments, custom domains, instant rollbacks, and production-grade observability.',
   path: '/',
   keywords: [
-    'self-hosted deployment platform',
-    'backend deployment',
-    'docker app deployment',
-    'platform engineering',
+    'managed deployment platform',
+    'vercel alternative',
+    'saas deployment platform',
+    'preview deployments',
+    'custom domain hosting',
   ],
 });
 
@@ -730,7 +731,7 @@ export default function HomePage() {
                 <span>Apployd</span>
               </p>
               <p className={styles.footerCopy}>
-                Self-hosted deployment platform for backend teams.
+                Managed deployment platform for modern SaaS teams.
               </p>
             </div>
             <div>

@@ -8,7 +8,7 @@ export const metadata: Metadata = buildPageMetadata({
   description:
     'Transparent plans for Apployd with project limits, resource pools, and upgrade paths for teams at every stage.',
   path: '/pricing',
-  keywords: ['Apployd pricing', 'deployment platform plans', 'self-hosted platform cost'],
+  keywords: ['Apployd pricing', 'managed deployment platform pricing', 'vercel alternative pricing'],
 });
 
 interface PlanFeature {

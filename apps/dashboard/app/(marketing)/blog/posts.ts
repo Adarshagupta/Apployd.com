@@ -10,10 +10,10 @@ export type BlogPost = {
 
 export const blogPosts: BlogPost[] = [
   {
-    slug: 'introducing-apployd-self-hosted-deployments-for-everyone',
-    title: 'Introducing Apployd - Self-Hosted Deployments for Everyone',
+    slug: 'introducing-apployd-managed-deployments-for-saas-teams',
+    title: 'Introducing Apployd - Managed Deployments for SaaS Teams',
     excerpt:
-      "We built Apployd because developers deserve Render-level DX on their own infrastructure. Here's the story.",
+      "We built Apployd to give teams Vercel-style deploy UX with predictable SaaS pricing. Here's the story.",
     category: 'Product',
     dateLabel: 'Jan 28, 2026',
     publishedAt: '2026-01-28T00:00:00.000Z',

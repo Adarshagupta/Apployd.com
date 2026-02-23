@@ -9,6 +9,7 @@ import {
   organizationJsonLd,
   siteMetadataBase,
   siteUrl,
+  SITE_PRIMARY_KEYWORDS,
   softwareApplicationJsonLd,
   SITE_DESCRIPTION,
   SITE_NAME,
@@ -40,7 +41,7 @@ const metadataVerification: Metadata['verification'] = {
 export const metadata: Metadata = {
   metadataBase: siteMetadataBase,
   title: {
-    default: `${SITE_NAME} | Self-Hosted Deployment Platform`,
+    default: `${SITE_NAME} | Managed Deployment Platform`,
     template: `%s | ${SITE_NAME}`,
   },
   description: SITE_DESCRIPTION,
@@ -58,11 +59,10 @@ export const metadata: Metadata = {
   verification: metadataVerification,
   keywords: [
     SITE_NAME,
-    'self-hosted deployment platform',
+    ...SITE_PRIMARY_KEYWORDS,
+    'application hosting',
     'backend hosting',
-    'docker deployment',
-    'devops',
-    'platform engineering',
+    'devops platform',
   ],
   alternates: {
     canonical: '/',
@@ -75,7 +75,7 @@ export const metadata: Metadata = {
     locale: 'en_US',
     type: 'website',
     url: '/',
-    title: `${SITE_NAME} | Self-Hosted Deployment Platform`,
+    title: `${SITE_NAME} | Managed Deployment Platform`,
     description: SITE_DESCRIPTION,
     images: [
       {
@@ -88,7 +88,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: `${SITE_NAME} | Self-Hosted Deployment Platform`,
+    title: `${SITE_NAME} | Managed Deployment Platform`,
     description: SITE_DESCRIPTION,
     images: ['/twitter-image'],
   },

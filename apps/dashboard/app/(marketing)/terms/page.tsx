@@ -18,7 +18,7 @@ const termsSections = [
   {
     title: '1. Service Scope',
     body: [
-      'Apployd provides a self-hosted deployment platform and supporting control plane features for software teams.',
+      'Apployd provides a managed SaaS deployment platform and supporting control plane features for software teams.',
       'Service availability may vary based on customer infrastructure, network conditions, and third-party dependencies.',
     ],
   },

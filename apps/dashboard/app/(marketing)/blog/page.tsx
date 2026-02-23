@@ -60,7 +60,7 @@ export default function BlogPage() {
             Engineering and product updates
           </h1>
           <p style={{ maxWidth: 540, margin: '1rem auto 0', fontSize: '1.05rem', color: 'rgba(212,221,244,0.7)' }}>
-            Behind the scenes of building a self-hosted deployment platform.
+            Behind the scenes of building a managed SaaS deployment platform.
           </p>
         </div>
       </section>

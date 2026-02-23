@@ -3,7 +3,17 @@ import type { Metadata } from 'next';
 const DEFAULT_SITE_URL = 'https://apployd.com';
 export const SITE_NAME = 'Apployd';
 export const SITE_DESCRIPTION =
-  'Self-hosted deployment platform for backend teams. Ship faster with pooled resources, secure secrets, and real-time observability.';
+  'Managed deployment platform for SaaS teams. Deploy web apps and APIs with preview environments, custom domains, and real-time observability.';
+export const SITE_PRIMARY_KEYWORDS = [
+  'managed deployment platform',
+  'saas deployment platform',
+  'vercel alternative',
+  'preview deployments',
+  'custom domain hosting',
+  'developer platform',
+  'platform as a service',
+  'git based deployments',
+];
 const rawSiteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ??
   process.env.NEXT_PUBLIC_APP_URL ??
@@ -70,11 +80,13 @@ export const softwareApplicationJsonLd = {
   '@type': 'SoftwareApplication',
   name: SITE_NAME,
   applicationCategory: 'DeveloperApplication',
-  operatingSystem: 'Linux',
+  operatingSystem: 'Web',
   offers: {
     '@type': 'Offer',
     price: '0',
     priceCurrency: 'USD',
+    availability: 'https://schema.org/InStock',
+    category: 'SoftwareSubscription',
   },
   description: SITE_DESCRIPTION,
   url: siteUrl,

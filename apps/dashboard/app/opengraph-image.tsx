@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og';
 
-export const alt = 'Apployd - Self-Hosted Deployment Platform';
+export const alt = 'Apployd - Managed SaaS Deployment Platform';
 export const size = {
   width: 1200,
   height: 630,
@@ -56,7 +56,7 @@ export default function OpenGraphImage() {
               maxWidth: '980px',
             }}
           >
-            Self-Hosted Deployment Platform
+            Managed SaaS Deployment Platform
           </div>
           <div
             style={{
@@ -66,7 +66,7 @@ export default function OpenGraphImage() {
               maxWidth: '980px',
             }}
           >
-            Deploy backend apps on your own infrastructure with real-time logs, domain automation, and runtime controls.
+            Deploy apps from Git with preview environments, custom domains, and production-grade runtime controls.
           </div>
         </div>
 
