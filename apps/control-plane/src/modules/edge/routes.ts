@@ -17,6 +17,22 @@ const getHeaderValue = (value: string | string[] | undefined): string => {
   return typeof value === 'string' ? value : '';
 };
 
+const normalizeRemoteIp = (value: string): string => {
+  const first = value.split(',')[0]?.trim() ?? '';
+  if (!first) {
+    return '';
+  }
+  if (first.startsWith('::ffff:')) {
+    return first.slice(7);
+  }
+  return first;
+};
+
+const isLoopbackIp = (value: string): boolean => {
+  const ip = normalizeRemoteIp(value).toLowerCase();
+  return ip === '127.0.0.1' || ip === '::1';
+};
+
 const sanitizeOriginalUri = (value: string): string => {
   const trimmed = value.trim();
   if (!trimmed.startsWith('/')) {
@@ -110,11 +126,21 @@ export const edgeRoutes: FastifyPluginAsync = async (app) => {
   const queue = new DeployQueueService();
 
   app.all('/api/v1/edge/deployments/:deploymentId/wake', async (request, reply) => {
+    const loopbackSource = isLoopbackIp(request.ip);
+
     if (env.EDGE_WAKE_TOKEN) {
       const incomingToken = getHeaderValue(request.headers['x-apployd-edge-token']);
       if (incomingToken !== env.EDGE_WAKE_TOKEN) {
         return reply.code(403).send({ error: 'Forbidden' });
       }
+    } else if (env.NODE_ENV === 'production') {
+      return reply.code(503).send({
+        error: 'Misconfigured',
+        message: 'EDGE_WAKE_TOKEN must be configured in production.',
+      });
+    } else if (!loopbackSource) {
+      // In non-production fallback mode, only allow local loopback callers.
+      return reply.code(403).send({ error: 'Forbidden' });
     }
 
     const { deploymentId } = wakeParamsSchema.parse(request.params);

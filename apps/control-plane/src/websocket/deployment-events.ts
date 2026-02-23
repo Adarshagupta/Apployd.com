@@ -5,6 +5,56 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { redis } from '../lib/redis.js';
 
+const decodeProtocolToken = (value: string): string | null => {
+  const prefix = 'apployd-token.';
+  if (!value.startsWith(prefix)) {
+    return null;
+  }
+
+  const encoded = value.slice(prefix.length).trim();
+  if (!encoded) {
+    return null;
+  }
+
+  try {
+    return Buffer.from(encoded, 'base64url').toString('utf8');
+  } catch {
+    return null;
+  }
+};
+
+const resolveWebSocketToken = (request: { headers: Record<string, unknown>; query?: unknown }): string | undefined => {
+  const query = z.object({ token: z.string().optional() }).parse(request.query ?? {});
+  const queryToken = query.token?.trim();
+  if (queryToken) {
+    return queryToken;
+  }
+
+  const authorizationHeader = request.headers.authorization;
+  if (typeof authorizationHeader === 'string' && authorizationHeader.startsWith('Bearer ')) {
+    const bearerToken = authorizationHeader.slice('Bearer '.length).trim();
+    if (bearerToken) {
+      return bearerToken;
+    }
+  }
+
+  const protocolHeader = request.headers['sec-websocket-protocol'];
+  if (typeof protocolHeader === 'string') {
+    const protocols = protocolHeader
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+    for (const protocol of protocols) {
+      const token = decodeProtocolToken(protocol);
+      if (token) {
+        return token;
+      }
+    }
+  }
+
+  return undefined;
+};
+
 const extractEventType = (metadata: unknown, fallback: string): string => {
   if (
     metadata &&
@@ -28,13 +78,7 @@ export const deploymentWebsocketRoutes: FastifyPluginAsync = async (app) => {
     }
 
     void (async () => {
-      const query = z.object({ token: z.string().optional() }).parse(request.query ?? {});
-      const authorizationHeader = request.headers.authorization;
-      const bearerToken =
-        typeof authorizationHeader === 'string' && authorizationHeader.startsWith('Bearer ')
-          ? authorizationHeader.slice('Bearer '.length)
-          : undefined;
-      const token = query.token ?? bearerToken;
+      const token = resolveWebSocketToken(request);
 
       if (!token) {
         socket.close(1008, 'Authentication required');

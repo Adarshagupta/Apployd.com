@@ -1,9 +1,66 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { exec } from 'node:child_process';
+import { spawn } from 'node:child_process';
 
 import { z } from 'zod';
 
 import { prisma } from '../lib/prisma.js';
+
+const decodeProtocolToken = (value: string): string | null => {
+  const prefix = 'apployd-token.';
+  if (!value.startsWith(prefix)) {
+    return null;
+  }
+
+  const encoded = value.slice(prefix.length).trim();
+  if (!encoded) {
+    return null;
+  }
+
+  try {
+    return Buffer.from(encoded, 'base64url').toString('utf8');
+  } catch {
+    return null;
+  }
+};
+
+const resolveWebSocketToken = (request: { headers: Record<string, unknown>; query?: unknown }): string | undefined => {
+  const query = z.object({ token: z.string().optional() }).parse(request.query ?? {});
+  const queryToken = query.token?.trim();
+  if (queryToken) {
+    return queryToken;
+  }
+
+  const authorizationHeader = request.headers.authorization;
+  if (typeof authorizationHeader === 'string' && authorizationHeader.startsWith('Bearer ')) {
+    const bearerToken = authorizationHeader.slice('Bearer '.length).trim();
+    if (bearerToken) {
+      return bearerToken;
+    }
+  }
+
+  const protocolHeader = request.headers['sec-websocket-protocol'];
+  if (typeof protocolHeader === 'string') {
+    const protocols = protocolHeader
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+    for (const protocol of protocols) {
+      const token = decodeProtocolToken(protocol);
+      if (token) {
+        return token;
+      }
+    }
+  }
+
+  return undefined;
+};
+
+const parseLogLines = (chunk: Buffer): string[] =>
+  chunk
+    .toString('utf8')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
 
 export const containerLogsWebsocketRoutes: FastifyPluginAsync = async (app) => {
   app.get('/ws/containers/:containerId/logs', { websocket: true }, (socket, request) => {
@@ -15,13 +72,7 @@ export const containerLogsWebsocketRoutes: FastifyPluginAsync = async (app) => {
     }
 
     void (async () => {
-      const query = z.object({ token: z.string().optional() }).parse(request.query ?? {});
-      const authorizationHeader = request.headers.authorization;
-      const bearerToken =
-        typeof authorizationHeader === 'string' && authorizationHeader.startsWith('Bearer ')
-          ? authorizationHeader.slice('Bearer '.length)
-          : undefined;
-      const token = query.token ?? bearerToken;
+      const token = resolveWebSocketToken(request);
 
       if (!token) {
         socket.close(1008, 'Authentication required');
@@ -72,6 +123,13 @@ export const containerLogsWebsocketRoutes: FastifyPluginAsync = async (app) => {
         return;
       }
 
+      // Docker container IDs are hex strings. Enforce strict format before
+      // passing into any host command to avoid command injection surfaces.
+      if (!/^[a-f0-9]{12,64}$/i.test(container.dockerContainerId)) {
+        socket.close(1011, 'Container reference is invalid');
+        return;
+      }
+
       // Send initial connection success
       socket.send(
         JSON.stringify({
@@ -84,9 +142,10 @@ export const containerLogsWebsocketRoutes: FastifyPluginAsync = async (app) => {
       );
 
       // Stream logs with docker logs -f --tail 100
-      const dockerLogsProcess = exec(
-        `docker logs -f --tail 100 ${container.dockerContainerId} 2>&1`,
-        { maxBuffer: 1024 * 1024 * 10 }, // 10MB buffer
+      const dockerLogsProcess = spawn(
+        'docker',
+        ['logs', '-f', '--tail', '100', container.dockerContainerId],
+        { stdio: ['ignore', 'pipe', 'pipe'] },
       );
 
       if (!dockerLogsProcess.stdout) {
@@ -102,13 +161,28 @@ export const containerLogsWebsocketRoutes: FastifyPluginAsync = async (app) => {
       }
 
       dockerLogsProcess.stdout.on('data', (data: Buffer) => {
-        const lines = data.toString().split('\n').filter((line) => line.trim());
+        const lines = parseLogLines(data);
         for (const line of lines) {
           if (socket.readyState === socket.OPEN) {
             socket.send(
               JSON.stringify({
                 type: 'log',
-                line: line.trim(),
+                line,
+                timestamp: new Date().toISOString(),
+              }),
+            );
+          }
+        }
+      });
+
+      dockerLogsProcess.stderr?.on('data', (data: Buffer) => {
+        const lines = parseLogLines(data);
+        for (const line of lines) {
+          if (socket.readyState === socket.OPEN) {
+            socket.send(
+              JSON.stringify({
+                type: 'log',
+                line,
                 timestamp: new Date().toISOString(),
               }),
             );

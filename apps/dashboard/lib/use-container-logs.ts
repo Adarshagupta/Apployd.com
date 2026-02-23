@@ -15,6 +15,12 @@ interface UseContainerLogsOptions {
   maxLines?: number;
 }
 
+const encodeTokenForWebSocketProtocol = (token: string): string => {
+  const base64 = window.btoa(token);
+  const base64Url = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  return `apployd-token.${base64Url}`;
+};
+
 export function useContainerLogs({ containerId, enabled = true, maxLines = 500 }: UseContainerLogsOptions) {
   const [logs, setLogs] = useState<LogMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
@@ -37,9 +43,8 @@ export function useContainerLogs({ containerId, enabled = true, maxLines = 500 }
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const host = window.location.hostname;
       const port = process.env.NODE_ENV === 'development' ? ':3001' : '';
-      const wsUrl = `${protocol}//${host}${port}/ws/containers/${containerId}/logs?token=${token}`;
-
-      const ws = new WebSocket(wsUrl);
+      const wsUrl = `${protocol}//${host}${port}/ws/containers/${containerId}/logs`;
+      const ws = new WebSocket(wsUrl, [encodeTokenForWebSocketProtocol(token)]);
       wsRef.current = ws;
 
       ws.onopen = () => {

@@ -68,6 +68,9 @@ const githubExchangePayloadSchema = z.object({
 const OAUTH_STATE_PREFIX = 'apployd:oauth:github:';
 const LOGIN_RESULT_PREFIX = 'apployd:oauth:github:login:';
 const LOGIN_CHALLENGE_PREFIX = 'apployd:auth:login-challenge:';
+const LOGIN_ATTEMPT_PREFIX = 'apployd:auth:login-attempts:';
+const LOGIN_ATTEMPT_WINDOW_SECONDS = 15 * 60;
+const LOGIN_ATTEMPT_LIMIT = 10;
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
   const github = new GitHubService();
@@ -209,11 +212,29 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
   app.post('/auth/login', async (request, reply) => {
     const body = loginSchema.parse(request.body);
+    const normalizedEmail = body.email.trim().toLowerCase();
+
+    const existingAttempts = Number((await redis.get(loginAttemptKey(normalizedEmail))) ?? '0');
+    if (existingAttempts >= LOGIN_ATTEMPT_LIMIT) {
+      return reply.code(429).send({
+        message: 'Too many sign-in attempts. Please wait 15 minutes and try again.',
+      });
+    }
 
     const user = await prisma.user.findUnique({ where: { email: body.email } });
     if (!user || !verifyPassword(body.password, user.passwordHash)) {
+      const attempts = await redis.incr(loginAttemptKey(normalizedEmail));
+      if (attempts === 1) {
+        await redis.expire(loginAttemptKey(normalizedEmail), LOGIN_ATTEMPT_WINDOW_SECONDS);
+      }
+      if (attempts >= LOGIN_ATTEMPT_LIMIT) {
+        return reply.code(429).send({
+          message: 'Too many sign-in attempts. Please wait 15 minutes and try again.',
+        });
+      }
       return reply.unauthorized('Invalid email or password');
     }
+    await redis.del(loginAttemptKey(normalizedEmail));
 
     const loginChallengeId = await createLoginChallenge({
       userId: user.id,
@@ -477,6 +498,9 @@ const loginChallengeSchema = z.object({
 
 const loginChallengeKey = (challengeId: string): string =>
   `${LOGIN_CHALLENGE_PREFIX}${challengeId}`;
+
+const loginAttemptKey = (normalizedEmail: string): string =>
+  `${LOGIN_ATTEMPT_PREFIX}${normalizedEmail}`;
 
 const loginChallengeTtlSeconds = (): number =>
   env.EMAIL_VERIFICATION_TTL_MINUTES * 60;

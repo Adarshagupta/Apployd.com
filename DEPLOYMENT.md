@@ -84,7 +84,7 @@ Once complete, visit:
 
 ## Services & Architecture
 
-The platform runs 7 Docker containers:
+The platform runs 8 Docker containers:
 
 | Service | Port | Description |
 |---------|------|-------------|
@@ -95,6 +95,7 @@ The platform runs 7 Docker containers:
 | Prometheus | 9090 | Metrics collection |
 | Grafana | 3001 | Monitoring dashboards |
 | Node Exporter | 9100 | System metrics |
+| cAdvisor | internal only | Container-level metrics |
 
 ## Useful Commands
 
@@ -206,7 +207,10 @@ If you don't have a PostgreSQL database:
 Access monitoring dashboards:
 - **Grafana**: http://your-server-ip:3001
   - Default login: admin / admin
+  - Dashboards: `Apployd Overview`, `Apployd Platform Ops`
 - **Prometheus**: http://your-server-ip:9090
+  - Recording rules: `infra/monitoring/prometheus/rules/apployd-recording-rules.yml`
+  - Alert rules: `infra/monitoring/prometheus/rules/apployd-alerts.yml`
 
 ## Updating the Platform
 

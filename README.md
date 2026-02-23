@@ -115,11 +115,18 @@ Important:
 - Prometheus metrics:
   - Control plane HTTP request rate/latency
   - Deployment engine success/failure/duration
+  - Host-level telemetry via node-exporter (CPU, memory, disk, network)
+  - Container-level telemetry via cAdvisor (container CPU/memory)
+- Prometheus recording + alert rules:
+  - `infra/monitoring/prometheus/rules/apployd-recording-rules.yml`
+  - `infra/monitoring/prometheus/rules/apployd-alerts.yml`
 - Usage API:
   - `GET /api/v1/projects?organizationId=<id>` now includes per-project usage snapshots.
   - `GET /api/v1/usage/projects?organizationId=<id>` returns detailed usage for all projects.
   - `GET /api/v1/usage/projects/:projectId` returns project-level totals + daily series.
-- Grafana dashboard: `infra/monitoring/grafana/dashboards/apployd-overview.json`
+- Grafana dashboards:
+  - `infra/monitoring/grafana/dashboards/apployd-overview.json`
+  - `infra/monitoring/grafana/dashboards/apployd-platform-ops.json`
 - Centralized application logs table (`logs`).
 
 ## Setup (Local)

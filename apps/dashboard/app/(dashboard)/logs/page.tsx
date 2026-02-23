@@ -14,6 +14,12 @@ interface LogRow {
   source: string;
 }
 
+const encodeTokenForWebSocketProtocol = (token: string): string => {
+  const base64 = window.btoa(token);
+  const base64Url = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  return `apployd-token.${base64Url}`;
+};
+
 export default function LogsPage() {
   const { projects } = useWorkspaceContext();
   const [projectId, setProjectId] = useState('');
@@ -72,10 +78,9 @@ export default function LogsPage() {
     const wsBase = resolveWebSocketBaseUrl();
     const wsUrl = new URL(`${wsBase}/ws/deployments/${deploymentId}`);
     const token = typeof window !== 'undefined' ? window.localStorage.getItem('apployd_token') ?? '' : '';
-    if (token) {
-      wsUrl.searchParams.set('token', token);
-    }
-    const socket = new WebSocket(wsUrl.toString());
+    const socket = token
+      ? new WebSocket(wsUrl.toString(), [encodeTokenForWebSocketProtocol(token)])
+      : new WebSocket(wsUrl.toString());
     socketRef.current = socket;
     setStreamEvents([]);
 

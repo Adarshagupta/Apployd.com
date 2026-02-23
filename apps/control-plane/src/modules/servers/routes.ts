@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { OrgRole } from '@prisma/client';
 import { z } from 'zod';
 
+import { env } from '../../config/env.js';
 import { prisma } from '../../lib/prisma.js';
 
 export const serverRoutes: FastifyPluginAsync = async (app) => {
@@ -48,7 +49,30 @@ export const serverRoutes: FastifyPluginAsync = async (app) => {
     }
   };
 
-  app.get('/servers', { preHandler: [app.authenticate] }, async () => {
+  const requirePlatformAdminEmail = (email: string | undefined): void => {
+    const normalizedEmail = email?.trim().toLowerCase();
+    if (!normalizedEmail) {
+      throw new Error('Authenticated user email is required.');
+    }
+
+    if (env.PLATFORM_ADMIN_EMAILS.length === 0) {
+      throw new Error('Server management is disabled. Set PLATFORM_ADMIN_EMAILS to enable it.');
+    }
+
+    if (!env.PLATFORM_ADMIN_EMAILS.includes(normalizedEmail)) {
+      throw new Error('Platform admin access is required to manage servers.');
+    }
+  };
+
+  app.get('/servers', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
+    try {
+      requirePlatformAdminEmail(user.email);
+      await requireServerAdmin(user.userId);
+    } catch (error) {
+      return reply.forbidden((error as Error).message);
+    }
+
     const servers = await prisma.server.findMany({
       orderBy: [{ region: 'asc' }, { name: 'asc' }],
     });
@@ -61,6 +85,7 @@ export const serverRoutes: FastifyPluginAsync = async (app) => {
     const body = createServerSchema.parse(request.body);
 
     try {
+      requirePlatformAdminEmail(user.email);
       await requireServerAdmin(user.userId);
     } catch (error) {
       return reply.forbidden((error as Error).message);
@@ -99,6 +124,7 @@ export const serverRoutes: FastifyPluginAsync = async (app) => {
     const body = updateServerSchema.parse(request.body);
 
     try {
+      requirePlatformAdminEmail(user.email);
       await requireServerAdmin(user.userId);
     } catch (error) {
       return reply.forbidden((error as Error).message);

@@ -39,8 +39,19 @@ export const buildApp = () => {
     },
   });
 
+  const corsAllowedOrigins = new Set(env.CORS_ALLOWED_ORIGINS);
   app.register(cors, {
-    origin: true,
+    origin: (
+      origin: string | undefined,
+      callback: (error: Error | null, allow: boolean) => void,
+    ) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      callback(null, corsAllowedOrigins.has(origin));
+    },
     credentials: true,
   });
   app.register(sensible);

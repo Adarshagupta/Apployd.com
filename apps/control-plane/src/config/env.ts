@@ -36,6 +36,32 @@ const optionalEmail = z.preprocess((value) => {
   return trimmed.length > 0 ? trimmed : undefined;
 }, z.string().email().optional());
 
+const optionalCsvUrls = z.preprocess((value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const values = value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+
+  return values.length > 0 ? values : undefined;
+}, z.array(z.string().url()).optional());
+
+const optionalCsvEmails = z.preprocess((value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const values = value
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => entry.length > 0);
+
+  return values.length > 0 ? values : undefined;
+}, z.array(z.string().email()).optional());
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(4000),
@@ -60,7 +86,10 @@ const envSchema = z.object({
   GITHUB_OAUTH_REDIRECT_URI: z.string().url().optional(),
   GITHUB_WEBHOOK_SECRET: z.string().default(''),
   DASHBOARD_BASE_URL: z.string().url().default('http://localhost:3000'),
+  CORS_ALLOWED_ORIGINS: optionalCsvUrls,
+  PLATFORM_ADMIN_EMAILS: optionalCsvEmails,
   ENCRYPTION_KEY: z.string().min(32),
+  METRICS_AUTH_TOKEN: optionalString,
   CLOUDFLARE_API_TOKEN: z.string().optional(),
   CLOUDFLARE_ZONE_ID: z.string().optional(),
   BASE_DOMAIN: z.string().min(3),
@@ -79,11 +108,20 @@ const envSchema = z.object({
 });
 
 const parsedEnv = envSchema.parse(process.env);
+const defaultCorsOrigins = (() => {
+  try {
+    return [new URL(parsedEnv.DASHBOARD_BASE_URL).origin];
+  } catch {
+    return [] as string[];
+  }
+})();
 
 export const env = {
   ...parsedEnv,
   SMTP_SECURE: parsedEnv.SMTP_SECURE ?? parsedEnv.SMTP_PORT === 465,
   PREVIEW_BASE_DOMAIN: parsedEnv.PREVIEW_BASE_DOMAIN ?? parsedEnv.BASE_DOMAIN,
+  CORS_ALLOWED_ORIGINS: parsedEnv.CORS_ALLOWED_ORIGINS ?? defaultCorsOrigins,
+  PLATFORM_ADMIN_EMAILS: parsedEnv.PLATFORM_ADMIN_EMAILS ?? [],
   ALLOW_PRIVATE_GIT_HOSTS: parsedEnv.ALLOW_PRIVATE_GIT_HOSTS ?? false,
   AUTO_PROVISION_DEV_SERVER:
     parsedEnv.AUTO_PROVISION_DEV_SERVER ?? parsedEnv.NODE_ENV !== 'production',

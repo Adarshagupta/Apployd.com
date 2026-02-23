@@ -1,0 +1,72 @@
+groups:
+  - name: apployd-recording-rules
+    interval: 30s
+    rules:
+      - record: apployd:control:http_rps:5m
+        expr: |
+          sum(rate(apployd_control_http_requests_total[5m]))
+
+      - record: apployd:control:http_5xx_ratio:5m
+        expr: |
+          sum(rate(apployd_control_http_requests_total{status_code=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(apployd_control_http_requests_total[5m])), 0.001)
+
+      - record: apployd:control:http_p95_seconds:5m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(apployd_control_http_duration_seconds_bucket[5m])) by (le)
+          )
+
+      - record: apployd:control:http_p99_seconds:5m
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum(rate(apployd_control_http_duration_seconds_bucket[5m])) by (le)
+          )
+
+      - record: apployd:engine:deploy_success_ratio:30m
+        expr: |
+          sum(increase(apployd_engine_deployment_processed_total{status="success"}[30m]))
+          /
+          clamp_min(
+            sum(increase(apployd_engine_deployment_processed_total{status=~"success|failed"}[30m])),
+            1
+          )
+
+      - record: apployd:engine:deploy_failures_30m
+        expr: |
+          sum(increase(apployd_engine_deployment_processed_total{status="failed"}[30m]))
+
+      - record: apployd:engine:deploy_per_minute:5m
+        expr: |
+          sum(rate(apployd_engine_deployment_processed_total[5m])) * 60
+
+      - record: apployd:host:cpu_utilization:5m
+        expr: |
+          100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) by (instance) * 100)
+
+      - record: apployd:host:memory_utilization:5m
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100
+
+      - record: apployd:host:disk_utilization:5m
+        expr: |
+          100 *
+          (
+            1 -
+            (
+              sum(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs",mountpoint!~"/run.*"}) by (instance)
+              /
+              sum(node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs",mountpoint!~"/run.*"}) by (instance)
+            )
+          )
+
+      - record: apployd:host:network_receive_mbps:5m
+        expr: |
+          sum(rate(node_network_receive_bytes_total{device!~"lo|veth.*|docker.*"}[5m])) by (instance) * 8 / 1000000
+
+      - record: apployd:host:network_transmit_mbps:5m
+        expr: |
+          sum(rate(node_network_transmit_bytes_total{device!~"lo|veth.*|docker.*"}[5m])) by (instance) * 8 / 1000000
