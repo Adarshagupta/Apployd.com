@@ -62,6 +62,19 @@ const optionalCsvEmails = z.preprocess((value) => {
   return values.length > 0 ? values : undefined;
 }, z.array(z.string().email()).optional());
 
+const optionalCsvDomains = z.preprocess((value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const values = value
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => entry.length > 0);
+
+  return values.length > 0 ? values : undefined;
+}, z.array(z.string().regex(/^[a-z0-9.-]+\.[a-z]{2,}$/)).optional());
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(4000),
@@ -92,6 +105,13 @@ const envSchema = z.object({
   METRICS_AUTH_TOKEN: optionalString,
   CLOUDFLARE_API_TOKEN: z.string().optional(),
   CLOUDFLARE_ZONE_ID: z.string().optional(),
+  INVITE_ALLOWED_EMAIL_DOMAINS: optionalCsvDomains,
+  INVITE_WEBHOOK_TOKEN: optionalString,
+  INVITE_REMINDER_ENABLED: booleanFromEnv.optional(),
+  INVITE_REMINDER_DELAY_HOURS: z.coerce.number().int().min(1).max(720).default(24),
+  INVITE_REMINDER_INTERVAL_HOURS: z.coerce.number().int().min(1).max(720).default(24),
+  INVITE_MAX_REMINDERS: z.coerce.number().int().min(0).max(20).default(2),
+  INVITE_MAINTENANCE_INTERVAL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
   BASE_DOMAIN: z.string().min(3),
   PREVIEW_BASE_DOMAIN: z.string().min(3).optional(),
   PREVIEW_DOMAIN_STYLE: z.enum(['project', 'project_ref']).default('project_ref'),
@@ -122,6 +142,8 @@ export const env = {
   PREVIEW_BASE_DOMAIN: parsedEnv.PREVIEW_BASE_DOMAIN ?? parsedEnv.BASE_DOMAIN,
   CORS_ALLOWED_ORIGINS: parsedEnv.CORS_ALLOWED_ORIGINS ?? defaultCorsOrigins,
   PLATFORM_ADMIN_EMAILS: parsedEnv.PLATFORM_ADMIN_EMAILS ?? [],
+  INVITE_ALLOWED_EMAIL_DOMAINS: parsedEnv.INVITE_ALLOWED_EMAIL_DOMAINS ?? ['company.com'],
+  INVITE_REMINDER_ENABLED: parsedEnv.INVITE_REMINDER_ENABLED ?? true,
   ALLOW_PRIVATE_GIT_HOSTS: parsedEnv.ALLOW_PRIVATE_GIT_HOSTS ?? false,
   AUTO_PROVISION_DEV_SERVER:
     parsedEnv.AUTO_PROVISION_DEV_SERVER ?? parsedEnv.NODE_ENV !== 'production',

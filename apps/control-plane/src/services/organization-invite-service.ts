@@ -51,6 +51,13 @@ export class OrganizationInviteService {
         revokedAt: null,
         acceptedAt: null,
         acceptedByUserId: null,
+        emailDeliveryStatus: 'not_sent',
+        lastEmailSentAt: null,
+        lastDeliveryError: null,
+        lastReminderSentAt: null,
+        reminderCount: 0,
+        bouncedAt: null,
+        complainedAt: null,
       },
       create: {
         organizationId: input.organizationId,
@@ -95,6 +102,12 @@ export class OrganizationInviteService {
             email: true,
             name: true,
           },
+        },
+        emailEvents: {
+          orderBy: {
+            occurredAt: 'desc',
+          },
+          take: 20,
         },
       },
       orderBy: {

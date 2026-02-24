@@ -84,6 +84,26 @@ enum DomainStatus {
   removing
 }
 
+enum InviteEmailStatus {
+  not_sent
+  sent
+  failed
+  bounced
+  complained
+}
+
+enum InviteEmailEventType {
+  invite_sent
+  invite_send_failed
+  invite_resent
+  invite_resend_failed
+  invite_reminder_sent
+  invite_reminder_failed
+  bounced
+  complained
+  auto_expired
+}
+
 model User {
   id             String               @id @default(cuid())
   email          String               @unique
@@ -153,16 +173,42 @@ model OrganizationInvite {
   expiresAt         DateTime
   acceptedAt        DateTime?
   revokedAt         DateTime?
+  emailDeliveryStatus InviteEmailStatus @default(not_sent)
+  lastEmailSentAt   DateTime?
+  lastDeliveryError String?
+  lastReminderSentAt DateTime?
+  reminderCount     Int           @default(0)
+  bouncedAt         DateTime?
+  complainedAt      DateTime?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
   organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   invitedBy         User          @relation("OrganizationInviteSender", fields: [invitedById], references: [id], onDelete: Cascade)
   acceptedBy        User?         @relation("OrganizationInviteAccepter", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+  emailEvents       OrganizationInviteEmailEvent[]
 
   @@unique([organizationId, email])
   @@index([email, expiresAt])
   @@index([organizationId, createdAt])
+  @@index([organizationId, emailDeliveryStatus, expiresAt])
   @@map("organization_invites")
+}
+
+model OrganizationInviteEmailEvent {
+  id             String               @id @default(cuid())
+  inviteId       String
+  eventType      InviteEmailEventType
+  provider       String?
+  providerEventId String?
+  message        String?
+  metadata       Json?
+  occurredAt     DateTime             @default(now())
+  createdAt      DateTime             @default(now())
+  invite         OrganizationInvite   @relation(fields: [inviteId], references: [id], onDelete: Cascade)
+
+  @@index([inviteId, occurredAt])
+  @@index([provider, providerEventId])
+  @@map("organization_invite_email_events")
 }
 
 model Project {

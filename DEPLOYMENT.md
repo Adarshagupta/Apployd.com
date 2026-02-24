@@ -216,6 +216,35 @@ Access monitoring dashboards:
   - Routing config: `infra/monitoring/alertmanager/alertmanager.yml`
   - Set your Slack webhook + PagerDuty integration key in that file before production use.
 
+## Team Invite Email Ops
+
+Team invites now support delivery timeline, resend, bounce/complaint handling, reminder emails, and auto-expiry cleanup.
+
+Set these control-plane env vars:
+
+```bash
+INVITE_ALLOWED_EMAIL_DOMAINS=company.com
+INVITE_WEBHOOK_TOKEN=replace-with-random-secret
+INVITE_REMINDER_ENABLED=true
+INVITE_REMINDER_DELAY_HOURS=24
+INVITE_REMINDER_INTERVAL_HOURS=24
+INVITE_MAX_REMINDERS=2
+INVITE_MAINTENANCE_INTERVAL_SECONDS=300
+```
+
+Webhook endpoint (for SES/SendGrid or custom mail event bridge):
+
+```bash
+POST /api/v1/teams/invites/email/webhook
+Header: x-invite-webhook-token: <INVITE_WEBHOOK_TOKEN>
+```
+
+Resend invite endpoint (admin/owner):
+
+```bash
+POST /api/v1/teams/invites/:inviteId/resend
+```
+
 ## Updating the Platform
 
 ```bash

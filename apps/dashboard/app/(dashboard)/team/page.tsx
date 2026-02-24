@@ -32,6 +32,8 @@ export default function TeamPage() {
       id: string;
       email: string;
       role: string;
+      emailDeliveryStatus?: string;
+      lastDeliveryError?: string | null;
       expiresAt: string;
       createdAt: string;
       invitedBy: {
@@ -39,6 +41,13 @@ export default function TeamPage() {
         email: string;
         name: string | null;
       };
+      emailEvents?: Array<{
+        id: string;
+        eventType: string;
+        message?: string | null;
+        occurredAt: string;
+        provider?: string | null;
+      }>;
     }>
   >([]);
   const [myInvites, setMyInvites] = useState<
@@ -62,6 +71,7 @@ export default function TeamPage() {
   >([]);
   const [canManageInvites, setCanManageInvites] = useState(false);
   const [inviteActionId, setInviteActionId] = useState('');
+  const [inviteResendId, setInviteResendId] = useState('');
   const handledInviteFromQuery = useRef('');
   const [manualInviteLinks, setManualInviteLinks] = useState<{
     loginUrl: string;
@@ -175,6 +185,19 @@ export default function TeamPage() {
       setMessage((error as Error).message);
     } finally {
       setInviteActionId('');
+    }
+  };
+
+  const resendInvite = async (inviteId: string) => {
+    setInviteResendId(inviteId);
+    try {
+      const data = await apiClient.post(`/teams/invites/${inviteId}/resend`, {});
+      setMessage(data.message ?? (data.delivered ? 'Invitation resent.' : 'Invitation resend failed.'));
+      await loadMembers();
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setInviteResendId('');
     }
   };
 
@@ -334,17 +357,39 @@ export default function TeamPage() {
         {organizationInvites.length ? (
           <ul className="space-y-2">
             {organizationInvites.map((invite) => (
-              <li key={invite.id} className="panel-muted flex items-center justify-between p-3">
+              <li key={invite.id} className="panel-muted p-3">
                 <div>
-                  <p className="text-sm font-semibold text-slate-900">{invite.email}</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-slate-900">{invite.email}</p>
+                    <button
+                      className="btn-secondary"
+                      onClick={() => resendInvite(invite.id)}
+                      disabled={inviteResendId === invite.id}
+                    >
+                      {inviteResendId === invite.id ? 'Resending...' : 'Resend invite'}
+                    </button>
+                  </div>
                   <p className="text-xs text-slate-600">
                     Role: {invite.role} • Expires {new Date(invite.expiresAt).toLocaleDateString()}
                   </p>
                   <p className="text-xs text-slate-500">
                     Invited by {invite.invitedBy.name ?? invite.invitedBy.email}
                   </p>
+                  <p className="text-xs text-slate-500">
+                    Delivery: {formatInviteDeliveryStatus(invite.emailDeliveryStatus)}
+                    {invite.lastDeliveryError ? ` • ${invite.lastDeliveryError}` : ''}
+                  </p>
+                  {invite.emailEvents?.length ? (
+                    <ul className="mt-2 space-y-1">
+                      {invite.emailEvents.slice(0, 4).map((event) => (
+                        <li key={event.id} className="text-xs text-slate-500">
+                          {formatInviteEventType(event.eventType)} • {new Date(event.occurredAt).toLocaleString()}
+                          {event.message ? ` • ${event.message}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
-                <p className="mono text-xs uppercase text-slate-700">pending</p>
               </li>
             ))}
           </ul>
@@ -357,3 +402,14 @@ export default function TeamPage() {
     </div>
   );
 }
+
+const formatInviteDeliveryStatus = (status: string | undefined): string => {
+  if (!status) {
+    return 'unknown';
+  }
+  return status.replace(/_/g, ' ');
+};
+
+const formatInviteEventType = (eventType: string): string => {
+  return eventType.replace(/_/g, ' ');
+};
