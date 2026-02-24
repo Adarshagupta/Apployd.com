@@ -29,6 +29,7 @@ interface DeploymentSummary {
   branch?: string | null;
   commitSha?: string | null;
   gitUrl?: string | null;
+  errorMessage?: string | null;
   createdByName?: string | null;
   domain?: string | null;
   imageTag?: string | null;
@@ -126,11 +127,16 @@ const IN_PROGRESS_DEPLOYMENT_STATUSES = new Set(['queued', 'building', 'deployin
 const DEPLOYMENT_STATUS_UI: Record<string, { label: string; dotClass: string; textClass: string }> = {
   ready: { label: 'Ready', dotClass: 'bg-emerald-500', textClass: 'text-slate-900' },
   failed: { label: 'Error', dotClass: 'bg-red-500', textClass: 'text-slate-900' },
+  canceled: { label: 'Canceled', dotClass: 'bg-slate-500', textClass: 'text-slate-800' },
   queued: { label: 'Queued', dotClass: 'bg-amber-500', textClass: 'text-slate-800' },
   building: { label: 'Building', dotClass: 'bg-blue-500', textClass: 'text-slate-800' },
   deploying: { label: 'Deploying', dotClass: 'bg-blue-500', textClass: 'text-slate-800' },
   rolled_back: { label: 'Rolled Back', dotClass: 'bg-slate-500', textClass: 'text-slate-800' },
 };
+
+const isCanceledDeployment = (deployment: { status: string; errorMessage?: string | null }): boolean =>
+  deployment.status === 'failed' &&
+  (deployment.errorMessage ?? '').toLowerCase().includes('canceled by user');
 
 function formatDeploymentDuration(startIso: string, endIso?: string | null): string {
   const start = new Date(startIso).getTime();
@@ -359,6 +365,22 @@ export default function ProjectDetailPage() {
       await loadDeployments();
     } catch (error) {
       setMessage(`Rollback failed: ${(error as Error).message}`);
+    } finally {
+      setDeploymentAction('');
+    }
+  };
+
+  const handleCancelDeployment = async (deploymentId: string) => {
+    try {
+      setDeploymentAction(deploymentId);
+      await apiClient.post(`/deployments/${deploymentId}/cancel`, {});
+      setMessage('Deployment canceled.');
+      await Promise.all([
+        loadDeployments(),
+        refresh(),
+      ]);
+    } catch (error) {
+      setMessage(`Cancel failed: ${(error as Error).message}`);
     } finally {
       setDeploymentAction('');
     }
@@ -978,13 +1000,23 @@ export default function ProjectDetailPage() {
               {inProgressDeployment.branch ? ` on ${inProgressDeployment.branch}` : ''}
               {'. Runs server-side â€” safe to close the browser.'}
             </p>
-            <button
-              type="button"
-              className="ml-auto text-xs font-medium text-slate-900 hover:underline"
-              onClick={() => setActiveTab('realtime-logs')}
-            >
-              View logs
-            </button>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                className="rounded-md bg-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-900 transition hover:bg-slate-300"
+                onClick={() => handleCancelDeployment(inProgressDeployment.id)}
+                disabled={deploymentAction === inProgressDeployment.id}
+              >
+                {deploymentAction === inProgressDeployment.id ? 'Cancelling...' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                className="text-xs font-medium text-slate-900 hover:underline"
+                onClick={() => setActiveTab('realtime-logs')}
+              >
+                View logs
+              </button>
+            </div>
           </div>
         )}
 
@@ -1095,11 +1127,14 @@ export default function ProjectDetailPage() {
                 {deployments.map((dep, index) => {
                   const isActive = project.activeDeploymentId === dep.id;
                   const repoLabel = resolveRepoLabel(project.repoFullName, dep.gitUrl ?? project.repoUrl, project.name);
-                  const statusUi = DEPLOYMENT_STATUS_UI[dep.status] ?? {
+                  const statusUi = isCanceledDeployment(dep)
+                    ? DEPLOYMENT_STATUS_UI.canceled
+                    : DEPLOYMENT_STATUS_UI[dep.status] ?? {
                     label: dep.status.replace('_', ' '),
                     dotClass: 'bg-slate-400',
                     textClass: 'text-slate-800',
                   };
+                  const isInProgress = IN_PROGRESS_DEPLOYMENT_STATUSES.has(dep.status);
                   const durationLabel = formatDeploymentDuration(dep.createdAt, dep.finishedAt);
                   const branchLabel = dep.branch ?? project.branch ?? 'main';
                   const createdByLabel = dep.createdByName ?? 'workspace';
@@ -1142,7 +1177,7 @@ export default function ProjectDetailPage() {
                         <p className={`flex items-center gap-2 text-sm font-medium ${statusUi.textClass}`}>
                           <span
                             className={`inline-flex h-2.5 w-2.5 rounded-full ${statusUi.dotClass} ${
-                              IN_PROGRESS_DEPLOYMENT_STATUSES.has(dep.status) ? 'animate-pulse' : ''
+                              isInProgress ? 'animate-pulse' : ''
                             }`}
                           />
                           {statusUi.label}
@@ -1180,6 +1215,20 @@ export default function ProjectDetailPage() {
 
                       {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
                       <div className="flex items-center gap-2 md:justify-end" onClick={(e) => e.stopPropagation()}>
+                        {isInProgress && (
+                          <button
+                            type="button"
+                            className="rounded-md bg-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-900 transition hover:bg-slate-300"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCancelDeployment(dep.id);
+                            }}
+                            disabled={deploymentAction === dep.id}
+                          >
+                            {deploymentAction === dep.id ? 'Cancelling...' : 'Cancel'}
+                          </button>
+                        )}
+
                         {dep.domain && dep.status === 'ready' && (
                           <a
                             href={dep.domain.startsWith('http') ? dep.domain : `https://${dep.domain}`}

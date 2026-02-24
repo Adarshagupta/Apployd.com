@@ -40,13 +40,17 @@ interface DeploymentDetail {
 const STATUS_MAP: Record<string, { dot: string; bg: string; text: string; label: string }> = {
   ready: { dot: 'bg-slate-400', bg: 'bg-slate-100 border-slate-300', text: 'text-slate-900', label: 'Ready' },
   failed: { dot: 'bg-slate-900', bg: 'bg-slate-200 border-slate-400', text: 'text-slate-900', label: 'Failed' },
+  canceled: { dot: 'bg-slate-600', bg: 'bg-slate-100 border-slate-300', text: 'text-slate-800', label: 'Canceled' },
   building: { dot: 'bg-slate-700', bg: 'bg-slate-100 border-slate-300', text: 'text-slate-700', label: 'Building' },
   deploying: { dot: 'bg-slate-700', bg: 'bg-slate-100 border-slate-300', text: 'text-slate-700', label: 'Deploying' },
   queued: { dot: 'bg-slate-500', bg: 'bg-slate-50 border-slate-200', text: 'text-slate-600', label: 'Queued' },
   rolled_back: { dot: 'bg-slate-600', bg: 'bg-slate-50 border-slate-200', text: 'text-slate-700', label: 'Rolled back' },
 };
 
-function statusInfo(status: string) {
+function statusInfo(status: string, errorMessage?: string | null) {
+  if (status === 'failed' && (errorMessage ?? '').toLowerCase().includes('canceled by user')) {
+    return STATUS_MAP.canceled;
+  }
   return STATUS_MAP[status] ?? { dot: 'bg-slate-400', bg: 'bg-slate-50 border-slate-200', text: 'text-slate-600', label: status };
 }
 
@@ -81,6 +85,8 @@ export default function DeploymentDetailPage() {
   const [deployment, setDeployment] = useState<DeploymentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionMessage, setActionMessage] = useState('');
+  const [canceling, setCanceling] = useState(false);
   const [logsTab, setLogsTab] = useState<'build' | 'deploy' | 'error'>('build');
 
   const load = useCallback(async (options?: { silent?: boolean }) => {
@@ -115,6 +121,24 @@ export default function DeploymentDetailPage() {
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deployment?.status, load]);
+
+  const handleCancelDeployment = async () => {
+    if (!deployment) {
+      return;
+    }
+
+    try {
+      setCanceling(true);
+      setActionMessage('');
+      await apiClient.post(`/deployments/${deployment.deploymentId}/cancel`, {});
+      await load({ silent: true });
+      setActionMessage('Deployment canceled.');
+    } catch (err) {
+      setActionMessage(`Cancel failed: ${(err as Error).message}`);
+    } finally {
+      setCanceling(false);
+    }
+  };
 
   if (loading && !deployment) {
     return (
@@ -179,7 +203,7 @@ export default function DeploymentDetailPage() {
     );
   }
 
-  const st = statusInfo(deployment.status);
+  const st = statusInfo(deployment.status, deployment.errorMessage);
   const isActive = deployment.project.activeDeploymentId === deployment.deploymentId;
   const isInProgress = ['queued', 'building', 'deploying'].includes(deployment.status);
   const duration = formatDuration(deployment.createdAt, deployment.finishedAt);
@@ -207,6 +231,11 @@ export default function DeploymentDetailPage() {
 
       {/* ---- Main two-column layout (like Vercel) ---- */}
       <div className="section-band">
+        {actionMessage ? (
+          <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            {actionMessage}
+          </div>
+        ) : null}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8">
           {/* ---- LEFT: Preview / deployment snapshot ---- */}
           <div className="space-y-5">
@@ -304,6 +333,16 @@ export default function DeploymentDetailPage() {
               <h2 className="mt-1 text-lg font-semibold text-slate-900 break-all">
                 {deployment.project.slug}-{deployment.deploymentId.slice(0, 8)}
               </h2>
+              {isInProgress ? (
+                <button
+                  type="button"
+                  className="mt-3 rounded-md bg-slate-200 px-3 py-1.5 text-xs font-medium text-slate-900 transition hover:bg-slate-300"
+                  onClick={handleCancelDeployment}
+                  disabled={canceling}
+                >
+                  {canceling ? 'Cancelling...' : 'Cancel deployment'}
+                </button>
+              ) : null}
             </div>
 
             {/* Domains */}

@@ -325,6 +325,7 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
       select: {
         id: true,
         organizationId: true,
+        repoUrl: true,
         repoOwner: true,
         repoName: true,
         repoFullName: true,
@@ -363,10 +364,38 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(402).send({ message: 'Preview deployments are not available on your current plan.' });
     }
 
+    const shouldDefaultAutoDeploy =
+      body.autoDeployEnabled === undefined &&
+      body.repoUrl !== undefined &&
+      !project.autoDeployEnabled &&
+      entitlements.autoDeploy;
+
     const updateData: Record<string, unknown> = {};
+    const repoIdentityFromRequest = resolveRepoIdentity({
+      repoOwner: body.repoOwner,
+      repoName: body.repoName,
+      repoFullName: body.repoFullName,
+      repoUrl: body.repoUrl,
+    });
     if (body.repoUrl !== undefined) {
       updateData.repoUrl = body.repoUrl;
       updateData.gitProvider = 'github';
+      // Keep repo identity in sync when the URL changes so webhook matching works by default.
+      if (
+        body.repoOwner === undefined &&
+        body.repoName === undefined &&
+        body.repoFullName === undefined
+      ) {
+        if (repoIdentityFromRequest) {
+          updateData.repoOwner = repoIdentityFromRequest.owner;
+          updateData.repoName = repoIdentityFromRequest.name;
+          updateData.repoFullName = `${repoIdentityFromRequest.owner}/${repoIdentityFromRequest.name}`;
+        } else {
+          updateData.repoOwner = null;
+          updateData.repoName = null;
+          updateData.repoFullName = null;
+        }
+      }
     }
     if (body.repoOwner !== undefined) updateData.repoOwner = body.repoOwner;
     if (body.repoName !== undefined) updateData.repoName = body.repoName;
@@ -378,6 +407,7 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
     if (body.startCommand !== undefined) updateData.startCommand = body.startCommand || null;
     if (body.targetPort !== undefined) updateData.targetPort = body.targetPort;
     if (body.autoDeployEnabled !== undefined) updateData.autoDeployEnabled = body.autoDeployEnabled;
+    if (shouldDefaultAutoDeploy) updateData.autoDeployEnabled = true;
     if (body.previewDeploymentsEnabled !== undefined) {
       updateData.previewDeploymentsEnabled = body.previewDeploymentsEnabled;
     }
@@ -386,11 +416,14 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
     if (body.wakeMessage !== undefined) updateData.wakeMessage = body.wakeMessage || null;
     if (body.wakeRetrySeconds !== undefined) updateData.wakeRetrySeconds = body.wakeRetrySeconds;
 
-    const resolvedAutoDeployEnabled = body.autoDeployEnabled ?? project.autoDeployEnabled;
+    const resolvedAutoDeployEnabled =
+      body.autoDeployEnabled ??
+      (shouldDefaultAutoDeploy ? true : project.autoDeployEnabled);
     const repoIdentity = resolveRepoIdentity({
       repoOwner: body.repoOwner ?? project.repoOwner ?? undefined,
       repoName: body.repoName ?? project.repoName ?? undefined,
       repoFullName: body.repoFullName ?? project.repoFullName ?? undefined,
+      repoUrl: body.repoUrl ?? project.repoUrl ?? undefined,
     });
     let webhookResult:
       | {
@@ -489,12 +522,19 @@ export const githubIntegrationRoutes: FastifyPluginAsync = async (app) => {
 
     const payload = pushWebhookSchema.parse(request.body);
     const branch = payload.ref.replace('refs/heads/', '');
+    const repoUrlCandidates = buildGitHubRepoUrlCandidates({
+      fullName: payload.repository.full_name,
+      cloneUrl: payload.repository.clone_url,
+    });
 
     const projects = await prisma.project.findMany({
       where: {
         gitProvider: 'github',
-        repoFullName: payload.repository.full_name,
         autoDeployEnabled: true,
+        OR: [
+          { repoFullName: payload.repository.full_name },
+          ...repoUrlCandidates.map((repoUrl) => ({ repoUrl })),
+        ],
       },
       select: {
         id: true,
@@ -653,6 +693,7 @@ const resolveRepoIdentity = (input: {
   repoOwner?: string | undefined;
   repoName?: string | undefined;
   repoFullName?: string | undefined;
+  repoUrl?: string | undefined;
 }): { owner: string; name: string } | null => {
   if (input.repoOwner?.trim() && input.repoName?.trim()) {
     return {
@@ -668,7 +709,64 @@ const resolveRepoIdentity = (input: {
     }
   }
 
-  return null;
+  return parseGitHubRepoFromGitUrl(input.repoUrl ?? '');
+};
+
+const parseGitHubRepoFromGitUrl = (value: string): { owner: string; name: string } | null => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const sshMatch = trimmed.match(/^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/i);
+  if (sshMatch) {
+    const owner = sshMatch[1]?.trim();
+    const name = sshMatch[2]?.trim();
+    if (owner && name) {
+      return { owner, name };
+    }
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+
+  if (!/^(?:www\.)?github\.com$/i.test(parsed.hostname)) {
+    return null;
+  }
+
+  const [owner, repoSegment] = parsed.pathname.split('/').filter(Boolean);
+  const name = repoSegment?.replace(/\.git$/i, '');
+  if (!owner || !name) {
+    return null;
+  }
+
+  return { owner, name };
+};
+
+const buildGitHubRepoUrlCandidates = (input: {
+  fullName: string;
+  cloneUrl: string;
+}): string[] => {
+  const urls = new Set<string>();
+  const cloneUrl = input.cloneUrl.trim();
+  if (cloneUrl) {
+    urls.add(cloneUrl);
+    urls.add(cloneUrl.replace(/\.git$/i, ''));
+  }
+
+  const normalizedFullName = input.fullName.trim().replace(/^\/+|\/+$/g, '');
+  if (normalizedFullName) {
+    urls.add(`https://github.com/${normalizedFullName}.git`);
+    urls.add(`https://github.com/${normalizedFullName}`);
+    urls.add(`git@github.com:${normalizedFullName}.git`);
+    urls.add(`git@github.com:${normalizedFullName}`);
+  }
+
+  return Array.from(urls);
 };
 
 const slugifyOrganization = (value: string): string => {

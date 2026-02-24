@@ -64,6 +64,7 @@ const resolveRepoIdentity = (input: {
   repoOwner?: string | undefined;
   repoName?: string | undefined;
   repoFullName?: string | undefined;
+  repoUrl?: string | undefined;
 }): { owner: string; name: string } | null => {
   if (input.repoOwner?.trim() && input.repoName?.trim()) {
     return {
@@ -79,7 +80,42 @@ const resolveRepoIdentity = (input: {
     }
   }
 
-  return null;
+  return parseGitHubRepoFromGitUrl(input.repoUrl ?? '');
+};
+
+const parseGitHubRepoFromGitUrl = (value: string): { owner: string; name: string } | null => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const sshMatch = trimmed.match(/^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/i);
+  if (sshMatch) {
+    const owner = sshMatch[1]?.trim();
+    const name = sshMatch[2]?.trim();
+    if (owner && name) {
+      return { owner, name };
+    }
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+
+  if (!/^(?:www\.)?github\.com$/i.test(parsed.hostname)) {
+    return null;
+  }
+
+  const [owner, repoSegment] = parsed.pathname.split('/').filter(Boolean);
+  const name = repoSegment?.replace(/\.git$/i, '');
+  if (!owner || !name) {
+    return null;
+  }
+
+  return { owner, name };
 };
 
 export const projectRoutes: FastifyPluginAsync = async (app) => {
@@ -176,7 +212,11 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
       repoOwner: body.repoOwner,
       repoName: body.repoName,
       repoFullName: body.repoFullName,
+      repoUrl: body.repoUrl,
     });
+    const repoOwner = body.repoOwner ?? repoIdentity?.owner;
+    const repoName = body.repoName ?? repoIdentity?.name;
+    const repoFullName = body.repoFullName ?? (repoIdentity ? `${repoIdentity.owner}/${repoIdentity.name}` : undefined);
     let webhook:
       | {
           configured: true;
@@ -250,9 +290,9 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
             runtime: body.runtime,
             gitProvider: body.repoUrl ? 'github' : null,
             ...(body.repoUrl && { repoUrl: body.repoUrl }),
-            ...(body.repoOwner && { repoOwner: body.repoOwner }),
-            ...(body.repoName && { repoName: body.repoName }),
-            ...(body.repoFullName && { repoFullName: body.repoFullName }),
+            ...(repoOwner && { repoOwner }),
+            ...(repoName && { repoName }),
+            ...(repoFullName && { repoFullName }),
             ...(body.branch && { branch: body.branch }),
             ...(body.installCommand && { installCommand: body.installCommand }),
             ...(body.buildCommand && { buildCommand: body.buildCommand }),
