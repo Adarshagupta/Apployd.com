@@ -1127,9 +1127,11 @@ export default function ProjectDetailPage() {
                 {deployments.map((dep, index) => {
                   const isActive = project.activeDeploymentId === dep.id;
                   const repoLabel = resolveRepoLabel(project.repoFullName, dep.gitUrl ?? project.repoUrl, project.name);
-                  const statusUi = isCanceledDeployment(dep)
-                    ? DEPLOYMENT_STATUS_UI.canceled
-                    : DEPLOYMENT_STATUS_UI[dep.status] ?? {
+                  const statusUi = (
+                    isCanceledDeployment(dep)
+                      ? DEPLOYMENT_STATUS_UI.canceled
+                      : DEPLOYMENT_STATUS_UI[dep.status]
+                  ) ?? {
                     label: dep.status.replace('_', ' '),
                     dotClass: 'bg-slate-400',
                     textClass: 'text-slate-800',

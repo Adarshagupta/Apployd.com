@@ -37,7 +37,9 @@ interface DeploymentDetail {
 }
 
 /* ---------- helpers ---------- */
-const STATUS_MAP: Record<string, { dot: string; bg: string; text: string; label: string }> = {
+type StatusUi = { dot: string; bg: string; text: string; label: string };
+
+const STATUS_MAP: Record<string, StatusUi> = {
   ready: { dot: 'bg-slate-400', bg: 'bg-slate-100 border-slate-300', text: 'text-slate-900', label: 'Ready' },
   failed: { dot: 'bg-slate-900', bg: 'bg-slate-200 border-slate-400', text: 'text-slate-900', label: 'Failed' },
   canceled: { dot: 'bg-slate-600', bg: 'bg-slate-100 border-slate-300', text: 'text-slate-800', label: 'Canceled' },
@@ -47,11 +49,21 @@ const STATUS_MAP: Record<string, { dot: string; bg: string; text: string; label:
   rolled_back: { dot: 'bg-slate-600', bg: 'bg-slate-50 border-slate-200', text: 'text-slate-700', label: 'Rolled back' },
 };
 
-function statusInfo(status: string, errorMessage?: string | null) {
+const FALLBACK_STATUS_UI: StatusUi = {
+  dot: 'bg-slate-400',
+  bg: 'bg-slate-50 border-slate-200',
+  text: 'text-slate-600',
+  label: 'Unknown',
+};
+
+function statusInfo(status: string, errorMessage?: string | null): StatusUi {
   if (status === 'failed' && (errorMessage ?? '').toLowerCase().includes('canceled by user')) {
-    return STATUS_MAP.canceled;
+    return STATUS_MAP.canceled ?? FALLBACK_STATUS_UI;
   }
-  return STATUS_MAP[status] ?? { dot: 'bg-slate-400', bg: 'bg-slate-50 border-slate-200', text: 'text-slate-600', label: status };
+  return STATUS_MAP[status] ?? {
+    ...FALLBACK_STATUS_UI,
+    label: status,
+  };
 }
 
 function formatDuration(startIso: string | null, endIso: string | null): string | null {
