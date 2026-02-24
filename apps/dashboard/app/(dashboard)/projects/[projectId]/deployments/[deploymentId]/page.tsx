@@ -216,6 +216,9 @@ export default function DeploymentDetailPage() {
   }
 
   const st = statusInfo(deployment.status, deployment.errorMessage);
+  const statusDot = st?.dot ?? FALLBACK_STATUS_UI.dot;
+  const statusText = st?.text ?? FALLBACK_STATUS_UI.text;
+  const statusLabel = st?.label ?? deployment.status;
   const isActive = deployment.project.activeDeploymentId === deployment.deploymentId;
   const isInProgress = ['queued', 'building', 'deploying'].includes(deployment.status);
   const duration = formatDuration(deployment.createdAt, deployment.finishedAt);
@@ -384,13 +387,13 @@ export default function DeploymentDetailPage() {
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Status</p>
                 <div className="mt-2 flex items-center gap-2">
-                  <span className="relative flex h-2.5 w-2.5">
-                    {isInProgress && (
-                      <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${st.dot} opacity-75`} />
-                    )}
-                    <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${st.dot}`} />
+                    <span className="relative flex h-2.5 w-2.5">
+                      {isInProgress && (
+                      <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${statusDot} opacity-75`} />
+                      )}
+                    <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${statusDot}`} />
                   </span>
-                  <span className={`text-sm font-semibold ${st.text}`}>{st.label}</span>
+                  <span className={`text-sm font-semibold ${statusText}`}>{statusLabel}</span>
                   {isActive && (
                     <span className="inline-flex items-center rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-semibold text-white ml-1">
                       LIVE
