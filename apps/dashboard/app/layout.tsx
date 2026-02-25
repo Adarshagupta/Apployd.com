@@ -101,9 +101,22 @@ export const metadata: Metadata = {
   manifest: '/manifest.webmanifest',
 };
 
+const GOOGLE_TAG_ID = 'AW-17976896275';
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${heading.variable} ${mono.variable}`} suppressHydrationWarning>
+      <head>
+        <script async src={`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_TAG_ID}`} />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${GOOGLE_TAG_ID}');`,
+          }}
+        />
+      </head>
       <body className="font-[var(--font-heading)]" suppressHydrationWarning>
         <script
           type="application/ld+json"

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect } from 'react';
-import { usePathname } from 'next/navigation';
 
 type LandingTheme = 'light' | 'dark';
 
@@ -38,27 +37,13 @@ function applyTheme(theme: LandingTheme) {
 }
 
 export function LandingThemeSync() {
-  const pathname = usePathname();
-
   useEffect(() => {
-    const isOnboardingPath =
-      pathname === '/onboarding' || pathname?.startsWith('/onboarding/');
-
     const syncTheme = () => {
-      if (isOnboardingPath) {
-        applyTheme('light');
-        return;
-      }
-
       const theme = resolveTheme();
       applyTheme(theme);
     };
 
     syncTheme();
-
-    if (isOnboardingPath) {
-      return;
-    }
 
     window.addEventListener(LANDING_THEME_UPDATED_EVENT, syncTheme);
     window.addEventListener(DASHBOARD_THEME_UPDATED_EVENT, syncTheme);
@@ -69,7 +54,7 @@ export function LandingThemeSync() {
       window.removeEventListener(DASHBOARD_THEME_UPDATED_EVENT, syncTheme);
       window.removeEventListener('storage', syncTheme);
     };
-  }, [pathname]);
+  }, []);
 
   return null;
 }
