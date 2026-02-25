@@ -39,7 +39,7 @@ export default function SignupPage() {
     const nextRaw = searchParams?.get('next') ?? null;
     return nextRaw && nextRaw.startsWith('/') && !nextRaw.startsWith('//')
       ? nextRaw
-      : '/overview';
+      : '/onboarding';
   }, [searchParams]);
 
   useEffect(() => {
