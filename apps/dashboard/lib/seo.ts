@@ -3,10 +3,14 @@ import type { Metadata } from 'next';
 const DEFAULT_SITE_URL = 'https://apployd.com';
 export const SITE_NAME = 'Apployd';
 export const SITE_DESCRIPTION =
-  'Managed deployment platform for SaaS teams. Deploy web apps and APIs with preview environments, custom domains, and real-time observability.';
+  'Apployd is a deployment platform for backend apps. Deploy APIs on your own infrastructure with Git-based workflows, preview environments, and real-time observability.';
 export const SITE_PRIMARY_KEYWORDS = [
+  'apployd',
+  'apployd platform',
+  'backend deployment platform',
   'managed deployment platform',
   'saas deployment platform',
+  'hetzner deployment platform',
   'vercel alternative',
   'preview deployments',
   'custom domain hosting',
@@ -67,12 +71,19 @@ export const websiteJsonLd = {
   description: SITE_DESCRIPTION,
 };
 
+const organizationSameAs = [
+  process.env.NEXT_PUBLIC_LINKEDIN_URL,
+  process.env.NEXT_PUBLIC_GITHUB_URL,
+  process.env.NEXT_PUBLIC_X_URL,
+].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+
 export const organizationJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'Organization',
   name: SITE_NAME,
   url: siteUrl,
   logo: `${siteUrl}/icon.png`,
+  ...(organizationSameAs.length > 0 ? { sameAs: organizationSameAs } : {}),
 };
 
 export const softwareApplicationJsonLd = {

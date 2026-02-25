@@ -13,11 +13,14 @@ import { buildPageMetadata } from '../lib/seo';
 import styles from './landing.module.css';
 
 export const metadata: Metadata = buildPageMetadata({
-  title: 'Managed Deployment Platform for SaaS Teams',
+  title: 'Apployd Managed Deployment Platform',
   description:
-    'Deploy web apps and APIs with preview deployments, custom domains, instant rollbacks, and production-grade observability.',
+    'Deploy backend apps on your own infrastructure with Git-based workflows, preview deployments, custom domains, and real-time observability.',
   path: '/',
   keywords: [
+    'apployd',
+    'backend deployment platform',
+    'deploy on hetzner',
     'managed deployment platform',
     'vercel alternative',
     'saas deployment platform',
@@ -468,15 +471,15 @@ export default function HomePage() {
         <div className={styles.container}>
           <div className={styles.heroContent}>
             <div className={styles.heroMeta}>
-              <span>AI THAT WORKS.</span>
-              <span>VISION</span>
-              <span>SMART</span>
+              <span>DEPLOYMENT</span>
+              <span>PLATFORM</span>
+              <span>OBSERVABILITY</span>
             </div>
             <div className={styles.heroLayout}>
               <div className={styles.heroMain}>
-                <h1 className={styles.heroTitle}>Built & deploy with confidence.</h1>
+                <h1 className={styles.heroTitle}>Self-hosted deployment platform for backend apps.</h1>
                 <p className={styles.heroCopy}>
-                  Deploy backend systems with encrypted secrets, deterministic workflows, and live operational feedback.
+                  Apployd helps teams deploy APIs on their own infrastructure with encrypted secrets, deterministic Git-based workflows, and live operational feedback.
                 </p>
                 <div className={styles.heroActions}>
                   <Link href="/signup" className={styles.primaryButton}>

@@ -138,9 +138,17 @@ const isCanceledDeployment = (deployment: { status: string; errorMessage?: strin
   deployment.status === 'failed' &&
   (deployment.errorMessage ?? '').toLowerCase().includes('canceled by user');
 
-function formatDeploymentDuration(startIso: string, endIso?: string | null): string {
+const TERMINAL_DEPLOYMENT_STATUSES = new Set(['ready', 'failed', 'rolled_back']);
+
+function formatDeploymentDuration(startIso: string, endIso: string | null | undefined, status: string): string {
   const start = new Date(startIso).getTime();
-  const end = endIso ? new Date(endIso).getTime() : Date.now();
+  const parsedEnd = endIso ? new Date(endIso).getTime() : Number.NaN;
+  const end =
+    Number.isFinite(parsedEnd)
+      ? parsedEnd
+      : TERMINAL_DEPLOYMENT_STATUSES.has(status)
+      ? Number.NaN
+      : Date.now();
   if (!Number.isFinite(start) || !Number.isFinite(end)) {
     return '-';
   }
@@ -1124,6 +1132,14 @@ export default function ProjectDetailPage() {
               </div>
             ) : deployments.length ? (
               <div className="overflow-hidden rounded-xl border border-slate-200">
+                <div className="hidden md:grid md:grid-cols-[1.2fr_0.9fr_1fr_1fr_0.9fr_auto] md:items-center border-b border-slate-200 bg-slate-50 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                  <span>Deployment</span>
+                  <span>Status</span>
+                  <span>Source</span>
+                  <span>Git Ref</span>
+                  <span>Created</span>
+                  <span className="text-right">Actions</span>
+                </div>
                 {deployments.map((dep, index) => {
                   const isActive = project.activeDeploymentId === dep.id;
                   const repoLabel = resolveRepoLabel(project.repoFullName, dep.gitUrl ?? project.repoUrl, project.name);
@@ -1137,7 +1153,7 @@ export default function ProjectDetailPage() {
                     textClass: 'text-slate-800',
                   };
                   const isInProgress = IN_PROGRESS_DEPLOYMENT_STATUSES.has(dep.status);
-                  const durationLabel = formatDeploymentDuration(dep.createdAt, dep.finishedAt);
+                  const durationLabel = formatDeploymentDuration(dep.createdAt, dep.finishedAt, dep.status);
                   const branchLabel = dep.branch ?? project.branch ?? 'main';
                   const createdByLabel = dep.createdByName ?? 'workspace';
 
@@ -1158,7 +1174,7 @@ export default function ProjectDetailPage() {
                       } ${isActive ? 'bg-slate-100' : 'bg-white hover:bg-slate-50'}`}
                     >
                       <div className="min-w-0">
-                        <p className="mono truncate text-lg font-semibold text-slate-900">{dep.id.slice(0, 9)}</p>
+                        <p className="mono truncate text-base font-semibold text-slate-900">{dep.id.slice(0, 9)}</p>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
@@ -1216,7 +1232,7 @@ export default function ProjectDetailPage() {
                       </div>
 
                       {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-                      <div className="flex items-center gap-2 md:justify-end" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex flex-wrap items-center gap-2 md:min-w-[170px] md:justify-end" onClick={(e) => e.stopPropagation()}>
                         {isInProgress && (
                           <button
                             type="button"

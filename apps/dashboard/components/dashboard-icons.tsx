@@ -132,6 +132,15 @@ export function IconSettings(props: IconProps) {
   );
 }
 
+export function IconBell(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <path d="M5.2 8.4a4.8 4.8 0 1 1 9.6 0v2.1c0 .8.3 1.5.8 2.1l.8.8H3.6l.8-.8c.5-.6.8-1.3.8-2.1z" />
+      <path d="M8.2 15.2a1.8 1.8 0 0 0 3.6 0" />
+    </Glyph>
+  );
+}
+
 export function IconShield(props: IconProps) {
   return (
     <Glyph {...props}>

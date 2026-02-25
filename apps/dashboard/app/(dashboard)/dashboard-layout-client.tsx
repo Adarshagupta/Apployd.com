@@ -15,6 +15,7 @@ import {
   IconSettings,
   IconUsage,
 } from '../../components/dashboard-icons';
+import { TopbarNotifications } from '../../components/topbar-notifications';
 import { ThemeLogo } from '../../components/theme-logo';
 import { WorkspaceProvider, useWorkspaceContext } from '../../components/workspace-provider';
 import { apiClient, UnauthorizedError } from '../../lib/api';
@@ -296,6 +297,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               </div>
               <div className="dashboard-topbar-slot dashboard-topbar-right">
                 <TopbarSubscriptionChip />
+                <TopbarNotifications />
                 <Link href="/profile" className="dashboard-topbar-profile" aria-label="Open profile">
                   <IconProfile size={17} />
                   <span className="dashboard-topbar-profile-label">Profile</span>
