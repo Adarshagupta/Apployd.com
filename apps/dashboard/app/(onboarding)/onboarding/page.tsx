@@ -44,17 +44,6 @@ interface CurrentSubscriptionResponse {
 const PAID_PLAN_CODES = new Set(['dev', 'pro', 'max', 'enterprise']);
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due']);
 
-const normalizeRoute = (value: string | null | undefined, fallback: string): string => {
-  if (!value) {
-    return fallback;
-  }
-  const trimmed = value.trim();
-  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
-    return trimmed;
-  }
-  return fallback;
-};
-
 const parseStep = (value: string | null): WizardStep | null => {
   if (value === 'github' || value === 'team' || value === 'billing' || value === 'finish') {
     return value;

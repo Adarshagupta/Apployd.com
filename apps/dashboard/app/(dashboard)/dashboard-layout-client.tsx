@@ -140,7 +140,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     }
 
     setTheme('dark');
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (!topbarMenuOpen) {
@@ -202,7 +202,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       window.removeEventListener(THEME_UPDATED_EVENT, syncThemeFromStorage);
       window.removeEventListener('storage', syncThemeFromStorage);
     };
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -267,7 +267,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [router]);
 
   if (!authChecked) {
     return (
