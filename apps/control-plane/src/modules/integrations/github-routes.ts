@@ -1,6 +1,7 @@
 import { randomBytes } from 'crypto';
 
 import type { FastifyPluginAsync } from 'fastify';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { env } from '../../config/env.js';
@@ -651,29 +652,91 @@ const upsertGitHubConnectionForUser = async (input: {
   encryptedAccessToken: string;
   iv: string;
   authTag: string;
-}): Promise<void> => {
-  await prisma.gitHubConnection.upsert({
-    where: { userId: input.userId },
-    update: {
-      githubUserId: input.githubUserId,
-      username: input.username,
-      avatarUrl: input.avatarUrl,
-      tokenScope: input.tokenScope,
-      encryptedAccessToken: input.encryptedAccessToken,
-      iv: input.iv,
-      authTag: input.authTag,
-    },
-    create: {
-      userId: input.userId,
-      githubUserId: input.githubUserId,
-      username: input.username,
-      avatarUrl: input.avatarUrl,
-      tokenScope: input.tokenScope,
-      encryptedAccessToken: input.encryptedAccessToken,
-      iv: input.iv,
-      authTag: input.authTag,
-    },
-  });
+}): Promise<{ reassignedFromUserId: string | null }> => {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const existingByGithubUser = await tx.gitHubConnection.findUnique({
+        where: { githubUserId: input.githubUserId },
+        select: {
+          id: true,
+          userId: true,
+        },
+      });
+
+      if (existingByGithubUser && existingByGithubUser.userId !== input.userId) {
+        // Ensure current user has no stale connection before reassigning github identity.
+        await tx.gitHubConnection.deleteMany({
+          where: { userId: input.userId },
+        });
+
+        await tx.gitHubConnection.update({
+          where: { id: existingByGithubUser.id },
+          data: {
+            userId: input.userId,
+            username: input.username,
+            avatarUrl: input.avatarUrl,
+            tokenScope: input.tokenScope,
+            encryptedAccessToken: input.encryptedAccessToken,
+            iv: input.iv,
+            authTag: input.authTag,
+          },
+        });
+
+        await tx.user.updateMany({
+          where: {
+            id: existingByGithubUser.userId,
+            oauthProvider: 'github',
+            oauthSubject: input.githubUserId,
+          },
+          data: {
+            oauthProvider: null,
+            oauthSubject: null,
+          },
+        });
+
+        return {
+          reassignedFromUserId: existingByGithubUser.userId,
+        };
+      }
+
+      await tx.gitHubConnection.upsert({
+        where: { userId: input.userId },
+        update: {
+          githubUserId: input.githubUserId,
+          username: input.username,
+          avatarUrl: input.avatarUrl,
+          tokenScope: input.tokenScope,
+          encryptedAccessToken: input.encryptedAccessToken,
+          iv: input.iv,
+          authTag: input.authTag,
+        },
+        create: {
+          userId: input.userId,
+          githubUserId: input.githubUserId,
+          username: input.username,
+          avatarUrl: input.avatarUrl,
+          tokenScope: input.tokenScope,
+          encryptedAccessToken: input.encryptedAccessToken,
+          iv: input.iv,
+          authTag: input.authTag,
+        },
+      });
+
+      return {
+        reassignedFromUserId: null,
+      };
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError
+      && error.code === 'P2002'
+    ) {
+      throw new Error(
+        'This GitHub account is already linked to another Apployd account. Sign in with GitHub on that account or disconnect it first.',
+      );
+    }
+    throw error;
+  }
 };
 
 const normalizeEmail = (value?: string | null): string | null => {
