@@ -266,6 +266,8 @@ sudo bash setup.sh
 - [ ] Setup automated backups for database
 - [ ] Enable Docker log rotation
 - [ ] Setup monitoring alerts
+- [ ] Enable Falco runtime detection (`bash infra/scripts/install-falco.sh`)
+- [ ] Review Falco alerts (`sudo journalctl -u falco -f`)
 
 ### Firewall Setup
 ```bash

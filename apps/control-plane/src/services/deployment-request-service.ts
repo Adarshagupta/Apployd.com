@@ -153,6 +153,12 @@ export class DeploymentRequestService {
       );
     }
     assertSafeGitUrl(resolvedGitUrl);
+    if (resolvedBuildCommand) {
+      assertSafeDeploymentCommand('buildCommand', resolvedBuildCommand);
+    }
+    if (resolvedStartCommand) {
+      assertSafeDeploymentCommand('startCommand', resolvedStartCommand);
+    }
 
     const providedCommitSha = normalizeCommitSha(input.commitSha);
     const resolvedCommitSha = providedCommitSha
@@ -886,4 +892,52 @@ const assertSafeGitUrl = (gitUrl: string): void => {
       400,
     );
   }
+};
+
+const RISKY_DEPLOYMENT_COMMAND_PATTERNS: Array<{
+  pattern: RegExp;
+  reason: string;
+}> = [
+  {
+    pattern: /\b(nmap|masscan|zmap|rustscan|naabu|nikto|sqlmap|hping3|nping|hydra)\b/i,
+    reason: 'network scanning or offensive tooling',
+  },
+  {
+    pattern: /\b(?:nc|netcat)\b[^\n\r]*\s-z\b/i,
+    reason: 'TCP/UDP port probing (netcat -z)',
+  },
+  {
+    pattern: /\/dev\/tcp\//i,
+    reason: 'shell TCP probing via /dev/tcp',
+  },
+  {
+    pattern: /\b(?:apt|apt-get|apk|yum|dnf)\b[^\n\r]*(?:nmap|masscan|zmap|rustscan|naabu)\b/i,
+    reason: 'scanner installation during build/start',
+  },
+];
+
+const assertSafeDeploymentCommand = (
+  fieldName: 'buildCommand' | 'startCommand',
+  command: string,
+): void => {
+  if (env.ALLOW_RISKY_DEPLOYMENT_COMMANDS) {
+    return;
+  }
+
+  const normalized = command.trim();
+  if (!normalized) {
+    return;
+  }
+
+  const matchedRule = RISKY_DEPLOYMENT_COMMAND_PATTERNS.find((rule) =>
+    rule.pattern.test(normalized),
+  );
+  if (!matchedRule) {
+    return;
+  }
+
+  throw new DeploymentRequestError(
+    `${fieldName} is blocked by deployment security policy (${matchedRule.reason}). Contact platform admin to review this command.`,
+    400,
+  );
 };

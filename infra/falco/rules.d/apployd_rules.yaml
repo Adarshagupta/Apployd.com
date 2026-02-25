@@ -1,0 +1,66 @@
+- list: apployd_scanner_binaries
+  items: [nmap, masscan, zmap, rustscan, naabu, nikto, sqlmap, hping3, nping, hydra]
+
+- list: apployd_scanner_package_managers
+  items: [apt, apt-get, apk, yum, dnf, pip, pip3, npm, yarn, pnpm]
+
+- list: apployd_sensitive_egress_ports
+  items: [21, 22, 23, 25, 69, 445, 1433, 3306, 3389, 5432, 6379, 8080, 11211]
+
+- macro: apployd_runtime_container
+  condition: container and container.name startswith "apployd-"
+
+- rule: Apployd Scanner Binary In Runtime Container
+  desc: Detects known network scanner tools launched inside deployed Apployd runtime containers.
+  condition: apployd_runtime_container and spawned_process and proc.name in (apployd_scanner_binaries)
+  output: >
+    Apployd scanner tool execution detected
+    (container=%container.name user=%user.name proc=%proc.name cmdline=%proc.cmdline image=%container.image.repository:%container.image.tag)
+  priority: CRITICAL
+  tags: [apployd, container, runtime, reconnaissance]
+
+- rule: Apployd Scanner Installation Attempt In Runtime Container
+  desc: Detects package manager commands attempting to install scanner binaries in runtime containers.
+  condition: >
+    apployd_runtime_container and spawned_process and
+    proc.name in (apployd_scanner_package_managers) and
+    (
+      proc.cmdline contains " nmap" or
+      proc.cmdline contains " masscan" or
+      proc.cmdline contains " zmap" or
+      proc.cmdline contains " rustscan" or
+      proc.cmdline contains " naabu"
+    )
+  output: >
+    Apployd scanner installation attempt detected
+    (container=%container.name user=%user.name proc=%proc.name cmdline=%proc.cmdline)
+  priority: WARNING
+  tags: [apployd, container, runtime, supply_chain]
+
+- rule: Apployd Netcat Port Sweep Pattern
+  desc: Detects common netcat-based port sweep patterns in runtime containers.
+  condition: >
+    apployd_runtime_container and spawned_process and
+    proc.name in (nc, netcat) and
+    (
+      proc.cmdline contains " -z " or
+      proc.cmdline contains " -zv " or
+      proc.cmdline contains " --zero"
+    )
+  output: >
+    Apployd netcat sweep pattern detected
+    (container=%container.name user=%user.name proc=%proc.name cmdline=%proc.cmdline)
+  priority: CRITICAL
+  tags: [apployd, container, runtime, reconnaissance]
+
+- rule: Apployd Suspicious Egress Port In Runtime Container
+  desc: Detects outbound connections from runtime containers to high-risk service ports.
+  condition: >
+    apployd_runtime_container and evt.type=connect and
+    fd.l4proto=tcp and fd.rport in (apployd_sensitive_egress_ports) and
+    not fd.sip in ("127.0.0.1", "::1")
+  output: >
+    Apployd suspicious egress connection detected
+    (container=%container.name connection=%fd.name proc=%proc.name cmdline=%proc.cmdline)
+  priority: WARNING
+  tags: [apployd, container, runtime, network]

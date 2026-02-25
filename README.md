@@ -109,6 +109,7 @@ Important:
 - Secrets encrypted at rest (AES-256-GCM in `project_secrets`).
 - Audit trail (`audit_logs`) for sensitive actions.
 - UFW + Nginx edge hardening scripts for host setup.
+- Falco runtime threat detection with Apployd custom rules (`infra/falco/rules.d/apployd_rules.yaml`).
 
 ## Observability
 
@@ -176,6 +177,7 @@ bash infra/scripts/deploy-ubuntu.sh \
   --cloudflare-api-token <your-cloudflare-token> \
   --cloudflare-zone-id <your-cloudflare-zone-id> \
   --with-provision \
+  --with-falco \
   --run-certbot
 ```
 

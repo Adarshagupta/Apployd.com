@@ -1,6 +1,45 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+
+usage() {
+  cat <<'EOF'
+Provision Ubuntu host dependencies for Apployd.
+
+Usage:
+  bash infra/scripts/provision-ubuntu.sh [--with-falco|--without-falco]
+
+Options:
+  --with-falco     Install and enable Falco runtime security (default)
+  --without-falco  Skip Falco installation
+EOF
+}
+
+WITH_FALCO=true
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --with-falco)
+      WITH_FALCO=true
+      shift
+      ;;
+    --without-falco)
+      WITH_FALCO=false
+      shift
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1"
+      usage
+      exit 1
+      ;;
+  esac
+done
+
 # Provision Ubuntu 22.04 host for Apployd
 sudo apt-get update
 sudo apt-get install -y \
@@ -40,5 +79,9 @@ sudo ufw allow OpenSSH
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw --force enable
+
+if [[ "$WITH_FALCO" == "true" ]]; then
+  bash "$SCRIPT_DIR/install-falco.sh"
+fi
 
 echo "Provisioning complete."

@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { env } from './core/env.js';
 import { prisma } from './core/prisma.js';
 import { redis } from './core/redis.js';
+import { DockerAdapter } from './adapters/docker-adapter.js';
 import { startActiveContainerRecoveryLoop } from './monitoring/container-recovery.js';
 import { metricsRegistry } from './monitoring/metrics.js';
 import { startStatsCollector } from './monitoring/stats-collector.js';
@@ -61,6 +62,15 @@ const start = async () => {
 
   const consumer = new DeployQueueConsumer();
   const containerActionConsumer = new ContainerActionConsumer();
+  const docker = new DockerAdapter();
+
+  await docker.enforcePoliciesForRunningContainers().catch((error) => {
+    if (env.ENGINE_SECURITY_MODE === 'strict' || env.ENGINE_SECURITY_MODE === 'lockdown') {
+      throw new Error(`Failed to enforce startup container egress policies: ${(error as Error).message}`);
+    }
+    console.error('Failed to enforce startup container egress policies', error);
+  });
+
   startStatsCollector();
   startActiveContainerRecoveryLoop();
   console.log(`Deployment engine started in region ${env.ENGINE_REGION}`);

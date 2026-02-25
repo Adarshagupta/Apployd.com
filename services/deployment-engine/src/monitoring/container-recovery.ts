@@ -1,10 +1,13 @@
-import { ContainerStatus, SleepStatus, type Prisma } from '@prisma/client';
+import { ContainerStatus, DeploymentStatus, SleepStatus, type Prisma } from '@prisma/client';
 
 import { DockerAdapter } from '../adapters/docker-adapter.js';
+import { env } from '../core/env.js';
 import { prisma } from '../core/prisma.js';
+import { SecurityIncidentService } from '../security/security-incident-service.js';
 
 const INITIAL_DELAY_MS = 10_000;
 const RECOVERY_INTERVAL_MS = 60_000;
+const securityIncidentService = new SecurityIncidentService();
 
 interface RecoveryTarget {
   deploymentId: string;
@@ -24,6 +27,7 @@ interface RecoverySummary {
   policiesEnsured: number;
   restarted: number;
   markedCrashed: number;
+  securityBlocked: number;
   failures: number;
 }
 
@@ -118,6 +122,7 @@ const recoverActiveContainersOnce = async (): Promise<RecoverySummary> => {
     policiesEnsured: 0,
     restarted: 0,
     markedCrashed: 0,
+    securityBlocked: 0,
     failures: 0,
   };
 
@@ -132,6 +137,48 @@ const recoverActiveContainersOnce = async (): Promise<RecoverySummary> => {
       console.warn(
         `Container recovery: failed to ensure restart policy for ${target.container.dockerContainerId}: ${(error as Error).message}`,
       );
+    }
+
+    try {
+      await docker.enforceContainerSecurityPolicy(target.container.dockerContainerId);
+    } catch (error) {
+      summary.failures += 1;
+      const errorMessage = (error as Error).message;
+      await docker.stopContainer(target.container.dockerContainerId).catch(() => undefined);
+      const marked = await markContainerCrashed(
+        target,
+        'Container blocked because security policy could not be enforced',
+        {
+          reason: 'security_policy_enforcement_failed',
+          error: errorMessage,
+          securityMode: env.ENGINE_SECURITY_MODE,
+        },
+      );
+      if (marked) {
+        summary.markedCrashed += 1;
+      }
+      await securityIncidentService
+        .recordAutoBlockedIncident({
+          deploymentId: target.deploymentId,
+          containerId: target.container.id,
+          reasonCode: 'security_policy_enforcement_failed',
+          severity: 'high',
+          title: 'Container blocked by runtime security policy',
+          description:
+            'Runtime network policy enforcement failed and the container was automatically stopped.',
+          evidence: {
+            error: errorMessage,
+            securityMode: env.ENGINE_SECURITY_MODE,
+            dockerContainerId: target.container.dockerContainerId,
+          },
+        })
+        .catch((incidentError) => {
+          console.error(
+            `Container recovery: failed to record security incident for ${target.container.id}`,
+            incidentError,
+          );
+        });
+      continue;
     }
 
     const runtime = await docker.getContainerRuntimeState(target.container.dockerContainerId);
@@ -160,6 +207,94 @@ const recoverActiveContainersOnce = async (): Promise<RecoverySummary> => {
             lastRequestAt: new Date(),
           },
         });
+      }
+
+      if (env.ENGINE_SECURITY_MODE !== 'off') {
+        const outbound = await docker.inspectOutboundConnections(target.container.dockerContainerId);
+        if (outbound?.suspicious) {
+          const message =
+            `Security policy detected suspicious outbound network activity ` +
+            `(remoteHosts=${outbound.distinctRemoteHosts}, remotePorts=${outbound.distinctRemotePorts}, synSent=${outbound.synSentConnections}).`;
+
+          if (
+            env.ENGINE_SECURITY_AUTO_BLOCK &&
+            (env.ENGINE_SECURITY_MODE === 'strict' || env.ENGINE_SECURITY_MODE === 'lockdown')
+          ) {
+            await docker.stopContainer(target.container.dockerContainerId).catch(() => undefined);
+            await prisma.deployment.updateMany({
+              where: {
+                id: target.deploymentId,
+                status: {
+                  in: [
+                    DeploymentStatus.queued,
+                    DeploymentStatus.building,
+                    DeploymentStatus.deploying,
+                    DeploymentStatus.ready,
+                  ],
+                },
+              },
+              data: {
+                status: DeploymentStatus.failed,
+                errorMessage: 'Deployment blocked by runtime security policy due to suspicious outbound activity.',
+                finishedAt: new Date(),
+              },
+            }).catch(() => undefined);
+
+            const marked = await markContainerCrashed(
+              target,
+              `${message} Container auto-stopped by security policy.`,
+              {
+                reason: 'suspicious_outbound_activity',
+                distinctRemoteHosts: outbound.distinctRemoteHosts,
+                distinctRemotePorts: outbound.distinctRemotePorts,
+                synSentConnections: outbound.synSentConnections,
+                establishedConnections: outbound.establishedConnections,
+                sampleEndpoints: outbound.sampleRemoteEndpoints.join(', '),
+                securityMode: env.ENGINE_SECURITY_MODE,
+              },
+            );
+            if (marked) {
+              summary.markedCrashed += 1;
+            }
+            await securityIncidentService
+              .recordAutoBlockedIncident({
+                deploymentId: target.deploymentId,
+                containerId: target.container.id,
+                reasonCode: 'suspicious_outbound_activity',
+                severity: 'critical',
+                title: 'Container auto-blocked for suspicious outbound network activity',
+                description: message,
+                evidence: {
+                  distinctRemoteHosts: outbound.distinctRemoteHosts,
+                  distinctRemotePorts: outbound.distinctRemotePorts,
+                  synSentConnections: outbound.synSentConnections,
+                  establishedConnections: outbound.establishedConnections,
+                  sampleEndpoints: outbound.sampleRemoteEndpoints,
+                  securityMode: env.ENGINE_SECURITY_MODE,
+                  dockerContainerId: target.container.dockerContainerId,
+                },
+              })
+              .catch((incidentError) => {
+                console.error(
+                  `Container recovery: failed to record security incident for ${target.container.id}`,
+                  incidentError,
+                );
+              });
+            summary.securityBlocked += 1;
+            summary.failures += 1;
+            continue;
+          }
+
+          await recordRecoveryLog(target, 'warn', `${message} Monitoring mode only; container left running.`, {
+            reason: 'suspicious_outbound_activity',
+            distinctRemoteHosts: outbound.distinctRemoteHosts,
+            distinctRemotePorts: outbound.distinctRemotePorts,
+            synSentConnections: outbound.synSentConnections,
+            establishedConnections: outbound.establishedConnections,
+            sampleEndpoints: outbound.sampleRemoteEndpoints.join(', '),
+            securityMode: env.ENGINE_SECURITY_MODE,
+          });
+        }
       }
       continue;
     }
@@ -238,9 +373,14 @@ export const startActiveContainerRecoveryLoop = (): void => {
 
     try {
       const summary = await recoverActiveContainersOnce();
-      if (summary.restarted > 0 || summary.markedCrashed > 0 || summary.failures > 0) {
+      if (
+        summary.restarted > 0 ||
+        summary.markedCrashed > 0 ||
+        summary.securityBlocked > 0 ||
+        summary.failures > 0
+      ) {
         console.log(
-          `Container recovery (${source}): scanned=${summary.scanned}, policies=${summary.policiesEnsured}, restarted=${summary.restarted}, crashed=${summary.markedCrashed}, failures=${summary.failures}`,
+          `Container recovery (${source}): scanned=${summary.scanned}, policies=${summary.policiesEnsured}, restarted=${summary.restarted}, crashed=${summary.markedCrashed}, securityBlocked=${summary.securityBlocked}, failures=${summary.failures}`,
         );
       }
     } catch (error) {

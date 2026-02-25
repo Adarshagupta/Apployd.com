@@ -9,7 +9,7 @@
 
 ## First-time setup
 
-1. `bash infra/scripts/deploy-ubuntu.sh --public-domain apployd.com --base-domain apployd.com --preview-base-domain apployd.com --preview-domain-style project --certbot-email ops@apployd.com --cloudflare-api-token <token> --cloudflare-zone-id <zone-id> --with-provision --run-certbot`
+1. `bash infra/scripts/deploy-ubuntu.sh --public-domain apployd.com --base-domain apployd.com --preview-base-domain apployd.com --preview-domain-style project --certbot-email ops@apployd.com --cloudflare-api-token <token> --cloudflare-zone-id <zone-id> --with-provision --with-falco --run-certbot`
 2. Verify generated env files:
    - `apps/control-plane/.env`
    - `services/deployment-engine/.env`
@@ -27,6 +27,8 @@
 - Engine metrics: `GET :9102/metrics`
 - Grafana dashboard reachable on configured port
 - Stripe webhook endpoint receiving events
+- Falco running: `sudo systemctl status falco --no-pager`
+- Falco alerts stream: `sudo journalctl -u falco -f`
 
 ## Common incidents
 
@@ -34,3 +36,4 @@
 - Certificate failure: validate DNS propagation and certbot rate limits.
 - Quota rejection: check subscription pool and project allocation caps.
 - Past due billing: verify card/payment method on Stripe customer.
+- Suspicious network behavior: review Falco alerts and isolate offending deployment container.

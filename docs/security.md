@@ -6,6 +6,9 @@
 - Containers run as non-root (`uid:gid 1001:1001`).
 - Read-only root filesystem enabled by default.
 - Isolated Docker network (`apployd-net`) for east-west traffic.
+- Falco host sensor for syscall/runtime threat detection with Apployd-specific rules:
+  - `infra/falco/rules.d/apployd_rules.yaml`
+  - install via `infra/scripts/install-falco.sh`
 
 ## API Security
 
@@ -32,6 +35,10 @@
   - `Strict-Transport-Security` (TLS vhosts)
 - Cloudflare proxy records to mask origin and add DDoS/WAF layer.
 - UFW baseline rules via `infra/scripts/provision-ubuntu.sh`.
+- Runtime outbound abuse detection + auto-block controls in deployment-engine:
+  - `ENGINE_SECURITY_MODE`
+  - `ENGINE_SECURITY_AUTO_BLOCK`
+  - `ENGINE_EGRESS_ALLOWED_TCP_PORTS` / `ENGINE_EGRESS_BLOCKED_TCP_PORTS`
 
 ## Supply Chain Guardrails
 

@@ -117,6 +117,7 @@ const envSchema = z.object({
   PREVIEW_DOMAIN_STYLE: z.enum(['project', 'project_ref']).default('project_ref'),
   DEFAULT_REGION: z.string().default('fsn1'),
   ALLOW_PRIVATE_GIT_HOSTS: booleanFromEnv.optional(),
+  ALLOW_RISKY_DEPLOYMENT_COMMANDS: booleanFromEnv.optional(),
   AUTO_PROVISION_DEV_SERVER: booleanFromEnv.optional(),
   DEV_SERVER_NAME: z.string().min(2).default('local-dev-1'),
   DEV_SERVER_IPV4: z.string().ip({ version: 'v4' }).default('127.0.0.1'),
@@ -145,6 +146,7 @@ export const env = {
   INVITE_ALLOWED_EMAIL_DOMAINS: parsedEnv.INVITE_ALLOWED_EMAIL_DOMAINS ?? ['company.com'],
   INVITE_REMINDER_ENABLED: parsedEnv.INVITE_REMINDER_ENABLED ?? true,
   ALLOW_PRIVATE_GIT_HOSTS: parsedEnv.ALLOW_PRIVATE_GIT_HOSTS ?? false,
+  ALLOW_RISKY_DEPLOYMENT_COMMANDS: parsedEnv.ALLOW_RISKY_DEPLOYMENT_COMMANDS ?? false,
   AUTO_PROVISION_DEV_SERVER:
     parsedEnv.AUTO_PROVISION_DEV_SERVER ?? parsedEnv.NODE_ENV !== 'production',
 };

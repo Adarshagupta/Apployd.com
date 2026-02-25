@@ -15,6 +15,7 @@ Usage:
     --preview-domain-style project \
     --certbot-email ops@apployd.com \
     --with-provision \
+    --with-falco \
     --run-certbot
 
 Required flags:
@@ -35,6 +36,8 @@ Optional flags:
   --cloudflare-api-token  Cloudflare API token override
   --cloudflare-zone-id    Cloudflare zone ID override
   --with-provision        Run host package provisioning first
+  --with-falco            Install Falco during provisioning (default when --with-provision)
+  --without-falco         Skip Falco installation during provisioning
   --run-certbot           Run certbot for public domain after Nginx config
 EOF
 }
@@ -54,6 +57,7 @@ ENCRYPTION_KEY_VALUE=""
 CLOUDFLARE_API_TOKEN_VALUE=""
 CLOUDFLARE_ZONE_ID_VALUE=""
 WITH_PROVISION=false
+WITH_FALCO=true
 RUN_CERTBOT=false
 
 while [[ $# -gt 0 ]]; do
@@ -118,6 +122,14 @@ while [[ $# -gt 0 ]]; do
       WITH_PROVISION=true
       shift
       ;;
+    --with-falco)
+      WITH_FALCO=true
+      shift
+      ;;
+    --without-falco)
+      WITH_FALCO=false
+      shift
+      ;;
     --run-certbot)
       RUN_CERTBOT=true
       shift
@@ -147,7 +159,13 @@ if [[ -z "$CERTBOT_EMAIL" ]]; then
 fi
 
 if [[ "$WITH_PROVISION" == "true" ]]; then
-  bash "$SCRIPT_DIR/provision-ubuntu.sh"
+  provision_args=()
+  if [[ "$WITH_FALCO" == "true" ]]; then
+    provision_args+=(--with-falco)
+  else
+    provision_args+=(--without-falco)
+  fi
+  bash "$SCRIPT_DIR/provision-ubuntu.sh" "${provision_args[@]}"
 fi
 
 bash "$SCRIPT_DIR/configure-nginx.sh"

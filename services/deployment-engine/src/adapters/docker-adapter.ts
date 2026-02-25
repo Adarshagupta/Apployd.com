@@ -6,6 +6,7 @@ import { join } from 'path';
 
 import { runCommand, runCommandStreaming, type LogCallback } from '../core/run-command.js';
 import { env } from '../core/env.js';
+import { EgressGuard } from '../security/egress-guard.js';
 
 const shellEscape = (value: string) =>
   process.platform === 'win32' ? `"${value.replace(/"/g, '\\"')}"` : `'${value.replace(/'/g, `'\"'\"'`)}'`;
@@ -559,7 +560,18 @@ interface ContainerRuntimeState {
   error: string;
 }
 
+export interface OutboundConnectionSummary {
+  suspicious: boolean;
+  distinctRemoteHosts: number;
+  distinctRemotePorts: number;
+  synSentConnections: number;
+  establishedConnections: number;
+  sampleRemoteEndpoints: string[];
+}
+
 export class DockerAdapter {
+  private readonly egressGuard = new EgressGuard();
+
   /**
    * Build a Docker image entirely inside Docker — git clone, dependency
    * install, and build all happen in containerised stages.  The only
@@ -716,6 +728,12 @@ export class DockerAdapter {
     ].join(' ');
 
     const dockerContainerId = await runCommand(cmd);
+    try {
+      await this.enforceContainerEgressPolicy(dockerContainerId);
+    } catch (error) {
+      await runCommand(`docker stop ${shellEscape(dockerContainerId)}`).catch(() => undefined);
+      throw error;
+    }
     return { dockerContainerId, hostPort };
   }
 
@@ -730,10 +748,17 @@ export class DockerAdapter {
 
   async stopContainer(containerNameOrId: string): Promise<void> {
     await runCommand(`docker stop ${shellEscape(containerNameOrId)}`).catch(() => undefined);
+    await this.egressGuard.removePolicy(containerNameOrId).catch(() => undefined);
   }
 
   async startContainer(containerNameOrId: string): Promise<void> {
     await runCommand(`docker start ${shellEscape(containerNameOrId)}`).catch(() => undefined);
+    try {
+      await this.enforceContainerEgressPolicy(containerNameOrId);
+    } catch (error) {
+      await runCommand(`docker stop ${shellEscape(containerNameOrId)}`).catch(() => undefined);
+      throw error;
+    }
   }
 
   /**
@@ -843,6 +868,82 @@ export class DockerAdapter {
 
   async getContainerRuntimeState(containerNameOrId: string): Promise<ContainerRuntimeState | null> {
     return this.inspectContainerState(containerNameOrId);
+  }
+
+  async enforcePoliciesForRunningContainers(): Promise<void> {
+    await this.egressGuard.enforcePoliciesForRunningContainers();
+  }
+
+  async enforceContainerSecurityPolicy(containerNameOrId: string): Promise<void> {
+    await this.enforceContainerEgressPolicy(containerNameOrId);
+  }
+
+  async inspectOutboundConnections(containerNameOrId: string): Promise<OutboundConnectionSummary | null> {
+    try {
+      const raw = await runCommand(
+        `docker exec ${shellEscape(containerNameOrId)} sh -lc ${shellEscape('cat /proc/net/tcp /proc/net/tcp6 2>/dev/null || true')}`,
+      );
+      const lines = raw.split(/\r?\n/);
+      const distinctRemoteHosts = new Set<string>();
+      const distinctRemotePorts = new Set<number>();
+      const sampleRemoteEndpoints = new Set<string>();
+      let synSentConnections = 0;
+      let establishedConnections = 0;
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('sl')) {
+          continue;
+        }
+
+        const parts = trimmed.split(/\s+/);
+        if (parts.length < 4) {
+          continue;
+        }
+
+        const remoteAddress = parts[2] ?? '';
+        const state = parts[3] ?? '';
+        if (state !== '01' && state !== '02') {
+          continue;
+        }
+
+        const endpoint = this.parseProcNetRemoteEndpoint(remoteAddress);
+        if (!endpoint) {
+          continue;
+        }
+        if (env.ENGINE_SECURITY_ALLOW_PRIVATE_EGRESS && this.isPrivateOrLoopbackAddress(endpoint.host)) {
+          continue;
+        }
+
+        distinctRemoteHosts.add(endpoint.host);
+        distinctRemotePorts.add(endpoint.port);
+        if (sampleRemoteEndpoints.size < 6) {
+          sampleRemoteEndpoints.add(`${endpoint.host}:${endpoint.port}`);
+        }
+
+        if (state === '02') {
+          synSentConnections += 1;
+        } else {
+          establishedConnections += 1;
+        }
+      }
+
+      const suspicious =
+        distinctRemotePorts.size >= env.ENGINE_SECURITY_MAX_DISTINCT_REMOTE_PORTS
+        || distinctRemoteHosts.size >= env.ENGINE_SECURITY_MAX_DISTINCT_REMOTE_HOSTS
+        || synSentConnections >= env.ENGINE_SECURITY_MAX_SYN_SENT_CONNECTIONS;
+
+      return {
+        suspicious,
+        distinctRemoteHosts: distinctRemoteHosts.size,
+        distinctRemotePorts: distinctRemotePorts.size,
+        synSentConnections,
+        establishedConnections,
+        sampleRemoteEndpoints: [...sampleRemoteEndpoints],
+      };
+    } catch {
+      return null;
+    }
   }
 
   private async containerProbe(containerId: string, containerPort: number): Promise<boolean> {
@@ -978,6 +1079,82 @@ export class DockerAdapter {
     } catch {
       return null;
     }
+  }
+
+  private async enforceContainerEgressPolicy(containerNameOrId: string): Promise<void> {
+    if (env.ENGINE_SECURITY_MODE === 'off') {
+      return;
+    }
+
+    try {
+      await this.egressGuard.applyPolicy(containerNameOrId);
+    } catch (error) {
+      const message = `Container egress policy enforcement failed for ${containerNameOrId}: ${(error as Error).message}`;
+      if (this.shouldFailClosedOnSecurityError()) {
+        throw new Error(message);
+      }
+      console.warn(message);
+    }
+  }
+
+  private shouldFailClosedOnSecurityError(): boolean {
+    return env.ENGINE_SECURITY_MODE === 'strict' || env.ENGINE_SECURITY_MODE === 'lockdown';
+  }
+
+  private parseProcNetRemoteEndpoint(value: string): { host: string; port: number } | null {
+    const [hostHex = '', portHex = ''] = value.split(':');
+    if (!hostHex || !portHex) {
+      return null;
+    }
+
+    const host = this.decodeProcNetIpv4(hostHex);
+    if (!host) {
+      return null;
+    }
+
+    const port = Number.parseInt(portHex, 16);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      return null;
+    }
+
+    return { host, port };
+  }
+
+  private decodeProcNetIpv4(encoded: string): string | null {
+    if (!/^[0-9a-fA-F]{8}$/.test(encoded)) {
+      return null;
+    }
+
+    const bytes = encoded.match(/.{2}/g);
+    if (!bytes || bytes.length !== 4) {
+      return null;
+    }
+
+    const octets = [...bytes]
+      .reverse()
+      .map((part) => Number.parseInt(part, 16));
+    if (octets.some((octet) => Number.isNaN(octet) || octet < 0 || octet > 255)) {
+      return null;
+    }
+
+    return octets.join('.');
+  }
+
+  private isPrivateOrLoopbackAddress(host: string): boolean {
+    const parts = host.split('.').map((part) => Number(part));
+    if (parts.length !== 4 || parts.some((part) => Number.isNaN(part) || part < 0 || part > 255)) {
+      return false;
+    }
+
+    const [a = 0, b = 0] = parts;
+    return (
+      a === 10
+      || a === 127
+      || a === 0
+      || (a === 169 && b === 254)
+      || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168)
+    );
   }
 }
 

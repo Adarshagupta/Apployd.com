@@ -116,6 +116,20 @@ enum ContentPostStatus {
   archived
 }
 
+enum SecurityIncidentStatus {
+  open
+  appealed
+  reviewing
+  resolved
+  dismissed
+}
+
+enum SecurityAppealStatus {
+  submitted
+  approved
+  rejected
+}
+
 model User {
   id             String               @id @default(cuid())
   email          String               @unique
@@ -137,6 +151,9 @@ model User {
   auditLogs      AuditLog[]
   githubConnection GitHubConnection?
   contentPosts   ContentPost[]        @relation("ContentPostAuthor")
+  resolvedSecurityIncidents SecurityIncident[] @relation("SecurityIncidentResolver")
+  submittedSecurityAppeals SecurityIncidentAppeal[] @relation("SecurityIncidentAppealRequester")
+  decidedSecurityAppeals SecurityIncidentAppeal[] @relation("SecurityIncidentAppealDecider")
 
   @@index([oauthProvider, oauthSubject])
   @@map("users")
@@ -156,6 +173,8 @@ model Organization {
   subscriptions     Subscription[]
   usageRecords      UsageRecord[]
   auditLogs         AuditLog[]
+  securityIncidents SecurityIncident[]
+  securityAppeals   SecurityIncidentAppeal[]
 
   @@index([ownerId])
   @@map("organizations")
@@ -267,6 +286,8 @@ model Project {
   metrics              MetricEntry[]
   secrets              ProjectSecret[]
   customDomains        CustomDomain[]
+  securityIncidents    SecurityIncident[]
+  securityAppeals      SecurityIncidentAppeal[]
 
   @@unique([organizationId, slug])
   @@index([organizationId, createdAt])
@@ -324,6 +345,7 @@ model Deployment {
   server          Server?          @relation(fields: [serverId], references: [id], onDelete: SetNull)
   container       Container?       @relation(fields: [containerId], references: [id], onDelete: SetNull)
   logs            LogEntry[]
+  securityIncidents SecurityIncident[]
 
   @@index([projectId, createdAt])
   @@index([serverId, status])
@@ -352,6 +374,7 @@ model Container {
   deployments         Deployment[]
   logs                LogEntry[]
   metrics             MetricEntry[]
+  securityIncidents   SecurityIncident[]
 
   @@index([projectId, status])
   @@index([serverId, status])
@@ -521,6 +544,66 @@ model ContentPost {
   @@index([kind, publishedAt])
   @@index([createdAt])
   @@map("content_posts")
+}
+
+model SecurityIncident {
+  id            String               @id @default(cuid())
+  organizationId String
+  projectId     String
+  deploymentId  String?
+  containerId   String?
+  category      String               @default("runtime_abuse")
+  severity      String               @default("high")
+  title         String
+  description   String
+  reasonCode    String?
+  blocked       Boolean              @default(true)
+  status        SecurityIncidentStatus @default(open)
+  evidence      Json?
+  detectedAt    DateTime             @default(now())
+  blockedAt     DateTime?
+  resolvedAt    DateTime?
+  resolvedById  String?
+  resolutionNote String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  organization  Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project       Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deployment    Deployment?          @relation(fields: [deploymentId], references: [id], onDelete: SetNull)
+  container     Container?           @relation(fields: [containerId], references: [id], onDelete: SetNull)
+  resolvedBy    User?                @relation("SecurityIncidentResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  appeals       SecurityIncidentAppeal[]
+
+  @@index([organizationId, status, detectedAt])
+  @@index([projectId, status, detectedAt])
+  @@index([deploymentId, detectedAt])
+  @@index([containerId, detectedAt])
+  @@map("security_incidents")
+}
+
+model SecurityIncidentAppeal {
+  id            String               @id @default(cuid())
+  incidentId    String
+  organizationId String
+  projectId     String
+  requestedById String
+  status        SecurityAppealStatus @default(submitted)
+  message       String
+  decidedById   String?
+  decisionNote  String?
+  decidedAt     DateTime?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  incident      SecurityIncident     @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  organization  Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project       Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requestedBy   User                 @relation("SecurityIncidentAppealRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  decidedBy     User?                @relation("SecurityIncidentAppealDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([incidentId, createdAt])
+  @@index([organizationId, status, createdAt])
+  @@index([projectId, status, createdAt])
+  @@map("security_incident_appeals")
 }
 
 model ProjectSecret {

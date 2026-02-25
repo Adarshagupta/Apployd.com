@@ -9,7 +9,7 @@ import { apiClient } from '../lib/api';
 import { IconBell } from './dashboard-icons';
 import { useWorkspaceContext } from './workspace-provider';
 
-type NotificationCategory = 'invites' | 'deployments' | 'subscriptions' | 'usages';
+type NotificationCategory = 'invites' | 'deployments' | 'subscriptions' | 'usages' | 'security';
 type NotificationTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
 
 interface PendingInvite {
@@ -54,6 +54,20 @@ interface UsageSummaryResponse {
   usage?: Record<string, string | number | null | undefined>;
 }
 
+interface SecurityIncidentSummary {
+  id: string;
+  projectName: string;
+  title: string;
+  severity: string;
+  status: string;
+  blocked: boolean;
+  detectedAt: string;
+}
+
+interface SecurityIncidentsResponse {
+  incidents?: SecurityIncidentSummary[];
+}
+
 interface NotificationItem {
   id: string;
   category: NotificationCategory;
@@ -72,6 +86,7 @@ const CATEGORY_LABELS: Record<NotificationCategory, string> = {
   deployments: 'Deployments',
   subscriptions: 'Subscriptions',
   usages: 'Usage',
+  security: 'Security',
 };
 
 function toNumber(value: string | number | null | undefined): number {
@@ -189,6 +204,15 @@ function getFallbackNotifications(reason: string): NotificationItem[] {
       tone: 'neutral',
       actionRequired: false,
     },
+    {
+      id: 'security',
+      category: 'security',
+      title: 'Security unavailable',
+      detail: reason,
+      href: '/security-center',
+      tone: 'neutral',
+      actionRequired: false,
+    },
   ];
 }
 
@@ -215,11 +239,12 @@ export function TopbarNotifications() {
     setError('');
 
     try {
-      const [invitesResult, deploymentsResult, subscriptionResult, usageResult] = await Promise.allSettled([
+      const [invitesResult, deploymentsResult, subscriptionResult, usageResult, securityResult] = await Promise.allSettled([
         apiClient.get('/teams/invites/pending') as Promise<PendingInvitesResponse>,
         apiClient.get(`/deployments/recent?organizationId=${selectedOrganizationId}&limit=5`) as Promise<RecentDeploymentsResponse>,
         apiClient.get(`/plans/current?organizationId=${selectedOrganizationId}`) as Promise<CurrentSubscriptionResponse>,
         apiClient.get(`/usage/summary?organizationId=${selectedOrganizationId}`) as Promise<UsageSummaryResponse>,
+        apiClient.get(`/security/incidents?organizationId=${selectedOrganizationId}&status=active&limit=5`) as Promise<SecurityIncidentsResponse>,
       ]);
 
       const invites =
@@ -238,6 +263,10 @@ export function TopbarNotifications() {
         usageResult.status === 'fulfilled'
           ? usageResult.value.usage
           : undefined;
+      const securityIncidents =
+        securityResult.status === 'fulfilled'
+          ? (securityResult.value.incidents ?? [])
+          : [];
 
       const latestInvite = invites[0];
       const inviteCount = invites.length;
@@ -302,6 +331,23 @@ export function TopbarNotifications() {
         ? `CPU ${formatCount(cpuCount)} mCPU-s | RAM ${formatCount(ramCount)} MB-s.`
         : 'Usage activity appears here after traffic and runtime events.';
 
+      const activeIncidents = securityIncidents.filter((incident) => incident.blocked);
+      const topIncident = activeIncidents[0];
+      const securityActionRequired = activeIncidents.length > 0;
+      const securitySeverity = (topIncident?.severity ?? '').toLowerCase();
+      const securityTone: NotificationTone =
+        securitySeverity === 'critical' || securitySeverity === 'high'
+          ? 'danger'
+          : securityActionRequired
+            ? 'warning'
+            : 'neutral';
+      const securityTitle = securityActionRequired
+        ? `${activeIncidents.length} active security incident${activeIncidents.length === 1 ? '' : 's'}`
+        : 'No active security incidents';
+      const securityDetail = topIncident
+        ? `${topIncident.projectName}: ${topIncident.title} (${formatStatus(topIncident.status)}).`
+        : 'Runtime abuse detections and blocks will appear here.';
+
       const nextNotifications: NotificationItem[] = [
         {
           id: 'invites',
@@ -339,11 +385,21 @@ export function TopbarNotifications() {
           tone: hasUsageData ? 'info' : 'neutral',
           actionRequired: false,
         },
+        {
+          id: 'security',
+          category: 'security',
+          title: securityTitle,
+          detail: securityDetail,
+          href: '/security-center',
+          tone: securityTone,
+          actionRequired: securityActionRequired,
+        },
       ];
 
       const nextUnreadCount = inviteCount
         + (deploymentActionRequired ? 1 : 0)
-        + (subscriptionActionRequired ? 1 : 0);
+        + (subscriptionActionRequired ? 1 : 0)
+        + (securityActionRequired ? 1 : 0);
 
       setNotifications(nextNotifications);
       setUnreadCount(nextUnreadCount);
@@ -352,7 +408,8 @@ export function TopbarNotifications() {
         invitesResult.status === 'rejected'
         || deploymentsResult.status === 'rejected'
         || subscriptionResult.status === 'rejected'
-        || usageResult.status === 'rejected';
+        || usageResult.status === 'rejected'
+        || securityResult.status === 'rejected';
       if (hasRequestFailure) {
         setError('Some notifications could not be refreshed.');
       }
