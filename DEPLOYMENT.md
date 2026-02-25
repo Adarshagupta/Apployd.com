@@ -223,7 +223,9 @@ Team invites now support delivery timeline, resend, bounce/complaint handling, r
 Set these control-plane env vars:
 
 ```bash
-INVITE_ALLOWED_EMAIL_DOMAINS=company.com
+# Optional. Leave empty to allow inviting any email domain.
+# Example to restrict: INVITE_ALLOWED_EMAIL_DOMAINS=company.com,partner.io
+INVITE_ALLOWED_EMAIL_DOMAINS=
 INVITE_WEBHOOK_TOKEN=replace-with-random-secret
 INVITE_REMINDER_ENABLED=true
 INVITE_REMINDER_DELAY_HOURS=24

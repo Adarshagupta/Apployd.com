@@ -388,7 +388,7 @@ export default function StandaloneOnboardingPage() {
                 <input
                   type="email"
                   className="field-input"
-                  placeholder="teammate@company.com"
+                  placeholder="teammate@gmail.com"
                   value={inviteEmail}
                   onChange={(event) => setInviteEmail(event.target.value)}
                 />

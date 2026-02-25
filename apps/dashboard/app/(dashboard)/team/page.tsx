@@ -283,7 +283,7 @@ export default function TeamPage() {
           <label>
             <span className="field-label">Email</span>
             <input
-              placeholder="teammate@company.com"
+              placeholder="teammate@gmail.com"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               className="field-input"
