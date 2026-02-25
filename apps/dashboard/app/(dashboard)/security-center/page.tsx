@@ -185,7 +185,7 @@ export default function SecurityPage() {
   const [appealingIncidentId, setAppealingIncidentId] = useState('');
   const [unblockingIncidentId, setUnblockingIncidentId] = useState('');
 
-  const highlightedIncidentId = searchParams.get('incidentId') ?? '';
+  const highlightedIncidentId = searchParams?.get('incidentId') ?? '';
   const canUnblockIncidents = selectedOrganization?.role === 'owner' || selectedOrganization?.role === 'admin';
 
   useEffect(() => {
