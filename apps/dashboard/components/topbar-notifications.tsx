@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Route } from 'next';
 
 import { apiClient } from '../lib/api';
 import { IconBell } from './dashboard-icons';
@@ -58,7 +59,7 @@ interface NotificationItem {
   category: NotificationCategory;
   title: string;
   detail: string;
-  href: string;
+  href: Route;
   tone: NotificationTone;
   actionRequired: boolean;
 }
@@ -141,13 +142,13 @@ function formatStatus(value: string | null | undefined): string {
     .join(' ');
 }
 
-function resolveDeploymentHref(deployment: RecentDeployment | undefined): string {
+function resolveDeploymentHref(deployment: RecentDeployment | undefined): Route {
   const projectId = deployment?.project?.id;
   const deploymentId = deployment?.id;
   if (!projectId || !deploymentId) {
     return '/projects';
   }
-  return `/projects/${projectId}/deployments/${deploymentId}`;
+  return `/projects/${projectId}/deployments/${deploymentId}` as Route;
 }
 
 function getFallbackNotifications(reason: string): NotificationItem[] {
