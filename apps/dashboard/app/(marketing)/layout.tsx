@@ -13,7 +13,7 @@ const navLinks = [
   { href: '/security', label: 'Security' },
   { href: '/help', label: 'Help' },
   { href: '/contact', label: 'Contact' },
-];
+] as const;
 
 export default function MarketingLayout({ children }: { children: ReactNode }) {
   return (
@@ -29,9 +29,9 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
           </Link>
           <nav className={styles.navLinks}>
             {navLinks.map((l) => (
-              <a key={l.href} href={l.href} className={styles.navLink}>
+              <Link key={l.href} href={l.href} className={styles.navLink}>
                 {l.label}
-              </a>
+              </Link>
             ))}
           </nav>
           <div className={styles.navActions}>
@@ -62,26 +62,26 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
               <p className={styles.footerHeading}>Product</p>
               <ul className={styles.footerList}>
                 <li><Link href="/#product" className={styles.footerLink}>Features</Link></li>
-                <li><a href="/pricing" className={styles.footerLink}>Pricing</a></li>
-                <li><a href="/docs" className={styles.footerLink}>Docs</a></li>
-                <li><a href="/security" className={styles.footerLink}>Security</a></li>
+                <li><Link href="/pricing" className={styles.footerLink}>Pricing</Link></li>
+                <li><Link href="/docs" className={styles.footerLink}>Docs</Link></li>
+                <li><Link href="/security" className={styles.footerLink}>Security</Link></li>
               </ul>
             </div>
             <div>
               <p className={styles.footerHeading}>Company</p>
               <ul className={styles.footerList}>
-                <li><a href="/about" className={styles.footerLink}>About</a></li>
-                <li><a href="/blog" className={styles.footerLink}>Blog</a></li>
-                <li><a href="/help" className={styles.footerLink}>Help</a></li>
-                <li><a href="/contact" className={styles.footerLink}>Contact</a></li>
+                <li><Link href="/about" className={styles.footerLink}>About</Link></li>
+                <li><Link href="/blog" className={styles.footerLink}>Blog</Link></li>
+                <li><Link href="/help" className={styles.footerLink}>Help</Link></li>
+                <li><Link href="/contact" className={styles.footerLink}>Contact</Link></li>
               </ul>
             </div>
             <div>
               <p className={styles.footerHeading}>Legal</p>
               <ul className={styles.footerList}>
-                <li><a href="/privacy" className={styles.footerLink}>Privacy</a></li>
-                <li><a href="/terms" className={styles.footerLink}>Terms</a></li>
-                <li><a href="/legal/compliance" className={styles.footerLink}>Compliance</a></li>
+                <li><Link href="/privacy" className={styles.footerLink}>Privacy</Link></li>
+                <li><Link href="/terms" className={styles.footerLink}>Terms</Link></li>
+                <li><Link href="/legal/compliance" className={styles.footerLink}>Compliance</Link></li>
               </ul>
             </div>
           </div>
