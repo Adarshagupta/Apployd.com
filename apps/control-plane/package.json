@@ -9,8 +9,9 @@
     "start": "node dist/src/server.js",
     "lint": "eslint src --ext .ts",
     "test": "npx vitest run",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:generate": "node ../../scripts/prisma-run.cjs generate",
+    "prisma:migrate": "node ../../scripts/prisma-run.cjs migrate dev",
+    "prisma:migrate:deploy": "node ../../scripts/prisma-run.cjs migrate deploy"
   },
   "dependencies": {
     "@apployd/shared": "0.1.0",
