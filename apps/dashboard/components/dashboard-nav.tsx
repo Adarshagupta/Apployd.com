@@ -36,6 +36,7 @@ const mainItems = [
     href: '/content',
     label: 'Content',
     icon: <IconContent title="Content" />,
+    contentAdminOnly: true,
   },
   {
     href: '/logs',
@@ -90,8 +91,25 @@ const supportItems = [
   },
 ];
 
-export function DashboardNav() {
+const CONTENT_ADMIN_EMAIL_DOMAIN = '@apployd.com';
+
+const canManageContent = (email: string | null): boolean => {
+  if (!email) {
+    return false;
+  }
+
+  const normalized = email.trim().toLowerCase();
+  return normalized.endsWith(CONTENT_ADMIN_EMAIL_DOMAIN) && normalized.length > CONTENT_ADMIN_EMAIL_DOMAIN.length;
+};
+
+interface DashboardNavProps {
+  userEmail?: string | null;
+}
+
+export function DashboardNav({ userEmail = null }: DashboardNavProps) {
   const pathname = usePathname() ?? '';
+  const showContentMenu = canManageContent(userEmail);
+  const visibleMainItems = mainItems.filter((item) => !item.contentAdminOnly || showContentMenu);
 
   const renderNavItem = (item: { href: string; label: string; icon: ReactNode }) => {
     const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -118,7 +136,7 @@ export function DashboardNav() {
 
       <nav className="nav-content">
         <div className="nav-section">
-          {mainItems.map(renderNavItem)}
+          {visibleMainItems.map(renderNavItem)}
         </div>
 
         <div className="nav-section">

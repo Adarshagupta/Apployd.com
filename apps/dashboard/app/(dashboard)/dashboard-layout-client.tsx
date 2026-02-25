@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 import { DashboardNav } from '../../components/dashboard-nav';
 import {
@@ -33,6 +33,10 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/content': {
     title: 'Content Studio',
     subtitle: 'Create, edit, and publish blog and news updates.',
+  },
+  '/onboarding': {
+    title: 'Onboarding',
+    subtitle: 'Complete initial setup for GitHub, team access, and billing.',
   },
   '/projects/new': {
     title: 'Create Project',
@@ -83,11 +87,33 @@ type DashboardTheme = 'light' | 'dark';
 const THEME_STORAGE_KEY = 'apployd_dashboard_theme';
 const AUTH_STORAGE_KEY = 'apployd_token';
 const THEME_UPDATED_EVENT = 'apployd:dashboard-theme-updated';
+const CONTENT_ADMIN_EMAIL_DOMAIN = '@apployd.com';
+
+interface AuthMeResponse {
+  user?: {
+    email?: string | null;
+  } | null;
+}
+
+interface OnboardingStatusResponse {
+  completed?: boolean;
+}
+
+const canManageContent = (email: string | null): boolean => {
+  if (!email) {
+    return false;
+  }
+
+  const normalized = email.trim().toLowerCase();
+  return normalized.endsWith(CONTENT_ADMIN_EMAIL_DOMAIN) && normalized.length > CONTENT_ADMIN_EMAIL_DOMAIN.length;
+};
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname() || '/overview';
+  const router = useRouter();
   const [theme, setTheme] = useState<DashboardTheme>('dark');
   const [authChecked, setAuthChecked] = useState(false);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [topbarMenuOpen, setTopbarMenuOpen] = useState(false);
   const topbarMenuRef = useRef<HTMLDivElement | null>(null);
   const copy = pageTitles[pathname as keyof typeof pageTitles] ?? {
@@ -96,6 +122,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   };
   const isProjectDetail = PROJECT_DETAIL_RE.test(pathname);
   const topbarTitle = isProjectDetail ? 'Project' : copy.title;
+  const showContentMenu = canManageContent(currentUserEmail);
   const shellClassName = useMemo(
     () => `app-shell ${theme === 'dark' ? 'theme-dark' : 'theme-light'}`,
     [theme],
@@ -197,8 +224,29 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
     apiClient
       .get('/auth/me')
-      .then(() => {
+      .then(async (data) => {
         if (!cancelled) {
+          const email = ((data as AuthMeResponse).user?.email ?? null);
+          setCurrentUserEmail(typeof email === 'string' && email.trim().length > 0 ? email : null);
+          const isOnboardingPath =
+            window.location.pathname === '/onboarding'
+            || window.location.pathname.startsWith('/onboarding/');
+
+          const onboarding = (await apiClient.get('/onboarding/status').catch(() => null)) as
+            | OnboardingStatusResponse
+            | null;
+          if (cancelled) {
+            return;
+          }
+          const completed = Boolean(onboarding?.completed);
+
+          if (!completed && !isOnboardingPath) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            router.replace('/onboarding' as any);
+          } else if (completed && isOnboardingPath) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            router.replace('/overview' as any);
+          }
           setAuthChecked(true);
         }
       })
@@ -211,6 +259,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         // For network errors or other issues, allow access (optimistic)
         // User will get proper 401 on actual API calls if token is bad
         if (!cancelled) {
+          setCurrentUserEmail(null);
           setAuthChecked(true);
         }
       });
@@ -237,7 +286,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     <WorkspaceProvider>
     <main className={shellClassName}>
       <div className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <DashboardNav />
+        <DashboardNav userEmail={currentUserEmail} />
 
         <section className="min-w-0">
           <header className="panel dashboard-topbar">
@@ -273,10 +322,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                         <IconPlus size={16} />
                         <span>Create Project</span>
                       </Link>
-                      <Link href="/content" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
-                        <IconContent size={16} />
-                        <span>Content</span>
-                      </Link>
+                      {showContentMenu ? (
+                        <Link href="/content" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                          <IconContent size={16} />
+                          <span>Content</span>
+                        </Link>
+                      ) : null}
                       <Link href="/usage" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
                         <IconUsage size={16} />
                         <span>Usage</span>
