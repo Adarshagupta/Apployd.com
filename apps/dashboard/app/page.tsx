@@ -33,6 +33,10 @@ const navLinks = [
   { href: '#product', label: 'Product' },
   { href: '/pricing', label: 'Pricing' },
   { href: '/docs', label: 'Docs' },
+  { href: '/blog', label: 'Blog' },
+  { href: '/security', label: 'Security' },
+  { href: '/help', label: 'Help' },
+  { href: '/contact', label: 'Contact' },
 ];
 
 const platformModules = [
@@ -477,7 +481,7 @@ export default function HomePage() {
             </div>
             <div className={styles.heroLayout}>
               <div className={styles.heroMain}>
-                <h1 className={styles.heroTitle}>Self-hosted deployment platform for backend apps.</h1>
+                <h1 className={styles.heroTitle}>Build & Deploy with confidence</h1>
                 <p className={styles.heroCopy}>
                   Apployd helps teams deploy APIs on their own infrastructure with encrypted secrets, deterministic Git-based workflows, and live operational feedback.
                 </p>
@@ -750,7 +754,7 @@ export default function HomePage() {
               <p className={styles.footerHeading}>Company</p>
               <ul className={styles.footerList}>
                 <li><a href="/about" className={styles.footerLink}>About</a></li>
-                <li><a href="/blog" className={styles.footerLink}>Blog</a></li>
+                <li><Link href="/blog" className={styles.footerLink}>Blog</Link></li>
                 <li><a href="/help" className={styles.footerLink}>Help</a></li>
                 <li><a href="/contact" className={styles.footerLink}>Contact</a></li>
               </ul>

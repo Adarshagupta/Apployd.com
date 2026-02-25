@@ -1,0 +1,123 @@
+import { siteUrl } from './seo';
+
+const LOCAL_API_FALLBACK = 'http://localhost:4000/api/v1';
+
+export type ContentPostKind = 'blog' | 'news';
+export type ContentPostStatus = 'draft' | 'published' | 'archived';
+
+export interface ContentPostRecord {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string;
+  content: string;
+  kind: ContentPostKind;
+  status: ContentPostStatus;
+  publishedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  readTimeMinutes: number;
+  author: {
+    name: string | null;
+    email: string;
+  };
+}
+
+const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
+
+export const resolveServerApiUrl = (): string => {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return trimTrailingSlash(process.env.NEXT_PUBLIC_API_URL);
+  }
+  if (process.env.API_URL) {
+    return trimTrailingSlash(process.env.API_URL);
+  }
+  return LOCAL_API_FALLBACK;
+};
+
+const parsePosts = (payload: unknown): ContentPostRecord[] => {
+  if (!payload || typeof payload !== 'object') {
+    return [];
+  }
+  const posts = (payload as { posts?: unknown }).posts;
+  if (!Array.isArray(posts)) {
+    return [];
+  }
+  return posts as ContentPostRecord[];
+};
+
+const parsePost = (payload: unknown): ContentPostRecord | null => {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+  const post = (payload as { post?: unknown }).post;
+  if (!post || typeof post !== 'object') {
+    return null;
+  }
+  return post as ContentPostRecord;
+};
+
+const toAbsoluteUrl = (path: string): string => `${resolveServerApiUrl()}${path}`;
+
+export async function fetchPublishedContentPosts(options?: {
+  kind?: 'all' | ContentPostKind;
+  limit?: number;
+  revalidateSeconds?: number;
+}): Promise<ContentPostRecord[]> {
+  const kind = options?.kind ?? 'all';
+  const limit = options?.limit ?? 48;
+  const revalidateSeconds = options?.revalidateSeconds ?? 180;
+  const query = new URLSearchParams({
+    kind,
+    limit: String(limit),
+  });
+
+  try {
+    const response = await fetch(toAbsoluteUrl(`/content/posts?${query.toString()}`), {
+      next: { revalidate: revalidateSeconds },
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+    if (!response.ok) {
+      return [];
+    }
+    const payload = await response.json();
+    return parsePosts(payload);
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchPublishedContentPostBySlug(
+  slug: string,
+  options?: { revalidateSeconds?: number },
+): Promise<ContentPostRecord | null> {
+  const cleanSlug = slug.trim().toLowerCase();
+  if (!cleanSlug) {
+    return null;
+  }
+
+  const revalidateSeconds = options?.revalidateSeconds ?? 180;
+
+  try {
+    const response = await fetch(toAbsoluteUrl(`/content/posts/${encodeURIComponent(cleanSlug)}`), {
+      next: { revalidate: revalidateSeconds },
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const payload = await response.json();
+    return parsePost(payload);
+  } catch {
+    return null;
+  }
+}
+
+export const toContentCanonicalPath = (slug: string): string => `/blog/${slug}`;
+
+export const toContentAbsoluteUrl = (slug: string): string => `${siteUrl}${toContentCanonicalPath(slug)}`;
+

@@ -8,6 +8,7 @@ import websocket from '@fastify/websocket';
 import { env } from './config/env.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { billingRoutes } from './modules/billing/routes.js';
+import { contentRoutes } from './modules/content/routes.js';
 import { containerRoutes } from './modules/containers/routes.js';
 import { deploymentRoutes } from './modules/deployments/routes.js';
 import { domainRoutes } from './modules/domains/routes.js';
@@ -127,6 +128,7 @@ export const buildApp = () => {
     api.register(serverRoutes);
     api.register(billingRoutes);
     api.register(githubIntegrationRoutes);
+    api.register(contentRoutes);
   }, { prefix: '/api/v1' });
 
   app.register(deploymentWebsocketRoutes);

@@ -8,6 +8,7 @@ import { usePathname } from 'next/navigation';
 import { DashboardNav } from '../../components/dashboard-nav';
 import {
   IconBilling,
+  IconContent,
   IconPlus,
   IconProfile,
   IconProjects,
@@ -28,6 +29,10 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/projects': {
     title: 'Projects',
     subtitle: 'Manage your projects, deployments, and configuration.',
+  },
+  '/content': {
+    title: 'Content Studio',
+    subtitle: 'Create, edit, and publish blog and news updates.',
   },
   '/projects/new': {
     title: 'Create Project',
@@ -267,6 +272,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                       <Link href="/projects/new" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
                         <IconPlus size={16} />
                         <span>Create Project</span>
+                      </Link>
+                      <Link href="/content" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                        <IconContent size={16} />
+                        <span>Content</span>
                       </Link>
                       <Link href="/usage" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
                         <IconUsage size={16} />

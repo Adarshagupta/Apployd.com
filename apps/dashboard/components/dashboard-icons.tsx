@@ -112,6 +112,15 @@ export function IconTeam(props: IconProps) {
   );
 }
 
+export function IconContent(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <rect x="3.2" y="3.4" width="13.6" height="13.2" rx="2.1" />
+      <path d="M6.2 7.2h7.6M6.2 10h7.6M6.2 12.8h5.2" />
+    </Glyph>
+  );
+}
+
 export function IconProfile(props: IconProps) {
   return (
     <Glyph {...props}>

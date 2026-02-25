@@ -4,9 +4,9 @@ import { useState } from 'react';
 import styles from '../../landing.module.css';
 
 const methods = [
-  { label: 'Email', value: 'hello@apployd.dev', icon: '✉' },
-  { label: 'Sales', value: 'sales@apployd.dev', icon: '💼' },
-  { label: 'Support', value: 'support@apployd.dev', icon: '🛟' },
+  { label: 'Email', value: 'hello@apployd.com', icon: '✉' },
+  { label: 'Sales', value: 'sales@apployd.com', icon: '💼' },
+  { label: 'Support', value: 'support@apployd.com', icon: '🛟' },
   { label: 'GitHub', value: 'github.com/apployd', icon: '⌥' },
 ];
 

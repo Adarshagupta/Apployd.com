@@ -270,11 +270,11 @@ export default function SecurityPage() {
           </h2>
           <p style={{ maxWidth: 520, margin: '0.8rem auto 0', fontSize: '0.95rem', color: 'rgba(212,221,244,0.7)', lineHeight: 1.6 }}>
             Found a vulnerability? We take security reports seriously. Please email{' '}
-            <span style={{ color: '#6bb4ff' }}>security@apployd.dev</span>{' '}
+            <span style={{ color: '#6bb4ff' }}>security@apployd.com</span>{' '}
             and we&apos;ll respond within 24 hours.
           </p>
           <div className={styles.heroActions} style={{ justifyContent: 'center', marginTop: '1.6rem' }}>
-            <a href="mailto:security@apployd.dev" className={styles.primaryButton}>
+            <a href="mailto:security@apployd.com" className={styles.primaryButton}>
               Report a Vulnerability
             </a>
           </div>

@@ -16,17 +16,17 @@ const supportOptions = [
   {
     title: 'Technical Support',
     description: 'Deployment failures, runtime errors, DNS routing, and infrastructure troubleshooting.',
-    contact: 'support@apployd.dev',
+    contact: 'support@apployd.com',
   },
   {
     title: 'Security Reports',
     description: 'Vulnerability disclosure, incident communication, and hardening-related questions.',
-    contact: 'security@apployd.dev',
+    contact: 'security@apployd.com',
   },
   {
     title: 'Billing and Plans',
     description: 'Subscriptions, invoices, usage pools, and enterprise contract requests.',
-    contact: 'sales@apployd.dev',
+    contact: 'sales@apployd.com',
   },
 ];
 

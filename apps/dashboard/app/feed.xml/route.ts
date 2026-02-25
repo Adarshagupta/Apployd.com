@@ -1,4 +1,4 @@
-import { blogPosts } from '../(marketing)/blog/posts';
+import { fetchPublishedContentPosts, toContentAbsoluteUrl } from '../../lib/content';
 import { siteUrl } from '../../lib/seo';
 
 const escapeXml = (value: string): string =>
@@ -10,23 +10,32 @@ const escapeXml = (value: string): string =>
     .replace(/'/g, '&apos;');
 
 export async function GET() {
-  const items = blogPosts
+  const posts = await fetchPublishedContentPosts({
+    kind: 'all',
+    limit: 200,
+    revalidateSeconds: 300,
+  });
+
+  const items = posts
     .map((post) => {
-      const url = `${siteUrl}/blog#${post.slug}`;
+      const url = toContentAbsoluteUrl(post.slug);
+      const publishedAt = post.publishedAt ?? post.createdAt ?? new Date().toISOString();
       return [
         '<item>',
         `<title>${escapeXml(post.title)}</title>`,
         `<description>${escapeXml(post.excerpt)}</description>`,
         `<link>${escapeXml(url)}</link>`,
         `<guid isPermaLink="false">${escapeXml(post.slug)}</guid>`,
-        `<pubDate>${new Date(post.publishedAt).toUTCString()}</pubDate>`,
+        `<pubDate>${new Date(publishedAt).toUTCString()}</pubDate>`,
+        `<category>${escapeXml(post.kind)}</category>`,
         '</item>',
       ].join('');
     })
     .join('');
 
-  const latestPublishedAt = blogPosts
-    .map((post) => new Date(post.publishedAt).getTime())
+  const latestPublishedAt = posts
+    .map((post) => new Date(post.publishedAt ?? post.createdAt ?? 0).getTime())
+    .filter((value) => Number.isFinite(value) && value > 0)
     .sort((a, b) => b - a)[0] ?? Date.now();
 
   const rss = [

@@ -49,9 +49,9 @@ const faqs = [
 ] as const;
 
 const supportChannels = [
-  { label: 'Support Email', value: 'support@apployd.dev' },
-  { label: 'Security Reports', value: 'security@apployd.dev' },
-  { label: 'Sales Inquiries', value: 'sales@apployd.dev' },
+  { label: 'Support Email', value: 'support@apployd.com' },
+  { label: 'Security Reports', value: 'security@apployd.com' },
+  { label: 'Sales Inquiries', value: 'sales@apployd.com' },
   { label: 'Response SLA', value: 'Within 24 hours (business days)' },
 ] as const;
 

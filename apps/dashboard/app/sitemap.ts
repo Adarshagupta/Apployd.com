@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 
+import { fetchPublishedContentPosts, toContentAbsoluteUrl } from '../lib/content';
 import { siteUrl } from '../lib/seo';
 
 const publicRoutes = [
@@ -25,10 +26,15 @@ const priorityByRoute: Partial<Record<(typeof publicRoutes)[number], number>> = 
   '/feed.xml': 0.5,
 };
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const lastModified = new Date();
+  const publishedPosts = await fetchPublishedContentPosts({
+    kind: 'all',
+    limit: 400,
+    revalidateSeconds: 300,
+  });
 
-  return publicRoutes.map((route) => ({
+  const baseRoutes: MetadataRoute.Sitemap = publicRoutes.map((route) => ({
     url: `${siteUrl}${route}`,
     lastModified,
     changeFrequency:
@@ -39,4 +45,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
           : 'monthly',
     priority: priorityByRoute[route] ?? 0.7,
   }));
+
+  const blogRoutes: MetadataRoute.Sitemap = publishedPosts.map((post) => {
+    const modified = new Date(post.updatedAt ?? post.publishedAt ?? post.createdAt ?? Date.now());
+    return {
+      url: toContentAbsoluteUrl(post.slug),
+      lastModified: Number.isFinite(modified.getTime()) ? modified : lastModified,
+      changeFrequency: 'weekly',
+      priority: 0.75,
+    };
+  });
+
+  return [...baseRoutes, ...blogRoutes];
 }

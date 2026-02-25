@@ -104,6 +104,17 @@ enum InviteEmailEventType {
   auto_expired
 }
 
+enum ContentPostKind {
+  blog
+  news
+}
+
+enum ContentPostStatus {
+  draft
+  published
+  archived
+}
+
 model User {
   id             String               @id @default(cuid())
   email          String               @unique
@@ -124,6 +135,7 @@ model User {
   acceptedOrganizationInvites OrganizationInvite[] @relation("OrganizationInviteAccepter")
   auditLogs      AuditLog[]
   githubConnection GitHubConnection?
+  contentPosts   ContentPost[]        @relation("ContentPostAuthor")
 
   @@index([oauthProvider, oauthSubject])
   @@map("users")
@@ -488,6 +500,26 @@ model AuditLog {
   @@index([actorUserId, timestamp])
   @@index([entityType, entityId])
   @@map("audit_logs")
+}
+
+model ContentPost {
+  id          String            @id @default(cuid())
+  slug        String            @unique
+  title       String
+  excerpt     String
+  content     String
+  kind        ContentPostKind   @default(blog)
+  status      ContentPostStatus @default(draft)
+  publishedAt DateTime?
+  authorId    String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  author      User              @relation("ContentPostAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([status, publishedAt])
+  @@index([kind, publishedAt])
+  @@index([createdAt])
+  @@map("content_posts")
 }
 
 model ProjectSecret {

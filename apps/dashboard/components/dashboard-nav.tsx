@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation';
 
 import {
   IconBilling,
+  IconContent,
   IconHelp,
   IconIntegrations,
   IconLogs,
@@ -30,6 +31,11 @@ const mainItems = [
     href: '/projects',
     label: 'Projects',
     icon: <IconProjects title="Projects" />,
+  },
+  {
+    href: '/content',
+    label: 'Content',
+    icon: <IconContent title="Content" />,
   },
   {
     href: '/logs',

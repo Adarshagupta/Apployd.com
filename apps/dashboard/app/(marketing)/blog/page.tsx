@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 import { buildPageMetadata, SITE_NAME, siteUrl } from '../../../lib/seo';
-import { blogPosts } from './posts';
+import { fetchPublishedContentPosts, toContentCanonicalPath } from '../../../lib/content';
 import styles from '../../landing.module.css';
 
 export const metadata: Metadata = buildPageMetadata({
@@ -13,39 +13,55 @@ export const metadata: Metadata = buildPageMetadata({
   keywords: ['devops blog', 'deployment engineering', 'platform security updates'],
 });
 
-const categories = ['All', ...Array.from(new Set(blogPosts.map((post) => post.category))), 'Community'];
+export const dynamic = 'force-dynamic';
 
-const blogJsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'Blog',
-  name: `${SITE_NAME} Blog`,
-  url: `${siteUrl}/blog`,
-  description:
-    'Engineering deep-dives, product updates, and security practices from the Apployd deployment platform team.',
-  blogPost: blogPosts.map((post) => ({
-    '@type': 'BlogPosting',
-    headline: post.title,
-    description: post.excerpt,
-    datePublished: post.publishedAt,
-    dateModified: post.publishedAt,
-    url: `${siteUrl}/blog#${post.slug}`,
-    inLanguage: 'en-US',
-    author: {
-      '@type': 'Organization',
-      name: SITE_NAME,
-    },
-    publisher: {
-      '@type': 'Organization',
-      name: SITE_NAME,
-      logo: {
-        '@type': 'ImageObject',
-        url: `${siteUrl}/icon.png`,
-      },
-    },
-  })),
+const formatDate = (iso: string | null): string => {
+  if (!iso) {
+    return 'Unscheduled';
+  }
+  const parsed = new Date(iso);
+  if (!Number.isFinite(parsed.getTime())) {
+    return 'Unscheduled';
+  }
+  return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-export default function BlogPage() {
+const toReadTimeLabel = (minutes: number): string => `${Math.max(1, minutes)} min read`;
+
+export default async function BlogPage() {
+  const posts = await fetchPublishedContentPosts({ kind: 'all', limit: 96, revalidateSeconds: 120 });
+  const categories = ['All', 'Blog', 'News'];
+  const blogJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Blog',
+    name: `${SITE_NAME} Blog`,
+    url: `${siteUrl}/blog`,
+    description:
+      'Engineering deep-dives, product updates, and security practices from the Apployd deployment platform team.',
+    blogPost: posts.map((post) => ({
+      '@type': 'BlogPosting',
+      headline: post.title,
+      description: post.excerpt,
+      datePublished: post.publishedAt ?? post.createdAt,
+      dateModified: post.updatedAt ?? post.publishedAt ?? post.createdAt,
+      url: `${siteUrl}${toContentCanonicalPath(post.slug)}`,
+      inLanguage: 'en-US',
+      articleSection: post.kind === 'news' ? 'News' : 'Blog',
+      author: {
+        '@type': 'Organization',
+        name: SITE_NAME,
+      },
+      publisher: {
+        '@type': 'Organization',
+        name: SITE_NAME,
+        logo: {
+          '@type': 'ImageObject',
+          url: `${siteUrl}/icon.png`,
+        },
+      },
+    })),
+  };
+
   return (
     <>
       <script
@@ -91,54 +107,68 @@ export default function BlogPage() {
 
       <section className={styles.section}>
         <div className={styles.container}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
-            {blogPosts.map((post) => (
-              <article
-                key={post.slug}
-                id={post.slug}
-                style={{
-                  borderRadius: 14,
-                  border: '1px solid rgba(161,178,216,0.14)',
-                  background: 'rgba(8,10,16,0.6)',
-                  padding: '1.6rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.8rem',
-                  transition: 'border-color 0.2s',
-                  cursor: 'pointer',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                  <span
-                    style={{
-                      fontSize: '0.7rem',
-                      fontWeight: 600,
-                      letterSpacing: '0.1em',
-                      textTransform: 'uppercase',
-                      color: '#6bb4ff',
-                      border: '1px solid rgba(42,141,255,0.25)',
-                      borderRadius: 999,
-                      padding: '0.2rem 0.55rem',
-                    }}
-                  >
-                    {post.category}
+          {posts.length ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
+              {posts.map((post) => (
+                <a
+                  key={post.id}
+                  href={toContentCanonicalPath(post.slug)}
+                  style={{
+                    borderRadius: 14,
+                    border: '1px solid rgba(161,178,216,0.14)',
+                    background: 'rgba(8,10,16,0.6)',
+                    padding: '1.6rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.8rem',
+                    transition: 'border-color 0.2s',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <span
+                      style={{
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        letterSpacing: '0.1em',
+                        textTransform: 'uppercase',
+                        color: '#6bb4ff',
+                        border: '1px solid rgba(42,141,255,0.25)',
+                        borderRadius: 999,
+                        padding: '0.2rem 0.55rem',
+                      }}
+                    >
+                      {post.kind === 'news' ? 'News' : 'Blog'}
+                    </span>
+                    <span style={{ fontSize: '0.76rem', color: 'rgba(200,210,240,0.45)' }}>
+                      {formatDate(post.publishedAt ?? post.createdAt)}
+                    </span>
+                  </div>
+                  <h2 style={{ margin: 0, fontSize: '1.08rem', fontWeight: 600, lineHeight: 1.35 }}>
+                    {post.title}
+                  </h2>
+                  <p style={{ margin: 0, fontSize: '0.88rem', color: 'rgba(200,210,240,0.6)', lineHeight: 1.55, flex: 1 }}>
+                    {post.excerpt}
+                  </p>
+                  <span style={{ fontSize: '0.76rem', color: 'rgba(200,210,240,0.4)', fontFamily: 'var(--font-mono), monospace' }}>
+                    {toReadTimeLabel(post.readTimeMinutes)}
                   </span>
-                  <span style={{ fontSize: '0.76rem', color: 'rgba(200,210,240,0.45)' }}>
-                    {post.dateLabel}
-                  </span>
-                </div>
-                <h2 style={{ margin: 0, fontSize: '1.08rem', fontWeight: 600, lineHeight: 1.35 }}>
-                  {post.title}
-                </h2>
-                <p style={{ margin: 0, fontSize: '0.88rem', color: 'rgba(200,210,240,0.6)', lineHeight: 1.55, flex: 1 }}>
-                  {post.excerpt}
-                </p>
-                <span style={{ fontSize: '0.76rem', color: 'rgba(200,210,240,0.4)', fontFamily: 'var(--font-mono), monospace' }}>
-                  {post.readTime}
-                </span>
-              </article>
-            ))}
-          </div>
+                </a>
+              ))}
+            </div>
+          ) : (
+            <article
+              style={{
+                borderRadius: 14,
+                border: '1px solid rgba(161,178,216,0.14)',
+                background: 'rgba(8,10,16,0.6)',
+                padding: '1.4rem',
+              }}
+            >
+              <p style={{ margin: 0, color: 'rgba(212,221,244,0.7)', fontSize: '0.95rem' }}>
+                No published posts yet. Publish your first blog or news update from the dashboard content studio.
+              </p>
+            </article>
+          )}
         </div>
       </section>
 
