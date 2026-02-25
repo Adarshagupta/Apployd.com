@@ -1,6 +1,7 @@
 import { siteUrl } from './seo';
 
 const LOCAL_API_FALLBACK = 'http://localhost:4000/api/v1';
+const API_PATH_FALLBACK = '/api/v1';
 
 export type ContentPostKind = 'blog' | 'news';
 export type ContentPostStatus = 'draft' | 'published' | 'archived';
@@ -32,7 +33,18 @@ export const resolveServerApiUrl = (): string => {
   if (process.env.API_URL) {
     return trimTrailingSlash(process.env.API_URL);
   }
+  if (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL) {
+    return `${trimTrailingSlash(siteUrl)}${API_PATH_FALLBACK}`;
+  }
   return LOCAL_API_FALLBACK;
+};
+
+const toAbsoluteApiBase = (value: string): string => {
+  if (/^https?:\/\//i.test(value)) {
+    return trimTrailingSlash(value);
+  }
+  const normalized = value.startsWith('/') ? value : `/${value}`;
+  return `${trimTrailingSlash(siteUrl)}${normalized}`;
 };
 
 const parsePosts = (payload: unknown): ContentPostRecord[] => {
@@ -57,7 +69,7 @@ const parsePost = (payload: unknown): ContentPostRecord | null => {
   return post as ContentPostRecord;
 };
 
-const toAbsoluteUrl = (path: string): string => `${resolveServerApiUrl()}${path}`;
+const toAbsoluteUrl = (path: string): string => `${toAbsoluteApiBase(resolveServerApiUrl())}${path}`;
 
 export async function fetchPublishedContentPosts(options?: {
   kind?: 'all' | ContentPostKind;
@@ -120,4 +132,3 @@ export async function fetchPublishedContentPostBySlug(
 export const toContentCanonicalPath = (slug: string): string => `/blog/${slug}`;
 
 export const toContentAbsoluteUrl = (slug: string): string => `${siteUrl}${toContentCanonicalPath(slug)}`;
-

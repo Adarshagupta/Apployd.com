@@ -211,7 +211,7 @@ export default function ContentAdminPage() {
     }
   };
 
-  const liveSlug = selectedPost?.slug ?? form.slug.trim();
+  const liveSlug = selectedPost?.slug ?? '';
   const liveUrl = liveSlug ? `/blog/${liveSlug}` : '';
 
   return (
@@ -404,4 +404,3 @@ export default function ContentAdminPage() {
     </div>
   );
 }
-

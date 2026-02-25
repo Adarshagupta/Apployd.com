@@ -72,6 +72,7 @@ const postIdParamsSchema = z.object({
 });
 
 const readTimeWordsPerMinute = 220;
+const CONTENT_ADMIN_EMAIL_DOMAIN = '@apployd.com';
 
 const slugify = (value: string): string =>
   value
@@ -104,6 +105,11 @@ const parseDateOrNull = (value: string | null | undefined): Date | null => {
   return parsed;
 };
 
+const canManageContent = (email: string): boolean => {
+  const normalized = email.trim().toLowerCase();
+  return normalized.endsWith(CONTENT_ADMIN_EMAIL_DOMAIN) && normalized.length > CONTENT_ADMIN_EMAIL_DOMAIN.length;
+};
+
 const formatPostResponse = (post: ContentPost & { author: { name: string | null; email: string } }) => ({
   id: post.id,
   slug: post.slug,
@@ -121,18 +127,6 @@ const formatPostResponse = (post: ContentPost & { author: { name: string | null;
     email: post.author.email,
   },
 });
-
-const requireContentAdmin = async (userId: string): Promise<boolean> => {
-  const membership = await prisma.organizationMember.findFirst({
-    where: {
-      userId,
-      role: { in: ['owner', 'admin'] },
-    },
-    select: { id: true },
-  });
-
-  return Boolean(membership);
-};
 
 const ensureUniqueSlug = async (candidateSlug: string, ignorePostId?: string): Promise<string> => {
   const baseSlug = slugify(candidateSlug) || `post-${Date.now().toString(36)}`;
@@ -226,11 +220,10 @@ export const contentRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/content/admin/posts', { preHandler: [app.authenticate] }, async (request, reply) => {
     const user = request.user as { userId: string; email: string };
-    const query = adminListQuerySchema.parse(request.query);
-    const canManage = await requireContentAdmin(user.userId);
-    if (!canManage) {
-      return reply.forbidden('Owner/admin role required to manage blog content.');
+    if (!canManageContent(user.email)) {
+      return reply.forbidden('Only @apployd.com accounts can manage blog content.');
     }
+    const query = adminListQuerySchema.parse(request.query);
 
     const where: Prisma.ContentPostWhereInput = {};
     if (query.kind !== 'all') {
@@ -261,11 +254,10 @@ export const contentRoutes: FastifyPluginAsync = async (app) => {
 
   app.post('/content/admin/posts', { preHandler: [app.authenticate] }, async (request, reply) => {
     const user = request.user as { userId: string; email: string };
-    const body = createPostSchema.parse(request.body);
-    const canManage = await requireContentAdmin(user.userId);
-    if (!canManage) {
-      return reply.forbidden('Owner/admin role required to manage blog content.');
+    if (!canManageContent(user.email)) {
+      return reply.forbidden('Only @apployd.com accounts can manage blog content.');
     }
+    const body = createPostSchema.parse(request.body);
 
     const slug = await ensureUniqueSlug(body.slug ?? body.title);
     const publishedAt = resolveCreatePublishedAt(body.status, body.publishedAt);
@@ -296,12 +288,11 @@ export const contentRoutes: FastifyPluginAsync = async (app) => {
 
   app.patch('/content/admin/posts/:postId', { preHandler: [app.authenticate] }, async (request, reply) => {
     const user = request.user as { userId: string; email: string };
+    if (!canManageContent(user.email)) {
+      return reply.forbidden('Only @apployd.com accounts can manage blog content.');
+    }
     const params = postIdParamsSchema.parse(request.params);
     const body = updatePostSchema.parse(request.body);
-    const canManage = await requireContentAdmin(user.userId);
-    if (!canManage) {
-      return reply.forbidden('Owner/admin role required to manage blog content.');
-    }
 
     const existing = await prisma.contentPost.findUnique({
       where: { id: params.postId },
