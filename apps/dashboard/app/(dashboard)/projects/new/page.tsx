@@ -571,6 +571,15 @@ export default function CreateProjectPage() {
       <SectionCard title="Create Project" subtitle="Connect your code and deploy.">
         <form onSubmit={onSubmit} className="space-y-4">
           <section className="space-y-4">
+            <div className="flex justify-end">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowVercelImport((prev) => !prev)}
+              >
+                {showVercelImport ? 'Hide Vercel import' : 'Migrate from Vercel (optional)'}
+              </button>
+            </div>
             <div className="grid gap-3 md:grid-cols-2">
               <label>
                 <span className="field-label">Project name</span>
@@ -598,17 +607,44 @@ export default function CreateProjectPage() {
                 />
               </label>
 
-              <div className="md:col-span-2 space-y-3 rounded-xl border border-slate-200 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-slate-900">Source</p>
-                  <div className="flex flex-wrap gap-2">
+              {showVercelImport ? (
+                <div className="md:col-span-2 space-y-2 rounded-xl border border-slate-200 p-3">
+                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px_auto]">
+                    <input
+                      value={vercelProjectIdOrName}
+                      onChange={(event) => setVercelProjectIdOrName(event.target.value)}
+                      className="field-input"
+                      placeholder="Vercel project ID or name"
+                    />
+                    <input
+                      value={vercelTeamId}
+                      onChange={(event) => setVercelTeamId(event.target.value)}
+                      className="field-input"
+                      placeholder="team_xxx (optional)"
+                    />
                     <button
                       type="button"
                       className="btn-secondary"
-                      onClick={() => setShowVercelImport((prev) => !prev)}
+                      onClick={importFromVercel}
+                      disabled={vercelImportLoading}
                     >
-                      {showVercelImport ? 'Hide Vercel import' : 'Import from Vercel'}
+                      {vercelImportLoading ? 'Importing...' : 'Import'}
                     </button>
+                  </div>
+                  <input
+                    type="password"
+                    value={vercelAccessToken}
+                    onChange={(event) => setVercelAccessToken(event.target.value)}
+                    className="field-input"
+                    placeholder="Vercel token (optional)"
+                  />
+                </div>
+              ) : null}
+
+              <div className="md:col-span-2 space-y-3 rounded-xl border border-slate-200 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-900">Git repository</p>
+                  <div className="flex flex-wrap gap-2">
                     {!githubStatus?.connected ? (
                       <button
                         type="button"
@@ -629,40 +665,6 @@ export default function CreateProjectPage() {
                     )}
                   </div>
                 </div>
-
-                {showVercelImport ? (
-                  <div className="space-y-2 rounded-xl border border-slate-200 p-3">
-                    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px_auto]">
-                      <input
-                        value={vercelProjectIdOrName}
-                        onChange={(event) => setVercelProjectIdOrName(event.target.value)}
-                        className="field-input"
-                        placeholder="Vercel project ID or name"
-                      />
-                      <input
-                        value={vercelTeamId}
-                        onChange={(event) => setVercelTeamId(event.target.value)}
-                        className="field-input"
-                        placeholder="team_xxx (optional)"
-                      />
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        onClick={importFromVercel}
-                        disabled={vercelImportLoading}
-                      >
-                        {vercelImportLoading ? 'Importing...' : 'Import'}
-                      </button>
-                    </div>
-                    <input
-                      type="password"
-                      value={vercelAccessToken}
-                      onChange={(event) => setVercelAccessToken(event.target.value)}
-                      className="field-input"
-                      placeholder="Vercel token (optional)"
-                    />
-                  </div>
-                ) : null}
 
                 {githubStatus?.connected && showGithubBrowser ? (
                   <div className="space-y-2 rounded-xl border border-slate-200 p-3">
