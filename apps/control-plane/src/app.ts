@@ -15,6 +15,7 @@ import { domainRoutes } from './modules/domains/routes.js';
 import { edgeRoutes } from './modules/edge/routes.js';
 import { healthRoutes } from './modules/health/routes.js';
 import { githubIntegrationRoutes } from './modules/integrations/github-routes.js';
+import { vercelIntegrationRoutes } from './modules/integrations/vercel-routes.js';
 import { logRoutes } from './modules/logs/routes.js';
 import { auditRoutes } from './modules/audit/routes.js';
 import { metricRoutes } from './modules/metrics/routes.js';
@@ -128,6 +129,7 @@ export const buildApp = () => {
     api.register(serverRoutes);
     api.register(billingRoutes);
     api.register(githubIntegrationRoutes);
+    api.register(vercelIntegrationRoutes);
     api.register(contentRoutes);
   }, { prefix: '/api/v1' });
 

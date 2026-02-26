@@ -159,14 +159,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
 
       <section className={styles.section} style={{ paddingTop: '0.5rem' }}>
         <div className={styles.container} style={{ maxWidth: 860 }}>
-          <article
-            style={{
-              borderRadius: 18,
-              border: '1px solid rgba(161,178,216,0.14)',
-              background: 'rgba(8,10,16,0.62)',
-              padding: '1.5rem',
-            }}
-          >
+          <article>
             <div style={{ display: 'grid', gap: '1rem' }}>
               {paragraphs.map((paragraph, index) => (
                 <p
@@ -189,4 +182,3 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
     </>
   );
 }
-

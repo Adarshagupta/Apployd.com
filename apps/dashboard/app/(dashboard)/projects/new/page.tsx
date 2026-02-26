@@ -68,6 +68,41 @@ interface CurrentSubscription {
   } | null;
 }
 
+interface VercelImportPayload {
+  source: 'vercel';
+  project: {
+    id: string;
+    name: string;
+    slug: string;
+    repoUrl: string | null;
+    repoOwner: string | null;
+    repoName: string | null;
+    repoFullName: string | null;
+    branch: string;
+    rootDirectory: string | null;
+    buildCommand: string | null;
+    startCommand: string | null;
+    installCommand: string | null;
+    outputDirectory: string | null;
+    framework: string | null;
+    autoDeployEnabled: boolean;
+    targetPort: number;
+    runtime: 'node';
+    serviceType: 'web_service' | 'static_site';
+  };
+  environmentVariables: {
+    totalEntries: number;
+    importedCount: number;
+    unresolvedKeys: string[];
+    variables: Array<{
+      key: string;
+      value: string;
+      target: string | null;
+    }>;
+  };
+  warnings: string[];
+}
+
 const slugify = (value: string) =>
   value
     .toLowerCase()
@@ -133,6 +168,10 @@ export default function CreateProjectPage() {
   const [githubLoading, setGithubLoading] = useState(false);
   const [githubConnecting, setGithubConnecting] = useState(false);
   const [selectedGithubRepoId, setSelectedGithubRepoId] = useState('');
+  const [vercelImportLoading, setVercelImportLoading] = useState(false);
+  const [vercelProjectIdOrName, setVercelProjectIdOrName] = useState('');
+  const [vercelTeamId, setVercelTeamId] = useState('');
+  const [vercelAccessToken, setVercelAccessToken] = useState('');
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
   const [subscription, setSubscription] = useState<CurrentSubscription | null>(null);
 
@@ -296,6 +335,70 @@ export default function CreateProjectPage() {
     await loadGitHubRepositories(githubSearch);
   };
 
+  const importFromVercel = async () => {
+    const cleanedProject = vercelProjectIdOrName.trim();
+    if (!cleanedProject) {
+      setMessage('Enter Vercel project ID or name.');
+      return;
+    }
+
+    setVercelImportLoading(true);
+    setMessage('');
+    setNotice('');
+
+    try {
+      const payload = (await apiClient.post('/integrations/vercel/import-project', {
+        projectIdOrName: cleanedProject,
+        ...(vercelTeamId.trim() ? { teamId: vercelTeamId.trim() } : {}),
+        ...(vercelAccessToken.trim() ? { accessToken: vercelAccessToken.trim() } : {}),
+      })) as VercelImportPayload;
+
+      const imported = payload.project;
+      const importedName = imported.name.trim();
+      const importedSlug = slugify(imported.slug || imported.name || form.slug || importedName);
+      const importedTargetPort = Number(imported.targetPort);
+      const hasValidPort = Number.isFinite(importedTargetPort) && importedTargetPort >= 1 && importedTargetPort <= 65535;
+
+      setForm((prev) => ({
+        ...prev,
+        name: importedName || prev.name,
+        slug: importedSlug || prev.slug,
+        repoUrl: imported.repoUrl ?? prev.repoUrl,
+        branch: imported.branch || prev.branch,
+        rootDirectory: imported.rootDirectory ?? prev.rootDirectory,
+        buildCommand: imported.buildCommand ?? prev.buildCommand,
+        startCommand: imported.startCommand ?? prev.startCommand,
+        targetPort: hasValidPort ? importedTargetPort : prev.targetPort,
+        autoDeployEnabled: autoDeployLocked ? false : imported.autoDeployEnabled,
+      }));
+      setSlugManuallyEdited(false);
+      setSelectedGithubRepoId('');
+      setVercelAccessToken('');
+      const importedEnvVariables = payload.environmentVariables?.variables ?? [];
+      if (importedEnvVariables.length > 0) {
+        setEnvRows(importedEnvVariables.map((entry) => ({ key: entry.key, value: entry.value })));
+        setEnvBulkText('');
+      }
+
+      const envImportSummary =
+        payload.environmentVariables && payload.environmentVariables.importedCount > 0
+          ? `Imported ${payload.environmentVariables.importedCount} environment variable${
+              payload.environmentVariables.importedCount === 1 ? '' : 's'
+            }.`
+          : 'No environment variables were imported.';
+
+      if (payload.warnings.length > 0) {
+        setNotice(`${envImportSummary} Notes: ${payload.warnings.join(' ')}`);
+      } else {
+        setNotice(`Imported project settings from Vercel. ${envImportSummary}`);
+      }
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setVercelImportLoading(false);
+    }
+  };
+
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -449,6 +552,47 @@ export default function CreateProjectPage() {
                   required
                 />
               </label>
+
+              <div className="md:col-span-2 space-y-3 rounded-xl border border-slate-200 p-3">
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-slate-900">Migrate from Vercel</p>
+                  <p className="text-xs text-slate-600">
+                    Import repository and build settings from an existing Vercel project before creating it in Apployd.
+                  </p>
+                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px_auto]">
+                    <input
+                      value={vercelProjectIdOrName}
+                      onChange={(event) => setVercelProjectIdOrName(event.target.value)}
+                      className="field-input"
+                      placeholder="Vercel project ID or name"
+                    />
+                    <input
+                      value={vercelTeamId}
+                      onChange={(event) => setVercelTeamId(event.target.value)}
+                      className="field-input"
+                      placeholder="team_xxx (optional)"
+                    />
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={importFromVercel}
+                      disabled={vercelImportLoading}
+                    >
+                      {vercelImportLoading ? 'Importing...' : 'Import from Vercel'}
+                    </button>
+                  </div>
+                  <input
+                    type="password"
+                    value={vercelAccessToken}
+                    onChange={(event) => setVercelAccessToken(event.target.value)}
+                    className="field-input"
+                    placeholder="Vercel access token (optional if server has VERCEL_ACCESS_TOKEN)"
+                  />
+                  <p className="text-xs text-slate-600">
+                    Token is used only for this request and not stored by Apployd.
+                  </p>
+                </div>
+              </div>
 
               <div className="md:col-span-2 space-y-3 rounded-xl border border-slate-200 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">

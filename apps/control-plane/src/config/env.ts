@@ -98,6 +98,7 @@ const envSchema = z.object({
   GITHUB_CLIENT_SECRET: z.string().default(''),
   GITHUB_OAUTH_REDIRECT_URI: z.string().url().optional(),
   GITHUB_WEBHOOK_SECRET: z.string().default(''),
+  VERCEL_ACCESS_TOKEN: optionalString,
   DASHBOARD_BASE_URL: z.string().url().default('http://localhost:3000'),
   CORS_ALLOWED_ORIGINS: optionalCsvUrls,
   PLATFORM_ADMIN_EMAILS: optionalCsvEmails,
