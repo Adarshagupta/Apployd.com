@@ -621,7 +621,6 @@ export default function ProjectDetailPage() {
   const [envBulkText, setEnvBulkText] = useState('');
   const [managedDatabases, setManagedDatabases] = useState<ManagedDatabaseSummary[]>([]);
   const [managedDbLoading, setManagedDbLoading] = useState(false);
-  const [managedDbProvisioning, setManagedDbProvisioning] = useState(false);
   const [managedDbMessage, setManagedDbMessage] = useState('');
   const [neonProvisioningEnabled, setNeonProvisioningEnabled] = useState(true);
   const [managedDbDraft, setManagedDbDraft] = useState({
@@ -832,43 +831,9 @@ export default function ProjectDetailPage() {
   };
 
   const provisionManagedNeonDatabase = async () => {
-    if (!projectId) return;
-    if (!neonProvisioningEnabled) {
-      setManagedDbMessage('Neon provisioning is not configured on this server.');
-      return;
-    }
-
-    try {
-      setManagedDbProvisioning(true);
-      setManagedDbMessage('');
-      const payload = {
-        projectName: managedDbDraft.projectName.trim() || undefined,
-        regionId: managedDbDraft.regionId.trim() || undefined,
-        branchName: managedDbDraft.branchName.trim() || undefined,
-        databaseName: managedDbDraft.databaseName.trim() || undefined,
-        roleName: managedDbDraft.roleName.trim() || undefined,
-        secretKey: managedDbDraft.secretKey.trim().toUpperCase() || 'DATABASE_URL',
-      };
-
-      const result = (await apiClient.post(
-        `/projects/${projectId}/databases/neon/provision`,
-        payload,
-      )) as {
-        database?: ManagedDatabaseSummary;
-        secret?: { key?: string };
-      };
-
-      await Promise.all([loadManagedDatabases(), loadProjectSecrets()]);
-      setManagedDbMessage(
-        result.database?.name
-          ? `Neon database "${result.database.name}" provisioned. ${result.secret?.key ?? 'DATABASE_URL'} updated.`
-          : 'Neon database provisioned. DATABASE_URL updated.',
-      );
-    } catch (error) {
-      setManagedDbMessage((error as Error).message);
-    } finally {
-      setManagedDbProvisioning(false);
-    }
+    setManagedDbMessage('Project-based provisioning has moved to the Databases page.');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    router.push('/databases' as any);
   };
 
   const deleteProjectEnvVar = async (key: string) => {
@@ -1901,7 +1866,7 @@ export default function ProjectDetailPage() {
                 <div>
                   <h4 className="text-sm font-semibold text-slate-900">Managed PostgreSQL (Neon)</h4>
                   <p className="mt-1 text-xs text-slate-500">
-                    Create a Neon Postgres database and automatically write its connection string to a project secret.
+                    Database provisioning is now standalone. Use the Databases page to create and copy connection strings.
                   </p>
                 </div>
                 <button
@@ -1930,6 +1895,7 @@ export default function ProjectDetailPage() {
                     }
                     className="field-input"
                     placeholder={`${project?.name ?? 'Project'} database`}
+                    disabled
                   />
                 </label>
                 <label>
@@ -1941,6 +1907,7 @@ export default function ProjectDetailPage() {
                     }
                     className="field-input"
                     placeholder="aws-us-east-1"
+                    disabled
                   />
                 </label>
                 <label>
@@ -1952,6 +1919,7 @@ export default function ProjectDetailPage() {
                     }
                     className="field-input"
                     placeholder="main"
+                    disabled
                   />
                 </label>
                 <label>
@@ -1963,6 +1931,7 @@ export default function ProjectDetailPage() {
                     }
                     className="field-input"
                     placeholder="app_db"
+                    disabled
                   />
                 </label>
                 <label>
@@ -1974,6 +1943,7 @@ export default function ProjectDetailPage() {
                     }
                     className="field-input"
                     placeholder="app_user"
+                    disabled
                   />
                 </label>
                 <label>
@@ -1985,6 +1955,7 @@ export default function ProjectDetailPage() {
                     }
                     className="field-input"
                     placeholder="DATABASE_URL"
+                    disabled
                   />
                 </label>
               </div>
@@ -1994,9 +1965,9 @@ export default function ProjectDetailPage() {
                   type="button"
                   className="btn-primary"
                   onClick={provisionManagedNeonDatabase}
-                  disabled={managedDbProvisioning || !neonProvisioningEnabled}
+                  disabled={!neonProvisioningEnabled}
                 >
-                  {managedDbProvisioning ? 'Provisioning...' : 'Create Neon database'}
+                  Open Databases
                 </button>
               </div>
 

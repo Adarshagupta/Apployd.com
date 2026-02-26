@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { SectionCard } from '../../../components/section-card';
 import { useWorkspaceContext } from '../../../components/workspace-provider';
@@ -25,17 +25,13 @@ interface ManagedDatabaseSummary {
 }
 
 export default function DatabasesPage() {
-  const {
-    projects,
-    loading: workspaceLoading,
-    selectedOrganizationId,
-  } = useWorkspaceContext();
-  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const { selectedOrganizationId } = useWorkspaceContext();
   const [databases, setDatabases] = useState<ManagedDatabaseSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [provisioning, setProvisioning] = useState(false);
   const [message, setMessage] = useState('');
   const [lastConnectionUrl, setLastConnectionUrl] = useState('');
+  const [copied, setCopied] = useState(false);
   const [neonConfigured, setNeonConfigured] = useState(true);
   const [form, setForm] = useState({
     projectName: '',
@@ -43,22 +39,7 @@ export default function DatabasesPage() {
     branchName: 'main',
     databaseName: '',
     roleName: '',
-    secretKey: 'DATABASE_URL',
   });
-
-  const selectedProject = useMemo(
-    () => projects.find((project) => project.id === selectedProjectId) ?? null,
-    [projects, selectedProjectId],
-  );
-
-  useEffect(() => {
-    if (!selectedProjectId) {
-      return;
-    }
-    if (!projects.some((project) => project.id === selectedProjectId)) {
-      setSelectedProjectId('');
-    }
-  }, [projects, selectedProjectId]);
 
   const loadDatabases = useCallback(async () => {
     if (!selectedOrganizationId) {
@@ -71,7 +52,6 @@ export default function DatabasesPage() {
       setLoading(true);
       const query = new URLSearchParams({
         organizationId: selectedOrganizationId,
-        ...(selectedProjectId ? { projectId: selectedProjectId } : {}),
       });
       const data = (await apiClient.get(`/databases?${query.toString()}`)) as {
         neonConfigured?: boolean;
@@ -86,7 +66,7 @@ export default function DatabasesPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedOrganizationId, selectedProjectId]);
+  }, [selectedOrganizationId]);
 
   useEffect(() => {
     loadDatabases().catch(() => undefined);
@@ -106,33 +86,29 @@ export default function DatabasesPage() {
     try {
       setProvisioning(true);
       setMessage('');
+      setCopied(false);
       setLastConnectionUrl('');
       const payload = {
         organizationId: selectedOrganizationId,
-        projectId: selectedProjectId || undefined,
         projectName: form.projectName.trim() || undefined,
         regionId: form.regionId.trim() || undefined,
         branchName: form.branchName.trim() || undefined,
         databaseName: form.databaseName.trim() || undefined,
         roleName: form.roleName.trim() || undefined,
-        secretKey: form.secretKey.trim().toUpperCase() || 'DATABASE_URL',
       };
 
       const result = (await apiClient.post('/databases/neon/provision', payload)) as {
         database?: ManagedDatabaseSummary;
-        secret?: { key?: string } | null;
         connectionUrl?: string;
       };
 
       await loadDatabases();
       if (result.connectionUrl) {
         setLastConnectionUrl(result.connectionUrl);
+        setMessage(`Database "${result.database?.name ?? 'database'}" created successfully.`);
+      } else {
+        setMessage('Database created, but connection string was not returned.');
       }
-      setMessage(
-        selectedProjectId
-          ? `Database "${result.database?.name ?? 'database'}" created and ${result.secret?.key ?? 'DATABASE_URL'} updated.`
-          : `Standalone database "${result.database?.name ?? 'database'}" created.`,
-      );
     } catch (error) {
       setMessage((error as Error).message);
     } finally {
@@ -140,32 +116,28 @@ export default function DatabasesPage() {
     }
   };
 
+  const copyConnectionUrl = async () => {
+    if (!lastConnectionUrl) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(lastConnectionUrl);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <SectionCard
         title="Databases"
-        subtitle="Create Neon PostgreSQL with or without a project. Project mode auto-writes a secret; standalone mode returns a connection string."
+        subtitle="Create standalone Neon PostgreSQL databases for your workspace. No project binding is required."
       >
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-          <label>
-            <span className="field-label">Project scope</span>
-            <select
-              value={selectedProjectId}
-              onChange={(event) => setSelectedProjectId(event.target.value)}
-              className="field-input"
-              disabled={workspaceLoading || !selectedOrganizationId}
-            >
-              <option value="">Standalone (no project)</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="flex justify-end">
           <button
             type="button"
-            className="btn-secondary self-end"
+            className="btn-secondary"
             onClick={() => loadDatabases()}
             disabled={loading || !selectedOrganizationId}
           >
@@ -175,12 +147,8 @@ export default function DatabasesPage() {
       </SectionCard>
 
       <SectionCard
-        title="Provision Neon PostgreSQL"
-        subtitle={
-          selectedProjectId
-            ? `Provision a managed database for ${selectedProject?.name ?? 'selected project'}.`
-            : 'Provision a standalone database not attached to any project.'
-        }
+        title="Create Neon PostgreSQL"
+        subtitle="Provision a standalone database and get a ready-to-use PostgreSQL connection string."
       >
         <div className="space-y-4">
           {!neonConfigured ? (
@@ -196,7 +164,7 @@ export default function DatabasesPage() {
                 value={form.projectName}
                 onChange={(event) => setForm((prev) => ({ ...prev, projectName: event.target.value }))}
                 className="field-input"
-                placeholder={`${selectedProject?.name ?? 'Standalone'} database`}
+                placeholder="Bookai database"
               />
             </label>
             <label>
@@ -235,18 +203,6 @@ export default function DatabasesPage() {
                 placeholder="app_user"
               />
             </label>
-            <label>
-              <span className="field-label">Secret key (project mode only)</span>
-              <input
-                value={form.secretKey}
-                onChange={(event) =>
-                  setForm((prev) => ({ ...prev, secretKey: event.target.value.toUpperCase() }))
-                }
-                className="field-input"
-                placeholder="DATABASE_URL"
-                disabled={!selectedProjectId}
-              />
-            </label>
           </div>
 
           <div className="flex justify-end">
@@ -262,13 +218,25 @@ export default function DatabasesPage() {
         </div>
       </SectionCard>
 
+      {lastConnectionUrl ? (
+        <SectionCard
+          title="PostgreSQL Connection String"
+          subtitle="This is shown immediately after creation. Save it securely in your application secrets."
+        >
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <code className="mono block break-all text-xs text-slate-700">{lastConnectionUrl}</code>
+            <div className="flex justify-end">
+              <button type="button" className="btn-secondary" onClick={copyConnectionUrl}>
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        </SectionCard>
+      ) : null}
+
       <SectionCard
-        title={selectedProjectId ? 'Databases In Project' : 'Standalone Databases'}
-        subtitle={
-          selectedProjectId
-            ? 'Managed databases attached to the selected project.'
-            : 'Managed databases created at organization level without project binding.'
-        }
+        title="Provisioned Databases"
+        subtitle="Standalone databases created in this workspace."
       >
         {loading ? (
           <div className="space-y-2">
@@ -285,12 +253,10 @@ export default function DatabasesPage() {
                   {database.provider} | {database.status} | {database.regionId}
                 </p>
                 <p className="mono mt-1 text-xs text-slate-700">
-                  branch={database.branchName} db={database.databaseName} role={database.roleName}{' '}
-                  secret={database.secretKey}
+                  branch={database.branchName} db={database.databaseName} role={database.roleName}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Scope: {database.projectId ? 'project' : 'standalone'} | Created{' '}
-                  {new Date(database.createdAt).toLocaleString()}
+                  Created {new Date(database.createdAt).toLocaleString()}
                 </p>
               </article>
             ))}
@@ -301,17 +267,6 @@ export default function DatabasesPage() {
           </div>
         )}
       </SectionCard>
-
-      {lastConnectionUrl ? (
-        <SectionCard
-          title="Last Standalone Connection URL"
-          subtitle="Shown once after creation. Save it in your app or a project secret."
-        >
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <code className="mono break-all text-xs text-slate-700">{lastConnectionUrl}</code>
-          </div>
-        </SectionCard>
-      ) : null}
 
       {message ? <p className="text-sm text-slate-700">{message}</p> : null}
     </div>

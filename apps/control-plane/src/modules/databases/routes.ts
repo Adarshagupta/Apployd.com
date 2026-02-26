@@ -26,12 +26,10 @@ const provisionNeonDatabaseBodySchema = z.object({
 
 const listOrganizationDatabasesQuerySchema = z.object({
   organizationId: z.string().cuid(),
-  projectId: z.string().cuid().optional(),
 });
 
 const provisionOrganizationNeonDatabaseBodySchema = provisionNeonDatabaseBodySchema.extend({
   organizationId: z.string().cuid(),
-  projectId: z.string().cuid().optional(),
 });
 
 const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
@@ -85,6 +83,14 @@ const toProjectDisplayName = (value: string, fallback: string): string => {
     return fallback;
   }
   return normalized.slice(0, 120);
+};
+
+const ROLE_PROPAGATION_RETRY_DELAYS_MS = [250, 500, 1000, 1500] as const;
+
+const sleep = async (ms: number): Promise<void> => {
+  await new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 };
 
 const extractNeonError = (payload: unknown, status: number): string => {
@@ -344,23 +350,39 @@ const ensureDatabaseOnBranch = async (input: {
   databaseName: string;
   roleName: string;
 }): Promise<void> => {
-  try {
-    await neonRequest<unknown>({
-      path: `/projects/${encodeURIComponent(input.neonProjectId)}/branches/${encodeURIComponent(input.neonBranchId)}/databases`,
-      method: 'POST',
-      apiKey: input.apiKey,
-      body: {
-        database: {
-          name: input.databaseName,
-          owner_name: input.roleName,
+  for (let attempt = 0; attempt <= ROLE_PROPAGATION_RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      await neonRequest<unknown>({
+        path: `/projects/${encodeURIComponent(input.neonProjectId)}/branches/${encodeURIComponent(input.neonBranchId)}/databases`,
+        method: 'POST',
+        apiKey: input.apiKey,
+        body: {
+          database: {
+            name: input.databaseName,
+            owner_name: input.roleName,
+          },
         },
-      },
-    });
-  } catch (error) {
-    if (isNeonAlreadyExistsError(error)) {
+      });
       return;
+    } catch (error) {
+      if (isNeonAlreadyExistsError(error)) {
+        return;
+      }
+      if (!isNeonRoleMissingError(error) || attempt >= ROLE_PROPAGATION_RETRY_DELAYS_MS.length) {
+        throw error;
+      }
+      await ensureRoleOnBranch({
+        apiKey: input.apiKey,
+        neonProjectId: input.neonProjectId,
+        neonBranchId: input.neonBranchId,
+        roleName: input.roleName,
+      });
+      const delayMs =
+        ROLE_PROPAGATION_RETRY_DELAYS_MS[attempt]
+        ?? ROLE_PROPAGATION_RETRY_DELAYS_MS[ROLE_PROPAGATION_RETRY_DELAYS_MS.length - 1]
+        ?? 1500;
+      await sleep(delayMs);
     }
-    throw error;
   }
 };
 
@@ -370,22 +392,42 @@ const resetRolePassword = async (input: {
   neonBranchId: string;
   roleName: string;
 }): Promise<string> => {
-  const payload = await neonRequest<unknown>({
-    path: `/projects/${encodeURIComponent(input.neonProjectId)}/branches/${encodeURIComponent(input.neonBranchId)}/roles/${encodeURIComponent(input.roleName)}/reset_password`,
-    method: 'POST',
-    apiKey: input.apiKey,
-    body: {},
-  });
+  for (let attempt = 0; attempt <= ROLE_PROPAGATION_RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      const payload = await neonRequest<unknown>({
+        path: `/projects/${encodeURIComponent(input.neonProjectId)}/branches/${encodeURIComponent(input.neonBranchId)}/roles/${encodeURIComponent(input.roleName)}/reset_password`,
+        method: 'POST',
+        apiKey: input.apiKey,
+        body: {},
+      });
 
-  const root = asRecord(payload);
-  const password =
-    asString(root?.password)
-    ?? asString(asRecord(root?.role)?.password)
-    ?? null;
-  if (!password) {
-    throw new Error('Neon did not return a database password.');
+      const root = asRecord(payload);
+      const password =
+        asString(root?.password)
+        ?? asString(asRecord(root?.role)?.password)
+        ?? null;
+      if (!password) {
+        throw new Error('Neon did not return a database password.');
+      }
+      return password;
+    } catch (error) {
+      if (!isNeonRoleMissingError(error) || attempt >= ROLE_PROPAGATION_RETRY_DELAYS_MS.length) {
+        throw error;
+      }
+      await ensureRoleOnBranch({
+        apiKey: input.apiKey,
+        neonProjectId: input.neonProjectId,
+        neonBranchId: input.neonBranchId,
+        roleName: input.roleName,
+      });
+      const delayMs =
+        ROLE_PROPAGATION_RETRY_DELAYS_MS[attempt]
+        ?? ROLE_PROPAGATION_RETRY_DELAYS_MS[ROLE_PROPAGATION_RETRY_DELAYS_MS.length - 1]
+        ?? 1500;
+      await sleep(delayMs);
+    }
   }
-  return password;
+  throw new Error(`Role "${input.roleName}" not found in Neon branch after retries.`);
 };
 
 const createNeonProject = async (input: {
@@ -555,31 +597,12 @@ const provisionNeonManagedDatabase = async (input: {
       databaseName,
       roleName,
     });
-    let rolePassword: string;
-    try {
-      rolePassword = await resetRolePassword({
-        apiKey: input.apiKey,
-        neonProjectId,
-        neonBranchId,
-        roleName,
-      });
-    } catch (error) {
-      if (!isNeonRoleMissingError(error)) {
-        throw error;
-      }
-      await ensureRoleOnBranch({
-        apiKey: input.apiKey,
-        neonProjectId,
-        neonBranchId,
-        roleName,
-      });
-      rolePassword = await resetRolePassword({
-        apiKey: input.apiKey,
-        neonProjectId,
-        neonBranchId,
-        roleName,
-      });
-    }
+    const rolePassword = await resetRolePassword({
+      apiKey: input.apiKey,
+      neonProjectId,
+      neonBranchId,
+      roleName,
+    });
     const endpoint = await resolveEndpointInfo({
       apiKey: input.apiKey,
       neonProjectId,
@@ -712,23 +735,9 @@ export const databaseRoutes: FastifyPluginAsync = async (app) => {
       return reply.forbidden((error as Error).message);
     }
 
-    if (query.projectId) {
-      const project = await prisma.project.findFirst({
-        where: {
-          id: query.projectId,
-          organizationId: query.organizationId,
-        },
-        select: { id: true },
-      });
-      if (!project) {
-        return reply.notFound('Project not found in this organization.');
-      }
-    }
-
     const databases = await prisma.managedDatabase.findMany({
       where: {
         organizationId: query.organizationId,
-        ...(query.projectId ? { projectId: query.projectId } : {}),
       },
       orderBy: { createdAt: 'desc' },
       select: managedDatabaseSelect,
@@ -755,37 +764,12 @@ export const databaseRoutes: FastifyPluginAsync = async (app) => {
       return reply.forbidden((error as Error).message);
     }
 
-    const project = body.projectId
-      ? await prisma.project.findFirst({
-          where: {
-            id: body.projectId,
-            organizationId: body.organizationId,
-          },
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            organizationId: true,
-          },
-        })
-      : null;
-
-    if (body.projectId && !project) {
-      return reply.notFound('Project not found in this organization.');
-    }
-
     try {
       const result = await provisionNeonManagedDatabase({
         apiKey,
         actorUserId: user.userId,
         organizationId: body.organizationId,
-        project: project
-          ? {
-              id: project.id,
-              name: project.name,
-              slug: project.slug,
-            }
-          : null,
+        project: null,
         payload: {
           projectName: body.projectName,
           regionId: body.regionId,
@@ -845,55 +829,9 @@ export const databaseRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/projects/:projectId/databases/neon/provision', { preHandler: [app.authenticate] }, async (request, reply) => {
-    const user = request.user as { userId: string; email: string };
-    const params = PROJECT_ID_PARAMS_SCHEMA.parse(request.params);
-    const body = provisionNeonDatabaseBodySchema.parse(request.body);
-
-    const apiKey = env.NEON_API_KEY?.trim();
-    if (!apiKey) {
-      return reply.serviceUnavailable('Neon provisioning is not configured on the server.');
-    }
-
-    const project = await prisma.project.findUnique({
-      where: { id: params.projectId },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        organizationId: true,
-      },
+    PROJECT_ID_PARAMS_SCHEMA.parse(request.params);
+    return reply.code(410).send({
+      message: 'Project-based database creation has been removed. Create standalone databases from /databases.',
     });
-    if (!project) {
-      return reply.notFound('Project not found.');
-    }
-
-    try {
-      await access.requireOrganizationRole(user.userId, project.organizationId, 'developer');
-    } catch (error) {
-      return reply.forbidden((error as Error).message);
-    }
-
-    try {
-      const result = await provisionNeonManagedDatabase({
-        apiKey,
-        actorUserId: user.userId,
-        organizationId: project.organizationId,
-        project: {
-          id: project.id,
-          name: project.name,
-          slug: project.slug,
-        },
-        payload: body,
-        audit,
-        requestLog: request.log,
-      });
-
-      return reply.code(201).send({
-        database: result.database,
-        secret: result.secret,
-      });
-    } catch (error) {
-      return reply.badGateway((error as Error).message);
-    }
   });
 };
