@@ -172,6 +172,9 @@ export default function CreateProjectPage() {
   const [vercelProjectIdOrName, setVercelProjectIdOrName] = useState('');
   const [vercelTeamId, setVercelTeamId] = useState('');
   const [vercelAccessToken, setVercelAccessToken] = useState('');
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  const [showSecretsEditor, setShowSecretsEditor] = useState(false);
+  const [showResourceTuning, setShowResourceTuning] = useState(false);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
   const [subscription, setSubscription] = useState<CurrentSubscription | null>(null);
 
@@ -180,6 +183,15 @@ export default function CreateProjectPage() {
     [githubRepos, selectedGithubRepoId],
   );
   const autoDeployLocked = subscription?.entitlements?.autoDeploy === false;
+  const slugError = useMemo(() => {
+    if (!form.slug) return 'Slug is required.';
+    if (form.slug.length < 2) return 'Slug must be at least 2 characters.';
+    if (!SLUG_PATTERN.test(form.slug)) return 'Slug can only include lowercase letters, numbers, and hyphens.';
+    return '';
+  }, [form.slug]);
+  const hasProjectBasics = form.name.trim().length >= 2 && !slugError;
+  const hasSourceConfigured = form.repoUrl.trim().length > 0;
+  const isCreateDisabled = submitting || loading || !selectedOrganizationId || !!slugError;
   const resourceLimits = useMemo(
     () => ({
       ram: Math.max(
@@ -197,13 +209,6 @@ export default function CreateProjectPage() {
     }),
     [subscription],
   );
-
-  const slugError = useMemo(() => {
-    if (!form.slug) return 'Slug is required.';
-    if (form.slug.length < 2) return 'Slug must be at least 2 characters.';
-    if (!SLUG_PATTERN.test(form.slug)) return 'Slug can only include lowercase letters, numbers, and hyphens.';
-    return '';
-  }, [form.slug]);
 
   const loadGitHubStatus = useCallback(async () => {
     try {
@@ -330,8 +335,7 @@ export default function CreateProjectPage() {
     setForm((prev) => (prev.autoDeployEnabled ? { ...prev, autoDeployEnabled: false } : prev));
   }, [autoDeployLocked]);
 
-  const searchGitHubRepos = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const searchGitHubRepos = async () => {
     await loadGitHubRepositories(githubSearch);
   };
 
@@ -521,11 +525,62 @@ export default function CreateProjectPage() {
     }));
   };
 
+  const applyResourcePreset = (preset: {
+    ram: number;
+    cpu: number;
+    bandwidth: number;
+  }) => {
+    setForm((prev) => ({
+      ...prev,
+      ram: clamp(preset.ram, MIN_RESOURCE_LIMITS.ram, resourceLimits.ram),
+      cpu: clamp(preset.cpu, MIN_RESOURCE_LIMITS.cpu, resourceLimits.cpu),
+      bandwidth: clamp(preset.bandwidth, MIN_RESOURCE_LIMITS.bandwidth, resourceLimits.bandwidth),
+    }));
+  };
+
+  const leanPreset = {
+    ram: MIN_RESOURCE_LIMITS.ram,
+    cpu: MIN_RESOURCE_LIMITS.cpu,
+    bandwidth: MIN_RESOURCE_LIMITS.bandwidth,
+  };
+  const balancedPreset = {
+    ram: Math.min(512, resourceLimits.ram),
+    cpu: Math.min(500, resourceLimits.cpu),
+    bandwidth: Math.min(25, resourceLimits.bandwidth),
+  };
+  const performancePreset = {
+    ram: resourceLimits.ram,
+    cpu: resourceLimits.cpu,
+    bandwidth: resourceLimits.bandwidth,
+  };
+  const usingLeanPreset =
+    form.ram === leanPreset.ram &&
+    form.cpu === leanPreset.cpu &&
+    form.bandwidth === leanPreset.bandwidth;
+  const usingBalancedPreset =
+    form.ram === balancedPreset.ram &&
+    form.cpu === balancedPreset.cpu &&
+    form.bandwidth === balancedPreset.bandwidth;
+  const usingPerformancePreset =
+    form.ram === performancePreset.ram &&
+    form.cpu === performancePreset.cpu &&
+    form.bandwidth === performancePreset.bandwidth;
+
   return (
     <div className="space-y-4">
       <SectionCard title="Provision Project" subtitle="Create a project with deployment settings and initial resource limits.">
         <form onSubmit={onSubmit} className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-          <section className="space-y-3">
+          <section className="space-y-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-sm font-semibold text-slate-900">Quick setup</p>
+              <div className="mt-2 grid gap-2 text-xs text-slate-600 md:grid-cols-3">
+                <p className={hasProjectBasics ? 'text-emerald-700' : ''}>1. Project basics</p>
+                <p className={hasSourceConfigured ? 'text-emerald-700' : ''}>2. Source and branch</p>
+                <p className={showSecretsEditor || envBulkText.trim() || envRows.some((row) => row.key || row.value) ? 'text-emerald-700' : ''}>
+                  3. Secrets and deploy
+                </p>
+              </div>
+            </div>
             <div className="grid gap-3 md:grid-cols-2">
               <label>
                 <span className="field-label">Project name</span>
@@ -631,17 +686,22 @@ export default function CreateProjectPage() {
 
                 {githubStatus?.connected ? (
                   <div className="space-y-2">
-                    <form onSubmit={searchGitHubRepos} className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <input
                         value={githubSearch}
                         onChange={(event) => setGithubSearch(event.target.value)}
                         className="field-input max-w-sm"
                         placeholder="Search repositories"
                       />
-                      <button type="submit" className="btn-secondary" disabled={githubLoading}>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={searchGitHubRepos}
+                        disabled={githubLoading}
+                      >
                         {githubLoading ? 'Loading...' : 'Search'}
                       </button>
-                    </form>
+                    </div>
                     {githubRepos.length ? (
                       <div className="max-h-48 space-y-1 overflow-auto rounded-xl border border-slate-200 p-2">
                         {githubRepos.map((repository) => (
@@ -696,114 +756,144 @@ export default function CreateProjectPage() {
                   required
                 />
               </label>
-              <label>
-                <span className="field-label">Repository folder (optional)</span>
-                <input
-                  value={form.rootDirectory}
-                  onChange={(event) => setForm((prev) => ({ ...prev, rootDirectory: event.target.value }))}
-                  className="field-input"
-                  placeholder="/backend or apps/web"
-                />
-              </label>
-              <label>
-                <span className="field-label">Target port</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={65535}
-                  value={form.targetPort}
-                  onChange={(event) => setForm((prev) => ({ ...prev, targetPort: Number(event.target.value) }))}
-                  className="field-input"
-                  required
-                />
-              </label>
+              <div className="md:col-span-2">
+                <button
+                  type="button"
+                  className="text-sm font-medium text-slate-700 underline decoration-dotted underline-offset-4"
+                  onClick={() => setShowAdvancedSettings((prev) => !prev)}
+                >
+                  {showAdvancedSettings ? 'Hide advanced deploy settings' : 'Show advanced deploy settings'}
+                </button>
+              </div>
 
-              <label>
-                <span className="field-label">Build command</span>
-                <input
-                  value={form.buildCommand}
-                  onChange={(event) => setForm((prev) => ({ ...prev, buildCommand: event.target.value }))}
-                  className="field-input"
-                  placeholder="npm run build"
-                />
-              </label>
-              <label>
-                <span className="field-label">Start command</span>
-                <input
-                  value={form.startCommand}
-                  onChange={(event) => setForm((prev) => ({ ...prev, startCommand: event.target.value }))}
-                  className="field-input"
-                  placeholder="node dist/server.js"
-                />
-              </label>
+              {showAdvancedSettings ? (
+                <>
+                  <label>
+                    <span className="field-label">Repository folder (optional)</span>
+                    <input
+                      value={form.rootDirectory}
+                      onChange={(event) => setForm((prev) => ({ ...prev, rootDirectory: event.target.value }))}
+                      className="field-input"
+                      placeholder="/backend or apps/web"
+                    />
+                  </label>
+                  <label>
+                    <span className="field-label">Target port</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={65535}
+                      value={form.targetPort}
+                      onChange={(event) => setForm((prev) => ({ ...prev, targetPort: Number(event.target.value) }))}
+                      className="field-input"
+                      required
+                    />
+                  </label>
+                  <label>
+                    <span className="field-label">Build command</span>
+                    <input
+                      value={form.buildCommand}
+                      onChange={(event) => setForm((prev) => ({ ...prev, buildCommand: event.target.value }))}
+                      className="field-input"
+                      placeholder="npm run build"
+                    />
+                  </label>
+                  <label>
+                    <span className="field-label">Start command</span>
+                    <input
+                      value={form.startCommand}
+                      onChange={(event) => setForm((prev) => ({ ...prev, startCommand: event.target.value }))}
+                      className="field-input"
+                      placeholder="node dist/server.js"
+                    />
+                  </label>
+                </>
+              ) : null}
             </div>
 
             <div className="space-y-2 border-t border-slate-200 pt-3">
-              <p className="text-sm font-semibold text-slate-900">Environment variables (optional)</p>
-              <div className="space-y-2">
-                {envRows.map((row, index) => (
-                  <div key={index} className="grid gap-2 md:grid-cols-[220px_minmax(0,1fr)_auto]">
-                    <input
-                      value={row.key}
-                      onChange={(event) =>
-                        setEnvRows((prev) =>
-                          prev.map((item, itemIndex) =>
-                            itemIndex === index ? { ...item, key: event.target.value.toUpperCase() } : item,
-                          ),
-                        )
-                      }
-                      className="field-input"
-                      placeholder="DATABASE_URL"
-                    />
-                    <input
-                      value={row.value}
-                      onChange={(event) =>
-                        setEnvRows((prev) =>
-                          prev.map((item, itemIndex) =>
-                            itemIndex === index ? { ...item, value: event.target.value } : item,
-                          ),
-                        )
-                      }
-                      className="field-input"
-                      placeholder="postgres://..."
-                      type="password"
-                    />
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      onClick={() =>
-                        setEnvRows((prev) => {
-                          if (prev.length === 1) {
-                            return [{ key: '', value: '' }];
-                          }
-                          return prev.filter((_, itemIndex) => itemIndex !== index);
-                        })
-                      }
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-900">Environment variables (optional)</p>
+                <button
+                  type="button"
+                  className="text-sm font-medium text-slate-700 underline decoration-dotted underline-offset-4"
+                  onClick={() => setShowSecretsEditor((prev) => !prev)}
+                >
+                  {showSecretsEditor ? 'Hide secrets editor' : 'Add secrets'}
+                </button>
               </div>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setEnvRows((prev) => [...prev, { key: '', value: '' }])}
-              >
-                Add variable
-              </button>
-              <label className="block">
-                <span className="field-label">Paste full .env</span>
-                <textarea
-                  value={envBulkText}
-                  onChange={(event) => setEnvBulkText(event.target.value)}
-                  className="field-input min-h-36 font-mono text-xs"
-                  placeholder={'DATABASE_URL=postgres://...\nJWT_SECRET=...\n# Comments are supported'}
-                />
-              </label>
-              <p className="text-xs text-slate-600">
-                Saved as encrypted project secrets and injected into deployments.
-              </p>
+              {showSecretsEditor ? (
+                <>
+                  <div className="space-y-2">
+                    {envRows.map((row, index) => (
+                      <div key={index} className="grid gap-2 md:grid-cols-[220px_minmax(0,1fr)_auto]">
+                        <input
+                          value={row.key}
+                          onChange={(event) =>
+                            setEnvRows((prev) =>
+                              prev.map((item, itemIndex) =>
+                                itemIndex === index ? { ...item, key: event.target.value.toUpperCase() } : item,
+                              ),
+                            )
+                          }
+                          className="field-input"
+                          placeholder="DATABASE_URL"
+                        />
+                        <input
+                          value={row.value}
+                          onChange={(event) =>
+                            setEnvRows((prev) =>
+                              prev.map((item, itemIndex) =>
+                                itemIndex === index ? { ...item, value: event.target.value } : item,
+                              ),
+                            )
+                          }
+                          className="field-input"
+                          placeholder="postgres://..."
+                          type="password"
+                        />
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() =>
+                            setEnvRows((prev) => {
+                              if (prev.length === 1) {
+                                return [{ key: '', value: '' }];
+                              }
+                              return prev.filter((_, itemIndex) => itemIndex !== index);
+                            })
+                          }
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setEnvRows((prev) => [...prev, { key: '', value: '' }])}
+                  >
+                    Add variable
+                  </button>
+                  <label className="block">
+                    <span className="field-label">Paste full .env</span>
+                    <textarea
+                      value={envBulkText}
+                      onChange={(event) => setEnvBulkText(event.target.value)}
+                      className="field-input min-h-36 font-mono text-xs"
+                      placeholder={'DATABASE_URL=postgres://...\nJWT_SECRET=...\n# Comments are supported'}
+                    />
+                  </label>
+                  <p className="text-xs text-slate-600">
+                    Saved as encrypted project secrets and injected into deployments.
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-slate-600">
+                  Add secrets now or later from the project settings page.
+                </p>
+              )}
             </div>
 
             <label className="inline-flex items-center gap-2">
@@ -849,54 +939,88 @@ export default function CreateProjectPage() {
                       : `Using default limits: ${resourceLimits.ram} MB RAM, ${resourceLimits.cpu} mCPU, ${resourceLimits.bandwidth} GB bandwidth`
                     : 'Select an organization to load subscription limits.'}
               </p>
-              <ResourceSlider
-                label="RAM"
-                min={MIN_RESOURCE_LIMITS.ram}
-                max={resourceLimits.ram}
-                step={128}
-                value={form.ram}
-                unit="MB"
-                onChange={(ram) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    ram: clamp(ram, MIN_RESOURCE_LIMITS.ram, resourceLimits.ram),
-                  }))
-                }
-              />
-              <ResourceSlider
-                label="CPU"
-                min={MIN_RESOURCE_LIMITS.cpu}
-                max={resourceLimits.cpu}
-                step={100}
-                value={form.cpu}
-                unit="mCPU"
-                onChange={(cpu) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    cpu: clamp(cpu, MIN_RESOURCE_LIMITS.cpu, resourceLimits.cpu),
-                  }))
-                }
-              />
-              <ResourceSlider
-                label="Bandwidth"
-                min={MIN_RESOURCE_LIMITS.bandwidth}
-                max={resourceLimits.bandwidth}
-                value={form.bandwidth}
-                unit="GB"
-                onChange={(bandwidth) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    bandwidth: clamp(bandwidth, MIN_RESOURCE_LIMITS.bandwidth, resourceLimits.bandwidth),
-                  }))
-                }
-              />
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={`btn-secondary ${usingLeanPreset ? 'border-slate-900' : ''}`}
+                  onClick={() => applyResourcePreset(leanPreset)}
+                >
+                  Lean
+                </button>
+                <button
+                  type="button"
+                  className={`btn-secondary ${usingBalancedPreset ? 'border-slate-900' : ''}`}
+                  onClick={() => applyResourcePreset(balancedPreset)}
+                >
+                  Balanced
+                </button>
+                <button
+                  type="button"
+                  className={`btn-secondary ${usingPerformancePreset ? 'border-slate-900' : ''}`}
+                  onClick={() => applyResourcePreset(performancePreset)}
+                >
+                  Performance
+                </button>
+              </div>
+              <button
+                type="button"
+                className="text-sm font-medium text-slate-700 underline decoration-dotted underline-offset-4"
+                onClick={() => setShowResourceTuning((prev) => !prev)}
+              >
+                {showResourceTuning ? 'Hide manual resource tuning' : 'Fine tune resources manually'}
+              </button>
+              {showResourceTuning ? (
+                <>
+                  <ResourceSlider
+                    label="RAM"
+                    min={MIN_RESOURCE_LIMITS.ram}
+                    max={resourceLimits.ram}
+                    step={128}
+                    value={form.ram}
+                    unit="MB"
+                    onChange={(ram) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        ram: clamp(ram, MIN_RESOURCE_LIMITS.ram, resourceLimits.ram),
+                      }))
+                    }
+                  />
+                  <ResourceSlider
+                    label="CPU"
+                    min={MIN_RESOURCE_LIMITS.cpu}
+                    max={resourceLimits.cpu}
+                    step={100}
+                    value={form.cpu}
+                    unit="mCPU"
+                    onChange={(cpu) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        cpu: clamp(cpu, MIN_RESOURCE_LIMITS.cpu, resourceLimits.cpu),
+                      }))
+                    }
+                  />
+                  <ResourceSlider
+                    label="Bandwidth"
+                    min={MIN_RESOURCE_LIMITS.bandwidth}
+                    max={resourceLimits.bandwidth}
+                    value={form.bandwidth}
+                    unit="GB"
+                    onChange={(bandwidth) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        bandwidth: clamp(bandwidth, MIN_RESOURCE_LIMITS.bandwidth, resourceLimits.bandwidth),
+                      }))
+                    }
+                  />
+                </>
+              ) : null}
             </div>
 
             <div className="space-y-2 border-t border-slate-200 pt-3">
               <button
                 type="submit"
                 className="btn-primary w-full"
-                disabled={submitting || loading || !selectedOrganizationId || !!slugError}
+                disabled={isCreateDisabled}
               >
                 {submitting ? 'Creating project...' : 'Create project'}
               </button>
