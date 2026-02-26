@@ -10,6 +10,7 @@ import { prisma } from '../../lib/prisma.js';
 import { redis } from '../../lib/redis.js';
 import { EmailVerificationError, EmailVerificationService } from '../../services/email-verification-service.js';
 import { GitHubService } from '../../services/github-service.js';
+import { GoogleService } from '../../services/google-service.js';
 import { OrganizationInviteService } from '../../services/organization-invite-service.js';
 
 const signupSchema = z.object({
@@ -53,6 +54,21 @@ const githubExchangeSchema = z.object({
   code: z.string().min(24).max(128),
 });
 
+const googleLoginQuerySchema = z.object({
+  next: z.string().optional(),
+});
+
+const googleExchangeSchema = z.object({
+  code: z.string().min(24).max(128),
+});
+
+const googleCallbackQuerySchema = z.object({
+  code: z.string().optional(),
+  state: z.string().optional(),
+  error: z.string().optional(),
+  error_description: z.string().optional(),
+});
+
 const githubExchangePayloadSchema = z.object({
   token: z.string(),
   user: z.object({
@@ -67,6 +83,8 @@ const githubExchangePayloadSchema = z.object({
 
 const OAUTH_STATE_PREFIX = 'apployd:oauth:github:';
 const LOGIN_RESULT_PREFIX = 'apployd:oauth:github:login:';
+const GOOGLE_OAUTH_STATE_PREFIX = 'apployd:oauth:google:';
+const GOOGLE_LOGIN_RESULT_PREFIX = 'apployd:oauth:google:login:';
 const LOGIN_CHALLENGE_PREFIX = 'apployd:auth:login-challenge:';
 const LOGIN_ATTEMPT_PREFIX = 'apployd:auth:login-attempts:';
 const LOGIN_ATTEMPT_WINDOW_SECONDS = 15 * 60;
@@ -74,6 +92,7 @@ const LOGIN_ATTEMPT_LIMIT = 10;
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
   const github = new GitHubService();
+  const google = new GoogleService();
   const emailVerification = new EmailVerificationService();
   const inviteService = new OrganizationInviteService();
 
@@ -451,6 +470,128 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     };
   });
 
+  app.get('/auth/google/login-url', async (request, reply) => {
+    if (!google.isConfigured()) {
+      return reply.serviceUnavailable('Google OAuth is not configured on the server.');
+    }
+
+    const query = googleLoginQuerySchema.parse(request.query);
+    const state = randomBytes(24).toString('hex');
+    const redirectTo = safeRedirectPath(query.next, '/overview');
+
+    await redis.set(
+      `${GOOGLE_OAUTH_STATE_PREFIX}${state}`,
+      JSON.stringify({
+        mode: 'login',
+        redirectTo,
+      }),
+      'EX',
+      60 * 10,
+    );
+
+    return {
+      url: google.getAuthorizeUrl(state),
+    };
+  });
+
+  app.get('/auth/google/callback', async (request, reply) => {
+    const query = googleCallbackQuerySchema.parse(request.query);
+    const statePayload = await consumeGoogleOAuthState(query.state);
+
+    if (query.error) {
+      return reply.redirect(
+        dashboardGoogleLoginRedirect({
+          status: 'error',
+          message: query.error_description ?? query.error,
+          ...(statePayload?.redirectTo ? { next: statePayload.redirectTo } : {}),
+        }),
+      );
+    }
+
+    if (!query.code || !query.state) {
+      return reply.redirect(
+        dashboardGoogleLoginRedirect({
+          status: 'error',
+          message: 'Missing OAuth code or state.',
+          ...(statePayload?.redirectTo ? { next: statePayload.redirectTo } : {}),
+        }),
+      );
+    }
+
+    if (!statePayload) {
+      return reply.redirect(
+        dashboardGoogleLoginRedirect({
+          status: 'error',
+          message: 'OAuth state has expired. Please restart Google sign-in.',
+        }),
+      );
+    }
+
+    try {
+      const tokenResponse = await google.exchangeCodeForToken(query.code);
+      if (!tokenResponse.access_token) {
+        const message =
+          tokenResponse.error_description ?? tokenResponse.error ?? 'Google did not return an access token.';
+        throw new Error(message);
+      }
+
+      const googleUser = await google.getUser(tokenResponse.access_token);
+      if (!googleUser.email || !googleUser.emailVerified) {
+        throw new Error('Google account must have a verified email address to sign in.');
+      }
+
+      const loginUser = await resolveUserForGoogleLogin({
+        subject: googleUser.subject,
+        email: googleUser.email,
+        name: googleUser.name,
+        avatarUrl: googleUser.avatarUrl,
+      });
+
+      const inviteSync = await inviteService.syncInvitesForUser({
+        userId: loginUser.id,
+        email: loginUser.email,
+      });
+
+      const token = app.jwt.sign({
+        userId: loginUser.id,
+        email: loginUser.email,
+      });
+
+      const loginCode = randomBytes(24).toString('hex');
+      await redis.set(
+        `${GOOGLE_LOGIN_RESULT_PREFIX}${loginCode}`,
+        JSON.stringify({
+          token,
+          user: {
+            id: loginUser.id,
+            email: loginUser.email,
+            name: loginUser.name,
+          },
+          redirectTo: statePayload.redirectTo,
+          acceptedInvites: inviteSync.acceptedCount,
+          acceptedOrganizationIds: inviteSync.acceptedOrganizationIds,
+        }),
+        'EX',
+        60 * 5,
+      );
+
+      return reply.redirect(
+        dashboardGoogleAuthCallbackRedirect({
+          code: loginCode,
+          next: statePayload.redirectTo,
+        }),
+      );
+    } catch (error) {
+      return reply.redirect(
+        dashboardGoogleLoginRedirect({
+          status: 'error',
+          message: (error as Error).message,
+          next: statePayload.redirectTo,
+        }),
+      );
+    }
+  });
+
   app.post('/auth/github/exchange', async (request, reply) => {
     const body = githubExchangeSchema.parse(request.body);
     const key = `${LOGIN_RESULT_PREFIX}${body.code}`;
@@ -466,6 +607,24 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       return payload;
     } catch {
       return reply.unauthorized('GitHub login code is invalid.');
+    }
+  });
+
+  app.post('/auth/google/exchange', async (request, reply) => {
+    const body = googleExchangeSchema.parse(request.body);
+    const key = `${GOOGLE_LOGIN_RESULT_PREFIX}${body.code}`;
+    const stored = await redis.get(key);
+    await redis.del(key);
+
+    if (!stored) {
+      return reply.unauthorized('Google login code is invalid or expired.');
+    }
+
+    try {
+      const payload = githubExchangePayloadSchema.parse(JSON.parse(stored));
+      return payload;
+    } catch {
+      return reply.unauthorized('Google login code is invalid.');
     }
   });
 
@@ -496,6 +655,256 @@ const safeRedirectPath = (value: string | undefined, fallback: string): string =
   }
 
   return fallback;
+};
+
+const googleOauthStateSchema = z.object({
+  mode: z.literal('login'),
+  redirectTo: z.string(),
+});
+
+const consumeGoogleOAuthState = async (
+  state: string | undefined,
+): Promise<{ redirectTo: string } | null> => {
+  if (!state) {
+    return null;
+  }
+
+  const key = `${GOOGLE_OAUTH_STATE_PREFIX}${state}`;
+  const stored = await redis.get(key);
+  await redis.del(key);
+  if (!stored) {
+    return null;
+  }
+
+  try {
+    const parsed = googleOauthStateSchema.parse(JSON.parse(stored));
+    return {
+      redirectTo: safeRedirectPath(parsed.redirectTo, '/overview'),
+    };
+  } catch {
+    return null;
+  }
+};
+
+const dashboardGoogleLoginRedirect = (input: {
+  status: 'error';
+  message?: string;
+  next?: string;
+}): string => {
+  const url = new URL('/login', env.DASHBOARD_BASE_URL);
+  url.searchParams.set('googleLogin', input.status);
+  if (input.message) {
+    url.searchParams.set('googleMessage', input.message);
+  }
+
+  const next = safeRedirectPath(input.next, '/overview');
+  if (next) {
+    url.searchParams.set('next', next);
+  }
+
+  return url.toString();
+};
+
+const dashboardGoogleAuthCallbackRedirect = (input: {
+  code: string;
+  next?: string;
+}): string => {
+  const url = new URL('/google/callback', env.DASHBOARD_BASE_URL);
+  url.searchParams.set('code', input.code);
+  const next = safeRedirectPath(input.next, '/overview');
+  if (next) {
+    url.searchParams.set('next', next);
+  }
+  return url.toString();
+};
+
+const normalizeEmail = (value?: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return normalized || null;
+};
+
+const slugifyOrganization = (value: string): string => {
+  const candidate = value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 63);
+
+  if (candidate.length >= 2) {
+    return candidate;
+  }
+
+  return 'workspace';
+};
+
+const resolveUniqueOrganizationSlug = async (seed: string): Promise<string> => {
+  const base = slugifyOrganization(seed);
+  for (let attempt = 0; attempt < 1000; attempt += 1) {
+    if (attempt === 0) {
+      const existing = await prisma.organization.findUnique({
+        where: { slug: base },
+        select: { id: true },
+      });
+      if (!existing) {
+        return base;
+      }
+      continue;
+    }
+
+    const suffix = `-${attempt + 1}`;
+    const prefixMax = Math.max(2, 63 - suffix.length);
+    const prefixed = `${base.slice(0, prefixMax)}${suffix}`;
+    const existing = await prisma.organization.findUnique({
+      where: { slug: prefixed },
+      select: { id: true },
+    });
+    if (!existing) {
+      return prefixed;
+    }
+  }
+
+  throw new Error('Unable to allocate a unique organization slug.');
+};
+
+const resolveUserForGoogleLogin = async (input: {
+  subject: string;
+  email: string;
+  name: string | null;
+  avatarUrl: string | null;
+}): Promise<{ id: string; email: string; name: string | null }> => {
+  const normalizedEmail = normalizeEmail(input.email);
+  if (!normalizedEmail) {
+    throw new Error('Google did not provide a valid email.');
+  }
+  const fallbackDisplayName = normalizedEmail.split('@')[0] || 'workspace';
+
+  let user = await prisma.user.findFirst({
+    where: {
+      oauthProvider: 'google',
+      oauthSubject: input.subject,
+    },
+  });
+
+  if (!user) {
+    const existingByEmail = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    if (existingByEmail) {
+      if (
+        existingByEmail.oauthProvider === 'google'
+        && existingByEmail.oauthSubject
+        && existingByEmail.oauthSubject !== input.subject
+      ) {
+        throw new Error('This email is already linked to a different Google account.');
+      }
+
+      user = await prisma.user.update({
+        where: { id: existingByEmail.id },
+        data: {
+          oauthProvider: 'google',
+          oauthSubject: input.subject,
+          avatarUrl: existingByEmail.avatarUrl ?? input.avatarUrl,
+          name: existingByEmail.name ?? input.name ?? fallbackDisplayName,
+          emailVerifiedAt: existingByEmail.emailVerifiedAt ?? new Date(),
+        },
+      });
+    } else {
+      const freePlan = await prisma.plan.findUnique({
+        where: { code: 'free' },
+      });
+      if (!freePlan) {
+        throw new Error('Default plans not seeded');
+      }
+
+      const workspaceOwner = input.name?.trim() || fallbackDisplayName;
+      const organizationSlug = await resolveUniqueOrganizationSlug(workspaceOwner);
+      const organizationName = `${workspaceOwner} Workspace`;
+      const randomPassword = randomBytes(32).toString('hex');
+
+      user = await prisma.$transaction(async (tx) => {
+        const createdUser = await tx.user.create({
+          data: {
+            email: normalizedEmail,
+            name: input.name ?? workspaceOwner,
+            avatarUrl: input.avatarUrl,
+            passwordHash: hashPassword(randomPassword),
+            oauthProvider: 'google',
+            oauthSubject: input.subject,
+            emailVerifiedAt: new Date(),
+          },
+        });
+
+        const organization = await tx.organization.create({
+          data: {
+            name: organizationName,
+            slug: organizationSlug,
+            ownerId: createdUser.id,
+          },
+        });
+
+        await tx.organizationMember.create({
+          data: {
+            organizationId: organization.id,
+            userId: createdUser.id,
+            role: 'owner',
+          },
+        });
+
+        const periodStart = new Date();
+        const periodEnd = new Date(periodStart);
+        periodEnd.setMonth(periodEnd.getMonth() + 1);
+
+        await tx.subscription.create({
+          data: {
+            organizationId: organization.id,
+            planId: freePlan.id,
+            stripeCustomerId: `free_${organization.id}`,
+            stripeSubscriptionId: `free_${organization.id}`,
+            status: 'active',
+            currentPeriodStart: periodStart,
+            currentPeriodEnd: periodEnd,
+            poolRamMb: freePlan.includedRamMb,
+            poolCpuMillicores: freePlan.includedCpuMillicore,
+            poolBandwidthGb: freePlan.includedBandwidthGb,
+            overageEnabled: false,
+          },
+        });
+
+        return createdUser;
+      });
+    }
+  }
+
+  if (
+    user.oauthProvider !== 'google'
+    || user.oauthSubject !== input.subject
+    || (!user.name && input.name)
+    || (!user.avatarUrl && input.avatarUrl)
+    || !user.emailVerifiedAt
+  ) {
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        oauthProvider: 'google',
+        oauthSubject: input.subject,
+        name: user.name ?? input.name ?? fallbackDisplayName,
+        avatarUrl: user.avatarUrl ?? input.avatarUrl,
+        emailVerifiedAt: user.emailVerifiedAt ?? new Date(),
+      },
+    });
+  }
+
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name ?? null,
+  };
 };
 
 const loginChallengeSchema = z.object({

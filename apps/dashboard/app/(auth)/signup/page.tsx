@@ -33,6 +33,7 @@ export default function SignupPage() {
   const [verificationSubmitting, setVerificationSubmitting] = useState(false);
   const [resending, setResending] = useState(false);
   const [githubSubmitting, setGithubSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = useMemo(() => {
@@ -151,6 +152,24 @@ export default function SignupPage() {
     }
   };
 
+  const onGoogleSignup = async () => {
+    setError('');
+    setGoogleSubmitting(true);
+
+    try {
+      const data = await apiClient.get(
+        `/auth/google/login-url?next=${encodeURIComponent(nextPath)}`,
+      );
+      if (!data.url) {
+        throw new Error('Google authorize URL is missing.');
+      }
+      window.location.href = data.url;
+    } catch (err) {
+      setError((err as Error).message);
+      setGoogleSubmitting(false);
+    }
+  };
+
   return (
     <main className={styles.page}>
       <LandingThreeBackground className={styles.globalCanvas ?? ''} />
@@ -208,9 +227,18 @@ export default function SignupPage() {
                   type="button"
                   className={`${styles.githubButton} ${styles.full}`}
                   onClick={onGithubSignup}
-                  disabled={githubSubmitting || submitting}
+                  disabled={githubSubmitting || googleSubmitting || submitting}
                 >
                   {githubSubmitting ? 'Redirecting to GitHub...' : 'Continue with GitHub'}
+                </button>
+
+                <button
+                  type="button"
+                  className={`${styles.githubButton} ${styles.full}`}
+                  onClick={onGoogleSignup}
+                  disabled={googleSubmitting || githubSubmitting || submitting}
+                >
+                  {googleSubmitting ? 'Redirecting to Google...' : 'Continue with Google'}
                 </button>
 
                 <div className={`${styles.divider} ${styles.full}`}>

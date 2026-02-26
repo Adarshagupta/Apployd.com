@@ -26,6 +26,7 @@ export default function LoginPage() {
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
   const [githubSubmitting, setGithubSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -43,9 +44,16 @@ export default function LoginPage() {
   useEffect(() => {
     const githubLoginState = searchParams?.get('githubLogin');
     const githubMessage = searchParams?.get('githubMessage');
+    const googleLoginState = searchParams?.get('googleLogin');
+    const googleMessage = searchParams?.get('googleMessage');
 
     if (githubLoginState === 'error') {
       setError(githubMessage ?? 'GitHub sign-in failed.');
+      return;
+    }
+
+    if (googleLoginState === 'error') {
+      setError(googleMessage ?? 'Google sign-in failed.');
     }
   }, [searchParams]);
 
@@ -168,6 +176,27 @@ export default function LoginPage() {
     }
   };
 
+  const onGoogleLogin = async () => {
+    setError('');
+    setGoogleSubmitting(true);
+
+    try {
+      const nextRaw = searchParams?.get('next') ?? null;
+      const nextPath =
+        nextRaw && nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : '/overview';
+      const data = await apiClient.get(
+        `/auth/google/login-url?next=${encodeURIComponent(nextPath)}`,
+      );
+      if (!data.url) {
+        throw new Error('Google authorize URL is missing.');
+      }
+      window.location.href = data.url;
+    } catch (err) {
+      setError((err as Error).message);
+      setGoogleSubmitting(false);
+    }
+  };
+
   return (
     <main className={styles.page}>
       <LandingThreeBackground className={styles.globalCanvas ?? ''} />
@@ -219,9 +248,18 @@ export default function LoginPage() {
                 type="button"
                 className={styles.githubButton}
                 onClick={onGithubLogin}
-                disabled={githubSubmitting || submitting}
+                disabled={githubSubmitting || googleSubmitting || submitting}
               >
                 {githubSubmitting ? 'Redirecting to GitHub...' : 'Continue with GitHub'}
+              </button>
+
+              <button
+                type="button"
+                className={styles.githubButton}
+                onClick={onGoogleLogin}
+                disabled={googleSubmitting || githubSubmitting || submitting}
+              >
+                {googleSubmitting ? 'Redirecting to Google...' : 'Continue with Google'}
               </button>
 
               <div className={styles.divider}>
