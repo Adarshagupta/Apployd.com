@@ -297,6 +297,73 @@ const ensureConnectionUri = (input: {
   }
 };
 
+const neonErrorMessage = (error: unknown): string =>
+  (error as Error)?.message?.toLowerCase?.() ?? '';
+
+const isNeonAlreadyExistsError = (error: unknown): boolean => {
+  const message = neonErrorMessage(error);
+  return (
+    message.includes('already exists')
+    || message.includes('duplicate key')
+    || message.includes('conflict')
+  );
+};
+
+const isNeonRoleMissingError = (error: unknown): boolean =>
+  neonErrorMessage(error).includes('role not found');
+
+const ensureRoleOnBranch = async (input: {
+  apiKey: string;
+  neonProjectId: string;
+  neonBranchId: string;
+  roleName: string;
+}): Promise<void> => {
+  try {
+    await neonRequest<unknown>({
+      path: `/projects/${encodeURIComponent(input.neonProjectId)}/branches/${encodeURIComponent(input.neonBranchId)}/roles`,
+      method: 'POST',
+      apiKey: input.apiKey,
+      body: {
+        role: {
+          name: input.roleName,
+        },
+      },
+    });
+  } catch (error) {
+    if (isNeonAlreadyExistsError(error)) {
+      return;
+    }
+    throw error;
+  }
+};
+
+const ensureDatabaseOnBranch = async (input: {
+  apiKey: string;
+  neonProjectId: string;
+  neonBranchId: string;
+  databaseName: string;
+  roleName: string;
+}): Promise<void> => {
+  try {
+    await neonRequest<unknown>({
+      path: `/projects/${encodeURIComponent(input.neonProjectId)}/branches/${encodeURIComponent(input.neonBranchId)}/databases`,
+      method: 'POST',
+      apiKey: input.apiKey,
+      body: {
+        database: {
+          name: input.databaseName,
+          owner_name: input.roleName,
+        },
+      },
+    });
+  } catch (error) {
+    if (isNeonAlreadyExistsError(error)) {
+      return;
+    }
+    throw error;
+  }
+};
+
 const resetRolePassword = async (input: {
   apiKey: string;
   neonProjectId: string;
@@ -475,12 +542,44 @@ const provisionNeonManagedDatabase = async (input: {
       neonProjectId,
       branchName,
     });
-    const rolePassword = await resetRolePassword({
+    await ensureRoleOnBranch({
       apiKey: input.apiKey,
       neonProjectId,
       neonBranchId,
       roleName,
     });
+    await ensureDatabaseOnBranch({
+      apiKey: input.apiKey,
+      neonProjectId,
+      neonBranchId,
+      databaseName,
+      roleName,
+    });
+    let rolePassword: string;
+    try {
+      rolePassword = await resetRolePassword({
+        apiKey: input.apiKey,
+        neonProjectId,
+        neonBranchId,
+        roleName,
+      });
+    } catch (error) {
+      if (!isNeonRoleMissingError(error)) {
+        throw error;
+      }
+      await ensureRoleOnBranch({
+        apiKey: input.apiKey,
+        neonProjectId,
+        neonBranchId,
+        roleName,
+      });
+      rolePassword = await resetRolePassword({
+        apiKey: input.apiKey,
+        neonProjectId,
+        neonBranchId,
+        roleName,
+      });
+    }
     const endpoint = await resolveEndpointInfo({
       apiKey: input.apiKey,
       neonProjectId,
