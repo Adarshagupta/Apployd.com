@@ -24,6 +24,16 @@ const provisionNeonDatabaseBodySchema = z.object({
   secretKey: z.string().trim().min(1).max(120).regex(SECRET_KEY_PATTERN).optional(),
 });
 
+const listOrganizationDatabasesQuerySchema = z.object({
+  organizationId: z.string().cuid(),
+  projectId: z.string().cuid().optional(),
+});
+
+const provisionOrganizationNeonDatabaseBodySchema = provisionNeonDatabaseBodySchema.extend({
+  organizationId: z.string().cuid(),
+  projectId: z.string().cuid().optional(),
+});
+
 const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
@@ -378,9 +388,326 @@ const createNeonProject = async (input: {
   return neonProjectId;
 };
 
+const managedDatabaseSelect = {
+  id: true,
+  organizationId: true,
+  projectId: true,
+  provider: true,
+  status: true,
+  name: true,
+  regionId: true,
+  branchName: true,
+  databaseName: true,
+  roleName: true,
+  secretKey: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+const provisionNeonManagedDatabase = async (input: {
+  apiKey: string;
+  actorUserId: string;
+  organizationId: string;
+  project: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
+  payload: z.infer<typeof provisionNeonDatabaseBodySchema>;
+  audit: AuditLogService;
+  requestLog: {
+    error: (arg0: Record<string, unknown>, arg1: string) => void;
+  };
+}): Promise<{
+  database: {
+    id: string;
+    organizationId: string;
+    projectId: string | null;
+    provider: string;
+    status: string;
+    name: string;
+    regionId: string;
+    branchName: string;
+    databaseName: string;
+    roleName: string;
+    secretKey: string;
+    createdAt: Date;
+    updatedAt: Date;
+  };
+  secret: {
+    id: string;
+    key: string;
+    createdAt: Date;
+    updatedAt: Date;
+  } | null;
+  connectionUrl: string | null;
+}> => {
+  const regionId = input.payload.regionId?.trim() || env.NEON_DEFAULT_REGION;
+  const slugSeed =
+    input.project?.slug
+    ?? toSnakeIdentifier(input.payload.projectName ?? `org_${input.organizationId.slice(0, 6)}`, 'app');
+  const nameSeed = input.project?.name ?? 'Standalone';
+  const branchName = toBranchName(input.payload.branchName ?? 'main', 'main');
+  const databaseName = input.payload.databaseName ?? toSnakeIdentifier(`${slugSeed}_db`, 'app_db');
+  const roleName = input.payload.roleName ?? toSnakeIdentifier(`${slugSeed}_user`, 'app_user');
+  const secretKey = input.payload.secretKey?.trim().toUpperCase() || 'DATABASE_URL';
+  const projectName = toProjectDisplayName(
+    input.payload.projectName ?? `${nameSeed} database`,
+    `${nameSeed} database`,
+  );
+
+  let neonProjectId = '';
+  let neonBranchId = '';
+  let neonEndpointId: string | null = null;
+  let databaseUrl = '';
+
+  try {
+    neonProjectId = await createNeonProject({
+      apiKey: input.apiKey,
+      projectName,
+      regionId,
+      branchName,
+      databaseName,
+      roleName,
+    });
+    neonBranchId = await resolveBranchId({
+      apiKey: input.apiKey,
+      neonProjectId,
+      branchName,
+    });
+    const rolePassword = await resetRolePassword({
+      apiKey: input.apiKey,
+      neonProjectId,
+      neonBranchId,
+      roleName,
+    });
+    const endpoint = await resolveEndpointInfo({
+      apiKey: input.apiKey,
+      neonProjectId,
+      neonBranchId,
+    });
+    neonEndpointId = endpoint.endpointId;
+    const connectionUri = await resolveConnectionUriFromNeon({
+      apiKey: input.apiKey,
+      neonProjectId,
+      neonBranchId,
+      databaseName,
+      roleName,
+    });
+    databaseUrl = ensureConnectionUri({
+      connectionUri,
+      roleName,
+      rolePassword,
+      databaseName,
+      endpointHost: endpoint.host,
+    });
+  } catch (error) {
+    input.requestLog.error(
+      {
+        err: error,
+        organizationId: input.organizationId,
+        projectId: input.project?.id ?? null,
+        regionId,
+        branchName,
+        databaseName,
+        roleName,
+      },
+      'Neon database provisioning failed',
+    );
+    throw error;
+  }
+
+  const encrypted = encryptSecret(databaseUrl);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const secret = input.project
+      ? await tx.projectSecret.upsert({
+          where: {
+            projectId_key: {
+              projectId: input.project.id,
+              key: secretKey,
+            },
+          },
+          update: {
+            encryptedValue: encrypted.encryptedValue,
+            iv: encrypted.iv,
+            authTag: encrypted.authTag,
+          },
+          create: {
+            projectId: input.project.id,
+            key: secretKey,
+            encryptedValue: encrypted.encryptedValue,
+            iv: encrypted.iv,
+            authTag: encrypted.authTag,
+          },
+          select: {
+            id: true,
+            key: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        })
+      : null;
+
+    const database = await tx.managedDatabase.create({
+      data: {
+        organizationId: input.organizationId,
+        projectId: input.project?.id ?? null,
+        createdById: input.actorUserId,
+        provider: 'neon',
+        status: 'ready',
+        name: projectName,
+        regionId,
+        branchName,
+        databaseName,
+        roleName,
+        secretKey,
+        externalProjectId: neonProjectId,
+        externalBranchId: neonBranchId,
+        externalEndpointId: neonEndpointId,
+      },
+      select: managedDatabaseSelect,
+    });
+
+    return {
+      secret,
+      database,
+    };
+  });
+
+  await input.audit.record({
+    organizationId: input.organizationId,
+    actorUserId: input.actorUserId,
+    action: 'database.provisioned',
+    entityType: 'managed_database',
+    entityId: result.database.id,
+    metadata: {
+      projectId: input.project?.id ?? null,
+      provider: 'neon',
+      regionId,
+      branchName,
+      databaseName,
+      roleName,
+      secretKey,
+    },
+  });
+
+  return {
+    database: result.database,
+    secret: result.secret,
+    connectionUrl: input.project ? null : databaseUrl,
+  };
+};
+
 export const databaseRoutes: FastifyPluginAsync = async (app) => {
   const access = new AccessService();
   const audit = new AuditLogService();
+
+  app.get('/databases', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
+    const query = listOrganizationDatabasesQuerySchema.parse(request.query);
+
+    try {
+      await access.requireOrganizationRole(user.userId, query.organizationId, 'developer');
+    } catch (error) {
+      return reply.forbidden((error as Error).message);
+    }
+
+    if (query.projectId) {
+      const project = await prisma.project.findFirst({
+        where: {
+          id: query.projectId,
+          organizationId: query.organizationId,
+        },
+        select: { id: true },
+      });
+      if (!project) {
+        return reply.notFound('Project not found in this organization.');
+      }
+    }
+
+    const databases = await prisma.managedDatabase.findMany({
+      where: {
+        organizationId: query.organizationId,
+        ...(query.projectId ? { projectId: query.projectId } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      select: managedDatabaseSelect,
+    });
+
+    return {
+      neonConfigured: Boolean(env.NEON_API_KEY?.trim()),
+      databases,
+    };
+  });
+
+  app.post('/databases/neon/provision', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
+    const body = provisionOrganizationNeonDatabaseBodySchema.parse(request.body);
+
+    const apiKey = env.NEON_API_KEY?.trim();
+    if (!apiKey) {
+      return reply.serviceUnavailable('Neon provisioning is not configured on the server.');
+    }
+
+    try {
+      await access.requireOrganizationRole(user.userId, body.organizationId, 'developer');
+    } catch (error) {
+      return reply.forbidden((error as Error).message);
+    }
+
+    const project = body.projectId
+      ? await prisma.project.findFirst({
+          where: {
+            id: body.projectId,
+            organizationId: body.organizationId,
+          },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            organizationId: true,
+          },
+        })
+      : null;
+
+    if (body.projectId && !project) {
+      return reply.notFound('Project not found in this organization.');
+    }
+
+    try {
+      const result = await provisionNeonManagedDatabase({
+        apiKey,
+        actorUserId: user.userId,
+        organizationId: body.organizationId,
+        project: project
+          ? {
+              id: project.id,
+              name: project.name,
+              slug: project.slug,
+            }
+          : null,
+        payload: {
+          projectName: body.projectName,
+          regionId: body.regionId,
+          branchName: body.branchName,
+          databaseName: body.databaseName,
+          roleName: body.roleName,
+          secretKey: body.secretKey,
+        },
+        audit,
+        requestLog: request.log,
+      });
+
+      return reply.code(201).send({
+        database: result.database,
+        secret: result.secret,
+        ...(result.connectionUrl ? { connectionUrl: result.connectionUrl } : {}),
+      });
+    } catch (error) {
+      return reply.badGateway((error as Error).message);
+    }
+  });
 
   app.get('/projects/:projectId/databases', { preHandler: [app.authenticate] }, async (request, reply) => {
     const user = request.user as { userId: string; email: string };
@@ -404,21 +731,12 @@ export const databaseRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const databases = await prisma.managedDatabase.findMany({
-      where: { projectId: params.projectId },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        provider: true,
-        status: true,
-        name: true,
-        regionId: true,
-        branchName: true,
-        databaseName: true,
-        roleName: true,
-        secretKey: true,
-        createdAt: true,
-        updatedAt: true,
+      where: {
+        organizationId: project.organizationId,
+        projectId: params.projectId,
       },
+      orderBy: { createdAt: 'desc' },
+      select: managedDatabaseSelect,
     });
 
     return {
@@ -456,163 +774,27 @@ export const databaseRoutes: FastifyPluginAsync = async (app) => {
       return reply.forbidden((error as Error).message);
     }
 
-    const regionId = body.regionId?.trim() || env.NEON_DEFAULT_REGION;
-    const branchName = toBranchName(body.branchName ?? 'main', 'main');
-    const databaseName = body.databaseName ?? toSnakeIdentifier(`${project.slug}_db`, 'app_db');
-    const roleName = body.roleName ?? toSnakeIdentifier(`${project.slug}_user`, 'app_user');
-    const secretKey = body.secretKey?.trim().toUpperCase() || 'DATABASE_URL';
-    const projectName = toProjectDisplayName(
-      body.projectName ?? `${project.name} database`,
-      `${project.name} database`,
-    );
-
-    let neonProjectId = '';
-    let neonBranchId = '';
-    let neonEndpointId: string | null = null;
-    let databaseUrl = '';
-
     try {
-      neonProjectId = await createNeonProject({
+      const result = await provisionNeonManagedDatabase({
         apiKey,
-        projectName,
-        regionId,
-        branchName,
-        databaseName,
-        roleName,
+        actorUserId: user.userId,
+        organizationId: project.organizationId,
+        project: {
+          id: project.id,
+          name: project.name,
+          slug: project.slug,
+        },
+        payload: body,
+        audit,
+        requestLog: request.log,
       });
-      neonBranchId = await resolveBranchId({
-        apiKey,
-        neonProjectId,
-        branchName,
-      });
-      const rolePassword = await resetRolePassword({
-        apiKey,
-        neonProjectId,
-        neonBranchId,
-        roleName,
-      });
-      const endpoint = await resolveEndpointInfo({
-        apiKey,
-        neonProjectId,
-        neonBranchId,
-      });
-      neonEndpointId = endpoint.endpointId;
-      const connectionUri = await resolveConnectionUriFromNeon({
-        apiKey,
-        neonProjectId,
-        neonBranchId,
-        databaseName,
-        roleName,
-      });
-      databaseUrl = ensureConnectionUri({
-        connectionUri,
-        roleName,
-        rolePassword,
-        databaseName,
-        endpointHost: endpoint.host,
+
+      return reply.code(201).send({
+        database: result.database,
+        secret: result.secret,
       });
     } catch (error) {
-      request.log.error(
-        {
-          err: error,
-          projectId: project.id,
-          regionId,
-          branchName,
-          databaseName,
-          roleName,
-        },
-        'Neon database provisioning failed',
-      );
       return reply.badGateway((error as Error).message);
     }
-
-    const encrypted = encryptSecret(databaseUrl);
-
-    const result = await prisma.$transaction(async (tx) => {
-      const secret = await tx.projectSecret.upsert({
-        where: {
-          projectId_key: {
-            projectId: project.id,
-            key: secretKey,
-          },
-        },
-        update: {
-          encryptedValue: encrypted.encryptedValue,
-          iv: encrypted.iv,
-          authTag: encrypted.authTag,
-        },
-        create: {
-          projectId: project.id,
-          key: secretKey,
-          encryptedValue: encrypted.encryptedValue,
-          iv: encrypted.iv,
-          authTag: encrypted.authTag,
-        },
-        select: {
-          id: true,
-          key: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
-
-      const managedDatabase = await tx.managedDatabase.create({
-        data: {
-          projectId: project.id,
-          createdById: user.userId,
-          provider: 'neon',
-          status: 'ready',
-          name: projectName,
-          regionId,
-          branchName,
-          databaseName,
-          roleName,
-          secretKey,
-          externalProjectId: neonProjectId,
-          externalBranchId: neonBranchId,
-          externalEndpointId: neonEndpointId,
-        },
-        select: {
-          id: true,
-          provider: true,
-          status: true,
-          name: true,
-          regionId: true,
-          branchName: true,
-          databaseName: true,
-          roleName: true,
-          secretKey: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
-
-      return {
-        secret,
-        managedDatabase,
-      };
-    });
-
-    await audit.record({
-      organizationId: project.organizationId,
-      actorUserId: user.userId,
-      action: 'project.database.provisioned',
-      entityType: 'managed_database',
-      entityId: result.managedDatabase.id,
-      metadata: {
-        projectId: project.id,
-        provider: 'neon',
-        regionId,
-        branchName,
-        databaseName,
-        roleName,
-        secretKey,
-      },
-    });
-
-    return reply.code(201).send({
-      database: result.managedDatabase,
-      secret: result.secret,
-    });
   });
 };

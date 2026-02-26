@@ -414,6 +414,13 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       };
     } catch (error) {
       if (error instanceof EmailVerificationError) {
+        if (error.statusCode === 429) {
+          return {
+            success: false,
+            throttled: true,
+            message: error.message,
+          };
+        }
         return reply.code(error.statusCode).send({ message: error.message });
       }
       throw error;
