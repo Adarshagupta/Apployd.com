@@ -175,6 +175,8 @@ export default function CreateProjectPage() {
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [showSecretsEditor, setShowSecretsEditor] = useState(false);
   const [showResourceTuning, setShowResourceTuning] = useState(false);
+  const [showVercelImport, setShowVercelImport] = useState(false);
+  const [showGithubBrowser, setShowGithubBrowser] = useState(false);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
   const [subscription, setSubscription] = useState<CurrentSubscription | null>(null);
 
@@ -189,8 +191,6 @@ export default function CreateProjectPage() {
     if (!SLUG_PATTERN.test(form.slug)) return 'Slug can only include lowercase letters, numbers, and hyphens.';
     return '';
   }, [form.slug]);
-  const hasProjectBasics = form.name.trim().length >= 2 && !slugError;
-  const hasSourceConfigured = form.repoUrl.trim().length > 0;
   const isCreateDisabled = submitting || loading || !selectedOrganizationId || !!slugError;
   const resourceLimits = useMemo(
     () => ({
@@ -568,19 +568,9 @@ export default function CreateProjectPage() {
 
   return (
     <div className="space-y-4">
-      <SectionCard title="Provision Project" subtitle="Create a project with deployment settings and initial resource limits.">
-        <form onSubmit={onSubmit} className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <SectionCard title="Create Project" subtitle="Connect your code and deploy.">
+        <form onSubmit={onSubmit} className="space-y-4">
           <section className="space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-sm font-semibold text-slate-900">Quick setup</p>
-              <div className="mt-2 grid gap-2 text-xs text-slate-600 md:grid-cols-3">
-                <p className={hasProjectBasics ? 'text-emerald-700' : ''}>1. Project basics</p>
-                <p className={hasSourceConfigured ? 'text-emerald-700' : ''}>2. Source and branch</p>
-                <p className={showSecretsEditor || envBulkText.trim() || envRows.some((row) => row.key || row.value) ? 'text-emerald-700' : ''}>
-                  3. Secrets and deploy
-                </p>
-              </div>
-            </div>
             <div className="grid gap-3 md:grid-cols-2">
               <label>
                 <span className="field-label">Project name</span>
@@ -609,59 +599,16 @@ export default function CreateProjectPage() {
               </label>
 
               <div className="md:col-span-2 space-y-3 rounded-xl border border-slate-200 p-3">
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold text-slate-900">Migrate from Vercel</p>
-                  <p className="text-xs text-slate-600">
-                    Import repository and build settings from an existing Vercel project before creating it in Apployd.
-                  </p>
-                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px_auto]">
-                    <input
-                      value={vercelProjectIdOrName}
-                      onChange={(event) => setVercelProjectIdOrName(event.target.value)}
-                      className="field-input"
-                      placeholder="Vercel project ID or name"
-                    />
-                    <input
-                      value={vercelTeamId}
-                      onChange={(event) => setVercelTeamId(event.target.value)}
-                      className="field-input"
-                      placeholder="team_xxx (optional)"
-                    />
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-900">Source</p>
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       className="btn-secondary"
-                      onClick={importFromVercel}
-                      disabled={vercelImportLoading}
+                      onClick={() => setShowVercelImport((prev) => !prev)}
                     >
-                      {vercelImportLoading ? 'Importing...' : 'Import from Vercel'}
+                      {showVercelImport ? 'Hide Vercel import' : 'Import from Vercel'}
                     </button>
-                  </div>
-                  <input
-                    type="password"
-                    value={vercelAccessToken}
-                    onChange={(event) => setVercelAccessToken(event.target.value)}
-                    className="field-input"
-                    placeholder="Vercel access token (optional if server has VERCEL_ACCESS_TOKEN)"
-                  />
-                  <p className="text-xs text-slate-600">
-                    Token is used only for this request and not stored by Apployd.
-                  </p>
-                </div>
-              </div>
-
-              <div className="md:col-span-2 space-y-3 rounded-xl border border-slate-200 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">GitHub repository</p>
-                    <p className="text-xs text-slate-600">
-                      {githubStatus?.connected
-                        ? `Connected as @${githubStatus.connection?.username ?? 'github-user'}`
-                        : githubStatus?.configured
-                          ? 'Connect GitHub to browse repositories.'
-                          : 'GitHub OAuth is not configured on the server.'}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
                     {!githubStatus?.connected ? (
                       <button
                         type="button"
@@ -675,17 +622,50 @@ export default function CreateProjectPage() {
                       <button
                         type="button"
                         className="btn-secondary"
-                        onClick={() => loadGitHubRepositories(githubSearch)}
-                        disabled={githubLoading}
+                        onClick={() => setShowGithubBrowser((prev) => !prev)}
                       >
-                        {githubLoading ? 'Refreshing...' : 'Refresh repos'}
+                        {showGithubBrowser ? 'Hide GitHub repos' : 'Browse GitHub repos'}
                       </button>
                     )}
                   </div>
                 </div>
 
-                {githubStatus?.connected ? (
-                  <div className="space-y-2">
+                {showVercelImport ? (
+                  <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+                    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px_auto]">
+                      <input
+                        value={vercelProjectIdOrName}
+                        onChange={(event) => setVercelProjectIdOrName(event.target.value)}
+                        className="field-input"
+                        placeholder="Vercel project ID or name"
+                      />
+                      <input
+                        value={vercelTeamId}
+                        onChange={(event) => setVercelTeamId(event.target.value)}
+                        className="field-input"
+                        placeholder="team_xxx (optional)"
+                      />
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={importFromVercel}
+                        disabled={vercelImportLoading}
+                      >
+                        {vercelImportLoading ? 'Importing...' : 'Import'}
+                      </button>
+                    </div>
+                    <input
+                      type="password"
+                      value={vercelAccessToken}
+                      onChange={(event) => setVercelAccessToken(event.target.value)}
+                      className="field-input"
+                      placeholder="Vercel token (optional)"
+                    />
+                  </div>
+                ) : null}
+
+                {githubStatus?.connected && showGithubBrowser ? (
+                  <div className="space-y-2 rounded-xl border border-slate-200 p-3">
                     <div className="flex flex-wrap gap-2">
                       <input
                         value={githubSearch}
@@ -701,6 +681,14 @@ export default function CreateProjectPage() {
                       >
                         {githubLoading ? 'Loading...' : 'Search'}
                       </button>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => loadGitHubRepositories(githubSearch)}
+                        disabled={githubLoading}
+                      >
+                        Refresh
+                      </button>
                     </div>
                     {githubRepos.length ? (
                       <div className="max-h-48 space-y-1 overflow-auto rounded-xl border border-slate-200 p-2">
@@ -715,66 +703,67 @@ export default function CreateProjectPage() {
                           >
                             <p className="text-sm font-semibold text-slate-900">{repository.fullName}</p>
                             <p className="text-xs text-slate-600">
-                              branch {repository.defaultBranch} | {repository.private ? 'private' : 'public'}
+                              {repository.defaultBranch} | {repository.private ? 'private' : 'public'}
                             </p>
                           </button>
                         ))}
                       </div>
                     ) : (
                       <p className="text-xs text-slate-600">
-                        {githubLoading ? 'Loading repositories...' : 'No repositories found for this filter.'}
+                        {githubLoading ? 'Loading repositories...' : 'No repositories found.'}
                       </p>
                     )}
-                    <p className="text-xs text-slate-600">
-                      Selected: <span className="font-medium">{selectedGithubRepo?.fullName ?? 'None'}</span>
-                    </p>
                   </div>
                 ) : null}
 
-                <label>
-                  <span className="field-label">Repository URL (optional)</span>
-                  <input
-                    type="url"
-                    value={form.repoUrl}
-                    onChange={(event) => {
-                      setSelectedGithubRepoId('');
-                      setForm((prev) => ({ ...prev, repoUrl: event.target.value }));
-                    }}
-                    className="field-input"
-                    placeholder="https://github.com/org/repo.git"
-                  />
-                </label>
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+                  <label>
+                    <span className="field-label">Repository URL</span>
+                    <input
+                      type="url"
+                      value={form.repoUrl}
+                      onChange={(event) => {
+                        setSelectedGithubRepoId('');
+                        setForm((prev) => ({ ...prev, repoUrl: event.target.value }));
+                      }}
+                      className="field-input"
+                      placeholder="https://github.com/org/repo.git"
+                    />
+                  </label>
+                  <label>
+                    <span className="field-label">Branch</span>
+                    <input
+                      value={form.branch}
+                      onChange={(event) => setForm((prev) => ({ ...prev, branch: event.target.value }))}
+                      className="field-input"
+                      placeholder="main"
+                      required
+                    />
+                  </label>
+                </div>
+                {selectedGithubRepo ? (
+                  <p className="text-xs text-slate-600">Selected: {selectedGithubRepo.fullName}</p>
+                ) : null}
               </div>
-
-              <label>
-                <span className="field-label">Branch</span>
-                <input
-                  value={form.branch}
-                  onChange={(event) => setForm((prev) => ({ ...prev, branch: event.target.value }))}
-                  className="field-input"
-                  placeholder="main"
-                  required
-                />
-              </label>
               <div className="md:col-span-2">
                 <button
                   type="button"
-                  className="text-sm font-medium text-slate-700 underline decoration-dotted underline-offset-4"
+                  className="btn-secondary"
                   onClick={() => setShowAdvancedSettings((prev) => !prev)}
                 >
-                  {showAdvancedSettings ? 'Hide advanced deploy settings' : 'Show advanced deploy settings'}
+                  {showAdvancedSettings ? 'Hide advanced settings' : 'Advanced settings'}
                 </button>
               </div>
 
               {showAdvancedSettings ? (
-                <>
+                <div className="md:col-span-2 grid gap-3 rounded-xl border border-slate-200 p-3 md:grid-cols-2">
                   <label>
-                    <span className="field-label">Repository folder (optional)</span>
+                    <span className="field-label">Repository folder</span>
                     <input
                       value={form.rootDirectory}
                       onChange={(event) => setForm((prev) => ({ ...prev, rootDirectory: event.target.value }))}
                       className="field-input"
-                      placeholder="/backend or apps/web"
+                      placeholder="apps/web"
                     />
                   </label>
                   <label>
@@ -807,19 +796,19 @@ export default function CreateProjectPage() {
                       placeholder="node dist/server.js"
                     />
                   </label>
-                </>
+                </div>
               ) : null}
             </div>
 
-            <div className="space-y-2 border-t border-slate-200 pt-3">
+            <div className="space-y-2 rounded-xl border border-slate-200 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-slate-900">Environment variables (optional)</p>
                 <button
                   type="button"
-                  className="text-sm font-medium text-slate-700 underline decoration-dotted underline-offset-4"
+                  className="btn-secondary"
                   onClick={() => setShowSecretsEditor((prev) => !prev)}
                 >
-                  {showSecretsEditor ? 'Hide secrets editor' : 'Add secrets'}
+                  {showSecretsEditor ? 'Hide' : 'Add secrets'}
                 </button>
               </div>
               {showSecretsEditor ? (
@@ -877,22 +866,17 @@ export default function CreateProjectPage() {
                     Add variable
                   </button>
                   <label className="block">
-                    <span className="field-label">Paste full .env</span>
+                    <span className="field-label">Paste .env</span>
                     <textarea
                       value={envBulkText}
                       onChange={(event) => setEnvBulkText(event.target.value)}
-                      className="field-input min-h-36 font-mono text-xs"
-                      placeholder={'DATABASE_URL=postgres://...\nJWT_SECRET=...\n# Comments are supported'}
+                      className="field-input min-h-32 font-mono text-xs"
+                      placeholder={'DATABASE_URL=postgres://...\nJWT_SECRET=...'}
                     />
                   </label>
-                  <p className="text-xs text-slate-600">
-                    Saved as encrypted project secrets and injected into deployments.
-                  </p>
                 </>
               ) : (
-                <p className="text-xs text-slate-600">
-                  Add secrets now or later from the project settings page.
-                </p>
+                <p className="text-xs text-slate-600">You can also add secrets later.</p>
               )}
             </div>
 
@@ -903,18 +887,16 @@ export default function CreateProjectPage() {
                 onChange={(event) => setForm((prev) => ({ ...prev, autoDeployEnabled: event.target.checked }))}
                 disabled={autoDeployLocked}
               />
-              <span className="text-sm text-slate-700">Auto deploy on push to selected branch</span>
+              <span className="text-sm text-slate-700">Auto deploy on push</span>
             </label>
             {autoDeployLocked ? (
-              <p className="text-xs text-slate-500">
-                Auto deploy is available on Dev plan and above.
-              </p>
+              <p className="text-xs text-slate-500">Upgrade plan to enable auto deploy.</p>
             ) : null}
           </section>
 
-          <aside className="space-y-4 rounded-2xl border border-slate-200 p-4">
+          <section className="space-y-4 rounded-2xl border border-slate-200 p-4">
             <div className="space-y-2">
-              <p className="text-sm font-semibold text-slate-900">Location</p>
+              <p className="text-sm font-semibold text-slate-900">Deployment</p>
               <label>
                 <span className="field-label">Deployment region</span>
                 <select
@@ -925,19 +907,18 @@ export default function CreateProjectPage() {
                   <option value="fsn1">Frankfurt, Germany (fsn1)</option>
                 </select>
               </label>
-              <p className="text-xs text-slate-600">More regions are coming soon.</p>
             </div>
 
             <div className="space-y-3">
-              <p className="text-sm font-semibold text-slate-900">Initial resource allocation</p>
+              <p className="text-sm font-semibold text-slate-900">Resource profile</p>
               <p className="text-xs text-slate-600">
                 {subscription
-                  ? `Subscription (${subscription.status}): up to ${resourceLimits.ram} MB RAM, ${resourceLimits.cpu} mCPU, ${resourceLimits.bandwidth} GB bandwidth`
+                  ? `Available: ${resourceLimits.ram} MB RAM, ${resourceLimits.cpu} mCPU, ${resourceLimits.bandwidth} GB`
                   : selectedOrganizationId
                     ? subscriptionLoading
                       ? 'Loading subscription limits...'
-                      : `Using default limits: ${resourceLimits.ram} MB RAM, ${resourceLimits.cpu} mCPU, ${resourceLimits.bandwidth} GB bandwidth`
-                    : 'Select an organization to load subscription limits.'}
+                      : `Default: ${resourceLimits.ram} MB RAM, ${resourceLimits.cpu} mCPU, ${resourceLimits.bandwidth} GB`
+                    : 'Select an organization to load limits.'}
               </p>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -964,10 +945,10 @@ export default function CreateProjectPage() {
               </div>
               <button
                 type="button"
-                className="text-sm font-medium text-slate-700 underline decoration-dotted underline-offset-4"
+                className="btn-secondary"
                 onClick={() => setShowResourceTuning((prev) => !prev)}
               >
-                {showResourceTuning ? 'Hide manual resource tuning' : 'Fine tune resources manually'}
+                {showResourceTuning ? 'Hide manual tuning' : 'Manual tuning'}
               </button>
               {showResourceTuning ? (
                 <>
@@ -1016,19 +997,19 @@ export default function CreateProjectPage() {
               ) : null}
             </div>
 
-            <div className="space-y-2 border-t border-slate-200 pt-3">
+            <div className="flex flex-col-reverse gap-2 border-t border-slate-200 pt-3 sm:flex-row sm:justify-end">
+              <Link href="/projects" className="btn-secondary text-center sm:w-36">
+                Cancel
+              </Link>
               <button
                 type="submit"
-                className="btn-primary w-full"
+                className="btn-primary sm:w-44"
                 disabled={isCreateDisabled}
               >
                 {submitting ? 'Creating project...' : 'Create project'}
               </button>
-              <Link href="/projects" className="btn-secondary w-full text-center">
-                Cancel
-              </Link>
             </div>
-          </aside>
+          </section>
         </form>
 
         {workspaceError ? <p className="mt-4 text-sm text-red-600">{workspaceError}</p> : null}
