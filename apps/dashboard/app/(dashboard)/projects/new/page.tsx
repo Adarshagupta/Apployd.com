@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ResourceSlider } from '../../../../components/resource-slider';
 import { SectionCard } from '../../../../components/section-card';
@@ -23,6 +23,55 @@ const DEFAULT_RESOURCE_LIMITS = {
   cpu: 500,
   bandwidth: 50,
 } as const;
+const GUIDE_STEPS = [
+  {
+    id: 'basics',
+    title: 'Project basics',
+    description: 'Set project name and slug.',
+  },
+  {
+    id: 'vercel',
+    title: 'Optional Vercel import',
+    description: 'Use this only if you want to import settings from Vercel.',
+  },
+  {
+    id: 'repository',
+    title: 'Git repository',
+    description: 'Connect GitHub or paste your repository URL and branch.',
+  },
+  {
+    id: 'advanced',
+    title: 'Advanced settings',
+    description: 'Open only when you need custom path, port, or commands.',
+  },
+  {
+    id: 'secrets',
+    title: 'Environment variables',
+    description: 'Add secrets now, or add them later from project settings.',
+  },
+  {
+    id: 'autoDeploy',
+    title: 'Auto deploy',
+    description: 'Enable deploy on every push to the selected branch.',
+  },
+  {
+    id: 'deployment',
+    title: 'Deployment region',
+    description: 'Choose where to deploy the service.',
+  },
+  {
+    id: 'resources',
+    title: 'Resource profile',
+    description: 'Pick a preset or tune resources manually.',
+  },
+  {
+    id: 'actions',
+    title: 'Create project',
+    description: 'Review choices, then create the project.',
+  },
+] as const;
+
+type GuideStepId = (typeof GUIDE_STEPS)[number]['id'];
 
 interface EnvRow {
   key: string;
@@ -179,6 +228,18 @@ export default function CreateProjectPage() {
   const [showGithubBrowser, setShowGithubBrowser] = useState(false);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
   const [subscription, setSubscription] = useState<CurrentSubscription | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [guideStepIndex, setGuideStepIndex] = useState(0);
+
+  const basicsRef = useRef<HTMLDivElement | null>(null);
+  const vercelToggleRef = useRef<HTMLDivElement | null>(null);
+  const repositoryRef = useRef<HTMLDivElement | null>(null);
+  const advancedRef = useRef<HTMLDivElement | null>(null);
+  const secretsRef = useRef<HTMLDivElement | null>(null);
+  const autoDeployRef = useRef<HTMLDivElement | null>(null);
+  const deploymentRef = useRef<HTMLDivElement | null>(null);
+  const resourcesRef = useRef<HTMLDivElement | null>(null);
+  const actionsRef = useRef<HTMLDivElement | null>(null);
 
   const selectedGithubRepo = useMemo(
     () => githubRepos.find((repo) => repo.id === selectedGithubRepoId) ?? null,
@@ -565,13 +626,83 @@ export default function CreateProjectPage() {
     form.ram === performancePreset.ram &&
     form.cpu === performancePreset.cpu &&
     form.bandwidth === performancePreset.bandwidth;
+  const activeGuideStep = guideOpen ? GUIDE_STEPS[guideStepIndex] : null;
+
+  const startGuide = () => {
+    setGuideStepIndex(0);
+    setGuideOpen(true);
+  };
+
+  const closeGuide = () => {
+    setGuideOpen(false);
+    setGuideStepIndex(0);
+  };
+
+  const nextGuideStep = () => {
+    if (guideStepIndex >= GUIDE_STEPS.length - 1) {
+      closeGuide();
+      return;
+    }
+
+    setGuideStepIndex((prev) => Math.min(prev + 1, GUIDE_STEPS.length - 1));
+  };
+
+  const previousGuideStep = () => {
+    setGuideStepIndex((prev) => Math.max(prev - 1, 0));
+  };
+
+  const getGuideTarget = useCallback((stepId: GuideStepId) => {
+    switch (stepId) {
+      case 'basics':
+        return basicsRef.current;
+      case 'vercel':
+        return vercelToggleRef.current;
+      case 'repository':
+        return repositoryRef.current;
+      case 'advanced':
+        return advancedRef.current;
+      case 'secrets':
+        return secretsRef.current;
+      case 'autoDeploy':
+        return autoDeployRef.current;
+      case 'deployment':
+        return deploymentRef.current;
+      case 'resources':
+        return resourcesRef.current;
+      case 'actions':
+        return actionsRef.current;
+      default:
+        return null;
+    }
+  }, []);
+
+  const guideHighlightClass = (stepId: GuideStepId) =>
+    activeGuideStep?.id === stepId
+      ? 'ring-2 ring-sky-400 shadow-[0_0_0_3px_rgba(56,189,248,0.18)]'
+      : '';
+
+  useEffect(() => {
+    if (!activeGuideStep) {
+      return;
+    }
+
+    const target = getGuideTarget(activeGuideStep.id);
+    if (!target) {
+      return;
+    }
+
+    target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+  }, [activeGuideStep, getGuideTarget]);
 
   return (
     <div className="space-y-4">
       <SectionCard title="Create Project" subtitle="Connect your code and deploy.">
         <form onSubmit={onSubmit} className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
           <section className="space-y-4">
-            <div className="flex justify-end">
+            <div
+              ref={vercelToggleRef}
+              className={`flex justify-end rounded-xl p-1 transition ${guideHighlightClass('vercel')}`}
+            >
               <button
                 type="button"
                 className="btn-secondary"
@@ -581,31 +712,36 @@ export default function CreateProjectPage() {
               </button>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <label>
-                <span className="field-label">Project name</span>
-                <input
-                  value={form.name}
-                  onChange={(event) => onNameChange(event.target.value)}
-                  className="field-input"
-                  placeholder="Payments API"
-                  required
-                />
-              </label>
-              <label>
-                <span className="field-label">Slug</span>
-                <input
-                  value={form.slug}
-                  onChange={(event) => {
-                    setSlugManuallyEdited(true);
-                    setForm((prev) => ({ ...prev, slug: slugify(event.target.value) }));
-                  }}
-                  className="field-input"
-                  placeholder="payments-api"
-                  minLength={2}
-                  maxLength={63}
-                  required
-                />
-              </label>
+              <div
+                ref={basicsRef}
+                className={`md:col-span-2 grid gap-3 rounded-xl p-1 transition md:grid-cols-2 ${guideHighlightClass('basics')}`}
+              >
+                <label>
+                  <span className="field-label">Project name</span>
+                  <input
+                    value={form.name}
+                    onChange={(event) => onNameChange(event.target.value)}
+                    className="field-input"
+                    placeholder="Payments API"
+                    required
+                  />
+                </label>
+                <label>
+                  <span className="field-label">Slug</span>
+                  <input
+                    value={form.slug}
+                    onChange={(event) => {
+                      setSlugManuallyEdited(true);
+                      setForm((prev) => ({ ...prev, slug: slugify(event.target.value) }));
+                    }}
+                    className="field-input"
+                    placeholder="payments-api"
+                    minLength={2}
+                    maxLength={63}
+                    required
+                  />
+                </label>
+              </div>
 
               {showVercelImport ? (
                 <div className="md:col-span-2 space-y-2 rounded-xl border border-slate-200 p-3">
@@ -641,7 +777,10 @@ export default function CreateProjectPage() {
                 </div>
               ) : null}
 
-              <div className="md:col-span-2 space-y-3 rounded-xl border border-slate-200 p-3">
+              <div
+                ref={repositoryRef}
+                className={`md:col-span-2 space-y-3 rounded-xl border border-slate-200 p-3 transition ${guideHighlightClass('repository')}`}
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-semibold text-slate-900">Git repository</p>
                   <div className="flex flex-wrap gap-2">
@@ -747,7 +886,10 @@ export default function CreateProjectPage() {
                   <p className="text-xs text-slate-600">Selected: {selectedGithubRepo.fullName}</p>
                 ) : null}
               </div>
-              <div className="md:col-span-2">
+              <div
+                ref={advancedRef}
+                className={`md:col-span-2 rounded-xl p-1 transition ${guideHighlightClass('advanced')}`}
+              >
                 <button
                   type="button"
                   className="btn-secondary"
@@ -802,7 +944,10 @@ export default function CreateProjectPage() {
               ) : null}
             </div>
 
-            <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+            <div
+              ref={secretsRef}
+              className={`space-y-2 rounded-xl border border-slate-200 p-3 transition ${guideHighlightClass('secrets')}`}
+            >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-slate-900">Environment variables (optional)</p>
                 <button
@@ -882,22 +1027,30 @@ export default function CreateProjectPage() {
               )}
             </div>
 
-            <label className="inline-flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={form.autoDeployEnabled}
-                onChange={(event) => setForm((prev) => ({ ...prev, autoDeployEnabled: event.target.checked }))}
-                disabled={autoDeployLocked}
-              />
-              <span className="text-sm text-slate-700">Auto deploy on push</span>
-            </label>
-            {autoDeployLocked ? (
-              <p className="text-xs text-slate-500">Upgrade plan to enable auto deploy.</p>
-            ) : null}
+            <div
+              ref={autoDeployRef}
+              className={`space-y-1 rounded-xl p-1 transition ${guideHighlightClass('autoDeploy')}`}
+            >
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={form.autoDeployEnabled}
+                  onChange={(event) => setForm((prev) => ({ ...prev, autoDeployEnabled: event.target.checked }))}
+                  disabled={autoDeployLocked}
+                />
+                <span className="text-sm text-slate-700">Auto deploy on push</span>
+              </label>
+              {autoDeployLocked ? (
+                <p className="text-xs text-slate-500">Upgrade plan to enable auto deploy.</p>
+              ) : null}
+            </div>
           </section>
 
           <aside className="space-y-4 rounded-2xl border border-slate-200 p-4 xl:sticky xl:top-24 h-fit">
-            <div className="space-y-2">
+            <div
+              ref={deploymentRef}
+              className={`space-y-2 rounded-xl p-1 transition ${guideHighlightClass('deployment')}`}
+            >
               <p className="text-sm font-semibold text-slate-900">Deployment</p>
               <label>
                 <span className="field-label">Deployment region</span>
@@ -911,7 +1064,10 @@ export default function CreateProjectPage() {
               </label>
             </div>
 
-            <div className="space-y-3">
+            <div
+              ref={resourcesRef}
+              className={`space-y-3 rounded-xl p-1 transition ${guideHighlightClass('resources')}`}
+            >
               <p className="text-sm font-semibold text-slate-900">Resource profile</p>
               <p className="text-xs text-slate-600">
                 {subscription
@@ -999,7 +1155,10 @@ export default function CreateProjectPage() {
               ) : null}
             </div>
 
-            <div className="space-y-2 border-t border-slate-200 pt-3">
+            <div
+              ref={actionsRef}
+              className={`space-y-2 rounded-xl border-t border-slate-200 p-1 pt-3 transition ${guideHighlightClass('actions')}`}
+            >
               <button
                 type="submit"
                 className="btn-primary w-full"
@@ -1018,6 +1177,50 @@ export default function CreateProjectPage() {
         {notice ? <p className="mt-2 text-sm text-slate-700">{notice}</p> : null}
         {message ? <p className="mt-2 text-sm text-red-600">{message}</p> : null}
       </SectionCard>
+
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2">
+        {activeGuideStep ? (
+          <div className="w-72 rounded-2xl border border-slate-700 bg-slate-950/95 p-4 text-slate-100 shadow-2xl backdrop-blur">
+            <p className="text-[11px] uppercase tracking-wide text-sky-300">
+              Form guide {guideStepIndex + 1}/{GUIDE_STEPS.length}
+            </p>
+            <p className="mt-1 text-sm font-semibold">{activeGuideStep.title}</p>
+            <p className="mt-1 text-xs text-slate-300">{activeGuideStep.description}</p>
+            <div className="mt-3 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={closeGuide}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={previousGuideStep}
+                disabled={guideStepIndex === 0}
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={nextGuideStep}
+              >
+                {guideStepIndex === GUIDE_STEPS.length - 1 ? 'Done' : 'Next'}
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <button
+          type="button"
+          className="btn-primary shadow-lg"
+          onClick={guideOpen ? closeGuide : startGuide}
+        >
+          {guideOpen ? 'Stop guide' : 'Guide me'}
+        </button>
+      </div>
     </div>
   );
 }
