@@ -22,6 +22,20 @@ interface ProjectSecretSummary {
   updatedAt: string;
 }
 
+interface ManagedDatabaseSummary {
+  id: string;
+  provider: string;
+  status: string;
+  name: string;
+  regionId: string;
+  branchName: string;
+  databaseName: string;
+  roleName: string;
+  secretKey: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface DeploymentSummary {
   id: string;
   status: string;
@@ -605,6 +619,19 @@ export default function ProjectDetailPage() {
   const [revealedSecrets, setRevealedSecrets] = useState<Record<string, string>>({});
   const [envDraft, setEnvDraft] = useState({ key: '', value: '' });
   const [envBulkText, setEnvBulkText] = useState('');
+  const [managedDatabases, setManagedDatabases] = useState<ManagedDatabaseSummary[]>([]);
+  const [managedDbLoading, setManagedDbLoading] = useState(false);
+  const [managedDbProvisioning, setManagedDbProvisioning] = useState(false);
+  const [managedDbMessage, setManagedDbMessage] = useState('');
+  const [neonProvisioningEnabled, setNeonProvisioningEnabled] = useState(true);
+  const [managedDbDraft, setManagedDbDraft] = useState({
+    projectName: '',
+    regionId: '',
+    branchName: 'main',
+    databaseName: '',
+    roleName: '',
+    secretKey: 'DATABASE_URL',
+  });
 
   const loadProjectSecrets = useCallback(async () => {
     if (!projectId) {
@@ -644,6 +671,36 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     loadProjectSecrets().catch(() => undefined);
   }, [loadProjectSecrets]);
+
+  const loadManagedDatabases = useCallback(async () => {
+    if (!projectId) {
+      setManagedDatabases([]);
+      setNeonProvisioningEnabled(true);
+      return;
+    }
+
+    try {
+      setManagedDbLoading(true);
+      const data = (await apiClient.get(`/projects/${projectId}/databases`)) as {
+        neonConfigured?: boolean;
+        databases?: ManagedDatabaseSummary[];
+      };
+      setManagedDatabases(data.databases ?? []);
+      setNeonProvisioningEnabled(data.neonConfigured !== false);
+    } catch (error) {
+      setManagedDatabases([]);
+      setManagedDbMessage((error as Error).message);
+    } finally {
+      setManagedDbLoading(false);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    if (activeTab !== 'environment') {
+      return;
+    }
+    loadManagedDatabases().catch(() => undefined);
+  }, [activeTab, loadManagedDatabases]);
 
   const saveProjectEnvVar = async () => {
     if (!projectId) return;
@@ -771,6 +828,46 @@ export default function ProjectDetailPage() {
       setEnvMessage((error as Error).message);
     } finally {
       setEnvBulkSaving(false);
+    }
+  };
+
+  const provisionManagedNeonDatabase = async () => {
+    if (!projectId) return;
+    if (!neonProvisioningEnabled) {
+      setManagedDbMessage('Neon provisioning is not configured on this server.');
+      return;
+    }
+
+    try {
+      setManagedDbProvisioning(true);
+      setManagedDbMessage('');
+      const payload = {
+        projectName: managedDbDraft.projectName.trim() || undefined,
+        regionId: managedDbDraft.regionId.trim() || undefined,
+        branchName: managedDbDraft.branchName.trim() || undefined,
+        databaseName: managedDbDraft.databaseName.trim() || undefined,
+        roleName: managedDbDraft.roleName.trim() || undefined,
+        secretKey: managedDbDraft.secretKey.trim().toUpperCase() || 'DATABASE_URL',
+      };
+
+      const result = (await apiClient.post(
+        `/projects/${projectId}/databases/neon/provision`,
+        payload,
+      )) as {
+        database?: ManagedDatabaseSummary;
+        secret?: { key?: string };
+      };
+
+      await Promise.all([loadManagedDatabases(), loadProjectSecrets()]);
+      setManagedDbMessage(
+        result.database?.name
+          ? `Neon database "${result.database.name}" provisioned. ${result.secret?.key ?? 'DATABASE_URL'} updated.`
+          : 'Neon database provisioned. DATABASE_URL updated.',
+      );
+    } catch (error) {
+      setManagedDbMessage((error as Error).message);
+    } finally {
+      setManagedDbProvisioning(false);
     }
   };
 
@@ -1797,6 +1894,132 @@ export default function ProjectDetailPage() {
               <p className="mt-1 text-sm text-slate-500">
                 Encrypted secrets injected into every deployment for this project.
               </p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 p-4 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900">Managed PostgreSQL (Neon)</h4>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Create a Neon Postgres database and automatically write its connection string to a project secret.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => loadManagedDatabases()}
+                  disabled={managedDbLoading}
+                >
+                  {managedDbLoading ? 'Refreshing...' : 'Refresh'}
+                </button>
+              </div>
+
+              {!neonProvisioningEnabled && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Neon API is not configured on this server. Set <span className="mono">NEON_API_KEY</span> in control-plane env.
+                </div>
+              )}
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <label>
+                  <span className="field-label">Neon project name (optional)</span>
+                  <input
+                    value={managedDbDraft.projectName}
+                    onChange={(event) =>
+                      setManagedDbDraft((previous) => ({ ...previous, projectName: event.target.value }))
+                    }
+                    className="field-input"
+                    placeholder={`${project?.name ?? 'Project'} database`}
+                  />
+                </label>
+                <label>
+                  <span className="field-label">Region (optional)</span>
+                  <input
+                    value={managedDbDraft.regionId}
+                    onChange={(event) =>
+                      setManagedDbDraft((previous) => ({ ...previous, regionId: event.target.value }))
+                    }
+                    className="field-input"
+                    placeholder="aws-us-east-1"
+                  />
+                </label>
+                <label>
+                  <span className="field-label">Branch</span>
+                  <input
+                    value={managedDbDraft.branchName}
+                    onChange={(event) =>
+                      setManagedDbDraft((previous) => ({ ...previous, branchName: event.target.value }))
+                    }
+                    className="field-input"
+                    placeholder="main"
+                  />
+                </label>
+                <label>
+                  <span className="field-label">Database name (optional)</span>
+                  <input
+                    value={managedDbDraft.databaseName}
+                    onChange={(event) =>
+                      setManagedDbDraft((previous) => ({ ...previous, databaseName: event.target.value }))
+                    }
+                    className="field-input"
+                    placeholder="app_db"
+                  />
+                </label>
+                <label>
+                  <span className="field-label">Role name (optional)</span>
+                  <input
+                    value={managedDbDraft.roleName}
+                    onChange={(event) =>
+                      setManagedDbDraft((previous) => ({ ...previous, roleName: event.target.value }))
+                    }
+                    className="field-input"
+                    placeholder="app_user"
+                  />
+                </label>
+                <label>
+                  <span className="field-label">Secret key</span>
+                  <input
+                    value={managedDbDraft.secretKey}
+                    onChange={(event) =>
+                      setManagedDbDraft((previous) => ({ ...previous, secretKey: event.target.value.toUpperCase() }))
+                    }
+                    className="field-input"
+                    placeholder="DATABASE_URL"
+                  />
+                </label>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={provisionManagedNeonDatabase}
+                  disabled={managedDbProvisioning || !neonProvisioningEnabled}
+                >
+                  {managedDbProvisioning ? 'Provisioning...' : 'Create Neon database'}
+                </button>
+              </div>
+
+              {managedDatabases.length > 0 && (
+                <div className="space-y-2">
+                  {managedDatabases.map((database) => (
+                    <article
+                      key={database.id}
+                      className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                    >
+                      <p className="text-sm font-medium text-slate-900">{database.name}</p>
+                      <p className="text-xs text-slate-600">
+                        {database.provider} | {database.status} | {database.regionId} | {database.branchName}
+                      </p>
+                      <p className="mono text-xs text-slate-700 mt-1">
+                        db={database.databaseName} user={database.roleName} secret={database.secretKey}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              )}
+
+              {managedDbMessage && <p className="text-sm text-slate-700">{managedDbMessage}</p>}
             </div>
 
             <div className="grid gap-3 md:grid-cols-[220px_minmax(0,1fr)_auto]">

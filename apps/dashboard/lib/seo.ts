@@ -3,21 +3,30 @@ import type { Metadata } from 'next';
 const DEFAULT_SITE_URL = 'https://apployd.com';
 export const SITE_NAME = 'Apployd';
 export const SITE_DESCRIPTION =
-  'Apployd is a deployment platform for backend apps. Deploy APIs on your own infrastructure with Git-based workflows, preview environments, and real-time observability.';
+  'Apployd is a managed deployment platform to deploy web apps and APIs with Git-based workflows, secure secrets, preview environments, and real-time observability.';
 export const SITE_PRIMARY_KEYWORDS = [
   'apployd',
   'apployd platform',
-  'backend deployment platform',
+  'web app deployment platform',
+  'api deployment platform',
   'managed deployment platform',
   'saas deployment platform',
-  'hetzner deployment platform',
-  'vercel alternative',
   'preview deployments',
   'custom domain hosting',
   'developer platform',
   'platform as a service',
   'git based deployments',
 ];
+
+export const SITE_NAVIGATION_LINKS = [
+  { name: 'Pricing', path: '/pricing' },
+  { name: 'Docs', path: '/docs' },
+  { name: 'Blog', path: '/blog' },
+  { name: 'Security', path: '/security' },
+  { name: 'About', path: '/about' },
+  { name: 'Help', path: '/help' },
+  { name: 'Contact', path: '/contact' },
+] as const;
 const rawSiteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ??
   process.env.NEXT_PUBLIC_APP_URL ??
@@ -66,9 +75,12 @@ export const indexRobots: NonNullable<Metadata['robots']> = {
 export const websiteJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'WebSite',
+  '@id': `${siteUrl}/#website`,
   name: SITE_NAME,
+  alternateName: `${SITE_NAME} Deployment Platform`,
   url: siteUrl,
   description: SITE_DESCRIPTION,
+  inLanguage: 'en-US',
 };
 
 const organizationSameAs = [
@@ -80,11 +92,19 @@ const organizationSameAs = [
 export const organizationJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'Organization',
+  '@id': `${siteUrl}/#organization`,
   name: SITE_NAME,
   url: siteUrl,
   logo: `${siteUrl}/icon.png`,
   ...(organizationSameAs.length > 0 ? { sameAs: organizationSameAs } : {}),
 };
+
+export const siteNavigationJsonLd = SITE_NAVIGATION_LINKS.map((item) => ({
+  '@context': 'https://schema.org',
+  '@type': 'SiteNavigationElement',
+  name: item.name,
+  url: `${siteUrl}${item.path}`,
+}));
 
 export const softwareApplicationJsonLd = {
   '@context': 'https://schema.org',

@@ -101,6 +101,21 @@ interface GitHubConnectionStatus {
   } | null;
 }
 
+interface VercelConnectionStatus {
+  configured: boolean;
+  connected: boolean;
+  connection: {
+    username: string | null;
+    email: string | null;
+    avatarUrl: string | null;
+    tokenScope: string | null;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+  oauthRedirectUri?: string;
+  legacyAccessTokenConfigured?: boolean;
+}
+
 interface CurrentSubscription {
   status: string;
   poolRamMb: number;
@@ -150,6 +165,22 @@ interface VercelImportPayload {
     }>;
   };
   warnings: string[];
+}
+
+interface VercelProjectListItem {
+  id: string;
+  name: string;
+  slug: string;
+  framework: string | null;
+  repoFullName: string | null;
+  repoUrl: string | null;
+  branch: string;
+  updatedAt: string | null;
+}
+
+interface VercelProjectListPayload {
+  source: 'vercel';
+  projects: VercelProjectListItem[];
 }
 
 const slugify = (value: string) =>
@@ -217,10 +248,14 @@ export default function CreateProjectPage() {
   const [githubLoading, setGithubLoading] = useState(false);
   const [githubConnecting, setGithubConnecting] = useState(false);
   const [selectedGithubRepoId, setSelectedGithubRepoId] = useState('');
+  const [vercelStatus, setVercelStatus] = useState<VercelConnectionStatus | null>(null);
+  const [vercelConnecting, setVercelConnecting] = useState(false);
   const [vercelImportLoading, setVercelImportLoading] = useState(false);
+  const [vercelProjectsLoading, setVercelProjectsLoading] = useState(false);
+  const [vercelProjects, setVercelProjects] = useState<VercelProjectListItem[]>([]);
+  const [vercelProjectSearch, setVercelProjectSearch] = useState('');
   const [vercelProjectIdOrName, setVercelProjectIdOrName] = useState('');
   const [vercelTeamId, setVercelTeamId] = useState('');
-  const [vercelAccessToken, setVercelAccessToken] = useState('');
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [showSecretsEditor, setShowSecretsEditor] = useState(false);
   const [showResourceTuning, setShowResourceTuning] = useState(false);
@@ -244,6 +279,25 @@ export default function CreateProjectPage() {
   const selectedGithubRepo = useMemo(
     () => githubRepos.find((repo) => repo.id === selectedGithubRepoId) ?? null,
     [githubRepos, selectedGithubRepoId],
+  );
+  const filteredVercelProjects = useMemo(() => {
+    const query = vercelProjectSearch.trim().toLowerCase();
+    if (!query) {
+      return vercelProjects;
+    }
+
+    return vercelProjects.filter((project) =>
+      project.name.toLowerCase().includes(query)
+      || project.slug.toLowerCase().includes(query)
+      || project.repoFullName?.toLowerCase().includes(query),
+    );
+  }, [vercelProjects, vercelProjectSearch]);
+  const selectedVercelProject = useMemo(
+    () =>
+      vercelProjects.find(
+        (project) => project.id === vercelProjectIdOrName || project.name === vercelProjectIdOrName,
+      ) ?? null,
+    [vercelProjects, vercelProjectIdOrName],
   );
   const autoDeployLocked = subscription?.entitlements?.autoDeploy === false;
   const slugError = useMemo(() => {
@@ -278,6 +332,19 @@ export default function CreateProjectPage() {
       if (!status.connected) {
         setGithubRepos([]);
         setSelectedGithubRepoId('');
+      }
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
+  }, []);
+
+  const loadVercelStatus = useCallback(async () => {
+    try {
+      const status = (await apiClient.get('/integrations/vercel/status')) as VercelConnectionStatus;
+      setVercelStatus(status);
+      if (!status.connected) {
+        setVercelProjects([]);
+        setVercelProjectIdOrName('');
       }
     } catch (error) {
       setMessage((error as Error).message);
@@ -340,6 +407,38 @@ export default function CreateProjectPage() {
     }
   };
 
+  const connectVercel = async () => {
+    setVercelConnecting(true);
+    setMessage('');
+    setNotice('');
+    try {
+      const data = await apiClient.get(
+        `/integrations/vercel/connect-url?redirectTo=${encodeURIComponent('/projects/new')}`,
+      );
+      if (!data.url) {
+        throw new Error('Vercel authorize URL is missing.');
+      }
+      window.location.href = data.url;
+    } catch (error) {
+      setMessage((error as Error).message);
+      setVercelConnecting(false);
+    }
+  };
+
+  const disconnectVercel = async () => {
+    setMessage('');
+    setNotice('');
+    try {
+      await apiClient.delete('/integrations/vercel/connection');
+      setVercelProjects([]);
+      setVercelProjectIdOrName('');
+      await loadVercelStatus();
+      setNotice('Vercel account disconnected.');
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
+  };
+
   const bindRepositorySelection = (repository: GitHubRepository) => {
     setSelectedGithubRepoId(repository.id);
     setForm((prev) => ({
@@ -353,6 +452,10 @@ export default function CreateProjectPage() {
   useEffect(() => {
     loadGitHubStatus().catch(() => undefined);
   }, [loadGitHubStatus]);
+
+  useEffect(() => {
+    loadVercelStatus().catch(() => undefined);
+  }, [loadVercelStatus]);
 
   useEffect(() => {
     loadSubscription().catch(() => undefined);
@@ -380,6 +483,21 @@ export default function CreateProjectPage() {
   }, [loadGitHubRepositories, loadGitHubStatus, searchParams]);
 
   useEffect(() => {
+    const vercelState = searchParams?.get('vercel');
+    const vercelMessage = searchParams?.get('vercelMessage');
+    if (vercelState === 'connected') {
+      setNotice('Vercel connected successfully.');
+      setShowVercelImport(true);
+      loadVercelStatus().catch(() => undefined);
+      return;
+    }
+
+    if (vercelState === 'error') {
+      setMessage(vercelMessage ?? 'Vercel connection failed.');
+    }
+  }, [loadVercelStatus, searchParams]);
+
+  useEffect(() => {
     setForm((prev) => ({
       ...prev,
       ram: clamp(prev.ram, MIN_RESOURCE_LIMITS.ram, resourceLimits.ram),
@@ -400,10 +518,48 @@ export default function CreateProjectPage() {
     await loadGitHubRepositories(githubSearch);
   };
 
+  const loadVercelProjects = async () => {
+    if (!vercelStatus?.connected) {
+      setMessage('Connect your Vercel account first.');
+      return;
+    }
+
+    setVercelProjectsLoading(true);
+    setMessage('');
+    setNotice('');
+
+    try {
+      const payload = (await apiClient.post('/integrations/vercel/projects', {
+        ...(vercelTeamId.trim() ? { teamId: vercelTeamId.trim() } : {}),
+        limit: 100,
+      })) as VercelProjectListPayload;
+
+      setVercelProjects(payload.projects ?? []);
+      setVercelProjectSearch('');
+      const firstProject = payload.projects[0];
+      if (!firstProject) {
+        setNotice('No Vercel projects found for this account/team.');
+      } else {
+        if (!vercelProjectIdOrName.trim()) {
+          setVercelProjectIdOrName(firstProject.id);
+        }
+        setNotice(`Loaded ${payload.projects.length} Vercel project${payload.projects.length === 1 ? '' : 's'}.`);
+      }
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setVercelProjectsLoading(false);
+    }
+  };
+
   const importFromVercel = async () => {
     const cleanedProject = vercelProjectIdOrName.trim();
     if (!cleanedProject) {
       setMessage('Enter Vercel project ID or name.');
+      return;
+    }
+    if (!vercelStatus?.connected) {
+      setMessage('Connect your Vercel account first.');
       return;
     }
 
@@ -415,7 +571,6 @@ export default function CreateProjectPage() {
       const payload = (await apiClient.post('/integrations/vercel/import-project', {
         projectIdOrName: cleanedProject,
         ...(vercelTeamId.trim() ? { teamId: vercelTeamId.trim() } : {}),
-        ...(vercelAccessToken.trim() ? { accessToken: vercelAccessToken.trim() } : {}),
       })) as VercelImportPayload;
 
       const imported = payload.project;
@@ -438,7 +593,6 @@ export default function CreateProjectPage() {
       }));
       setSlugManuallyEdited(false);
       setSelectedGithubRepoId('');
-      setVercelAccessToken('');
       const importedEnvVariables = payload.environmentVariables?.variables ?? [];
       if (importedEnvVariables.length > 0) {
         setEnvRows(importedEnvVariables.map((entry) => ({ key: entry.key, value: entry.value })));
@@ -745,35 +899,107 @@ export default function CreateProjectPage() {
 
               {showVercelImport ? (
                 <div className="md:col-span-2 space-y-2 rounded-xl border border-slate-200 p-3">
-                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px_auto]">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">Vercel migration</p>
+                      <p className="text-xs text-slate-600">
+                        {vercelStatus?.connected
+                          ? `Connected as ${vercelStatus.connection?.username ?? vercelStatus.connection?.email ?? 'your Vercel account'}`
+                          : vercelStatus?.configured
+                            ? 'Connect Vercel to import project settings.'
+                            : 'Vercel OAuth is not configured on the server.'}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {!vercelStatus?.connected ? (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={connectVercel}
+                          disabled={!vercelStatus?.configured || vercelConnecting}
+                        >
+                          {vercelConnecting ? 'Connecting...' : 'Connect Vercel'}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={disconnectVercel}
+                        >
+                          Disconnect
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={loadVercelProjects}
+                        disabled={!vercelStatus?.connected || vercelProjectsLoading}
+                      >
+                        {vercelProjectsLoading ? 'Loading...' : 'Load projects'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <input
+                    value={vercelTeamId}
+                    onChange={(event) => setVercelTeamId(event.target.value)}
+                    className="field-input"
+                    placeholder="team_xxx (optional)"
+                  />
+
+                  {vercelProjects.length > 0 ? (
+                    <div className="space-y-2 rounded-xl border border-slate-200 p-2">
+                      <input
+                        value={vercelProjectSearch}
+                        onChange={(event) => setVercelProjectSearch(event.target.value)}
+                        className="field-input"
+                        placeholder="Search loaded Vercel projects"
+                      />
+                      <div className="max-h-44 space-y-1 overflow-auto rounded-lg border border-slate-200 p-2">
+                        {filteredVercelProjects.map((project) => (
+                          <button
+                            key={project.id}
+                            type="button"
+                            className={`w-full rounded-lg border p-2 text-left ${
+                              selectedVercelProject?.id === project.id ? 'border-slate-900' : 'border-slate-200'
+                            }`}
+                            onClick={() => setVercelProjectIdOrName(project.id)}
+                          >
+                            <p className="text-sm font-semibold text-slate-900">{project.name}</p>
+                            <p className="text-xs text-slate-600">
+                              {project.repoFullName ?? project.slug} | branch {project.branch}
+                            </p>
+                          </button>
+                        ))}
+                        {!filteredVercelProjects.length ? (
+                          <p className="text-xs text-slate-600">No projects match this search.</p>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
                     <input
                       value={vercelProjectIdOrName}
                       onChange={(event) => setVercelProjectIdOrName(event.target.value)}
                       className="field-input"
-                      placeholder="Vercel project ID or name"
-                    />
-                    <input
-                      value={vercelTeamId}
-                      onChange={(event) => setVercelTeamId(event.target.value)}
-                      className="field-input"
-                      placeholder="team_xxx (optional)"
+                      placeholder="Selected Vercel project ID or name"
                     />
                     <button
                       type="button"
                       className="btn-secondary"
                       onClick={importFromVercel}
-                      disabled={vercelImportLoading}
+                      disabled={!vercelStatus?.connected || vercelImportLoading}
                     >
-                      {vercelImportLoading ? 'Importing...' : 'Import'}
+                      {vercelImportLoading ? 'Importing...' : 'Import settings'}
                     </button>
                   </div>
-                  <input
-                    type="password"
-                    value={vercelAccessToken}
-                    onChange={(event) => setVercelAccessToken(event.target.value)}
-                    className="field-input"
-                    placeholder="Vercel token (optional)"
-                  />
+
+                  {selectedVercelProject ? (
+                    <p className="text-xs text-slate-600">
+                      Selected: <span className="font-medium">{selectedVercelProject.name}</span>
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
 

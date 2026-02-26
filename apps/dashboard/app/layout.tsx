@@ -7,6 +7,7 @@ import { LandingThemeSync } from '../components/landing-theme-sync';
 import {
   indexRobots,
   organizationJsonLd,
+  siteNavigationJsonLd,
   siteMetadataBase,
   siteUrl,
   SITE_PRIMARY_KEYWORDS,
@@ -41,7 +42,7 @@ const metadataVerification: Metadata['verification'] = {
 export const metadata: Metadata = {
   metadataBase: siteMetadataBase,
   title: {
-    default: `${SITE_NAME} | Managed Deployment Platform`,
+    default: `${SITE_NAME} | Deploy Web Apps and APIs`,
     template: `%s | ${SITE_NAME}`,
   },
   description: SITE_DESCRIPTION,
@@ -75,7 +76,7 @@ export const metadata: Metadata = {
     locale: 'en_US',
     type: 'website',
     url: '/',
-    title: `${SITE_NAME} | Managed Deployment Platform`,
+    title: `${SITE_NAME} | Deploy Web Apps and APIs`,
     description: SITE_DESCRIPTION,
     images: [
       {
@@ -88,7 +89,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: `${SITE_NAME} | Managed Deployment Platform`,
+    title: `${SITE_NAME} | Deploy Web Apps and APIs`,
     description: SITE_DESCRIPTION,
     images: ['/twitter-image'],
   },
@@ -129,6 +130,10 @@ gtag('config', '${GOOGLE_TAG_ID}');`,
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareApplicationJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(siteNavigationJsonLd) }}
         />
         <LandingThemeSync />
         {children}

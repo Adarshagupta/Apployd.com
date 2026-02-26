@@ -150,10 +150,12 @@ model User {
   acceptedOrganizationInvites OrganizationInvite[] @relation("OrganizationInviteAccepter")
   auditLogs      AuditLog[]
   githubConnection GitHubConnection?
+  vercelConnection VercelConnection?
   contentPosts   ContentPost[]        @relation("ContentPostAuthor")
   resolvedSecurityIncidents SecurityIncident[] @relation("SecurityIncidentResolver")
   submittedSecurityAppeals SecurityIncidentAppeal[] @relation("SecurityIncidentAppealRequester")
   decidedSecurityAppeals SecurityIncidentAppeal[] @relation("SecurityIncidentAppealDecider")
+  managedDatabases ManagedDatabase[]
 
   @@index([oauthProvider, oauthSubject])
   @@map("users")
@@ -288,6 +290,7 @@ model Project {
   customDomains        CustomDomain[]
   securityIncidents    SecurityIncident[]
   securityAppeals      SecurityIncidentAppeal[]
+  managedDatabases     ManagedDatabase[]
 
   @@unique([organizationId, slug])
   @@index([organizationId, createdAt])
@@ -622,6 +625,32 @@ model ProjectSecret {
   @@map("project_secrets")
 }
 
+model ManagedDatabase {
+  id                String   @id @default(cuid())
+  projectId         String
+  createdById       String
+  provider          String   @default("neon")
+  status            String   @default("ready")
+  name              String
+  regionId          String
+  branchName        String
+  databaseName      String
+  roleName          String
+  secretKey         String   @default("DATABASE_URL")
+  externalProjectId String
+  externalBranchId  String
+  externalEndpointId String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy         User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([projectId, createdAt])
+  @@index([createdById, createdAt])
+  @@index([provider, externalProjectId])
+  @@map("managed_databases")
+}
+
 model WebhookEvent {
   id          String   @id @default(cuid())
   provider    String
@@ -671,4 +700,29 @@ model GitHubConnection {
   @@unique([githubUserId])
   @@index([username])
   @@map("github_connections")
+}
+
+model VercelConnection {
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  vercelUserId         String
+  username             String?
+  email                String?
+  avatarUrl            String?
+  tokenScope           String?
+  encryptedAccessToken String
+  accessTokenIv        String
+  accessTokenAuthTag   String
+  encryptedRefreshToken String?
+  refreshTokenIv       String?
+  refreshTokenAuthTag  String?
+  accessTokenExpiresAt DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([vercelUserId])
+  @@index([username])
+  @@index([accessTokenExpiresAt])
+  @@map("vercel_connections")
 }

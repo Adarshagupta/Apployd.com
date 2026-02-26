@@ -13,16 +13,15 @@ import { buildPageMetadata } from '../lib/seo';
 import styles from './landing.module.css';
 
 export const metadata: Metadata = buildPageMetadata({
-  title: 'Apployd Managed Deployment Platform',
+  title: 'Deploy Web Apps and APIs',
   description:
-    'Deploy backend apps on your own infrastructure with Git-based workflows, preview deployments, custom domains, and real-time observability.',
+    'Deploy web apps and APIs with Git-based workflows, preview deployments, custom domains, secure secrets, and real-time observability.',
   path: '/',
   keywords: [
     'apployd',
-    'backend deployment platform',
-    'deploy on hetzner',
+    'web app deployment platform',
+    'api deployment platform',
     'managed deployment platform',
-    'vercel alternative',
     'saas deployment platform',
     'preview deployments',
     'custom domain hosting',

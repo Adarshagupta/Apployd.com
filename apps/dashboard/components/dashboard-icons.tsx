@@ -79,6 +79,16 @@ export function IconIntegrations(props: IconProps) {
   );
 }
 
+export function IconDatabase(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <ellipse cx="10" cy="4.8" rx="5.8" ry="2.4" />
+      <path d="M4.2 4.8v8.1c0 1.3 2.6 2.4 5.8 2.4s5.8-1.1 5.8-2.4V4.8" />
+      <path d="M4.2 8.9c0 1.3 2.6 2.4 5.8 2.4s5.8-1.1 5.8-2.4" />
+    </Glyph>
+  );
+}
+
 export function IconUsage(props: IconProps) {
   return (
     <Glyph {...props}>

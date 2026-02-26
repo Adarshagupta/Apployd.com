@@ -9,6 +9,7 @@ import { DashboardNav } from '../../components/dashboard-nav';
 import {
   IconBilling,
   IconContent,
+  IconDatabase,
   IconPlus,
   IconProfile,
   IconProjects,
@@ -29,6 +30,10 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/projects': {
     title: 'Projects',
     subtitle: 'Manage your projects, deployments, and configuration.',
+  },
+  '/databases': {
+    title: 'Databases',
+    subtitle: 'Provision and manage project PostgreSQL databases.',
   },
   '/content': {
     title: 'Content Studio',
@@ -321,6 +326,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                       <Link href="/projects/new" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
                         <IconPlus size={16} />
                         <span>Create Project</span>
+                      </Link>
+                      <Link href="/databases" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                        <IconDatabase size={16} />
+                        <span>Databases</span>
                       </Link>
                       {showContentMenu ? (
                         <Link href="/content" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>

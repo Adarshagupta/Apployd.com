@@ -10,6 +10,7 @@ import { authRoutes } from './modules/auth/routes.js';
 import { billingRoutes } from './modules/billing/routes.js';
 import { contentRoutes } from './modules/content/routes.js';
 import { containerRoutes } from './modules/containers/routes.js';
+import { databaseRoutes } from './modules/databases/routes.js';
 import { deploymentRoutes } from './modules/deployments/routes.js';
 import { domainRoutes } from './modules/domains/routes.js';
 import { edgeRoutes } from './modules/edge/routes.js';
@@ -117,6 +118,7 @@ export const buildApp = () => {
     api.register(teamRoutes);
     api.register(planRoutes);
     api.register(projectRoutes);
+    api.register(databaseRoutes);
     api.register(securityRoutes);
     api.register(secretRoutes);
     api.register(deploymentRoutes);
