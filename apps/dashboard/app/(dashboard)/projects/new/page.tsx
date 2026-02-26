@@ -569,7 +569,7 @@ export default function CreateProjectPage() {
   return (
     <div className="space-y-4">
       <SectionCard title="Create Project" subtitle="Connect your code and deploy.">
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form onSubmit={onSubmit} className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
           <section className="space-y-4">
             <div className="flex justify-end">
               <button
@@ -896,7 +896,7 @@ export default function CreateProjectPage() {
             ) : null}
           </section>
 
-          <section className="space-y-4 rounded-2xl border border-slate-200 p-4">
+          <aside className="space-y-4 rounded-2xl border border-slate-200 p-4 xl:sticky xl:top-24 h-fit">
             <div className="space-y-2">
               <p className="text-sm font-semibold text-slate-900">Deployment</p>
               <label>
@@ -999,19 +999,19 @@ export default function CreateProjectPage() {
               ) : null}
             </div>
 
-            <div className="flex flex-col-reverse gap-2 border-t border-slate-200 pt-3 sm:flex-row sm:justify-end">
-              <Link href="/projects" className="btn-secondary text-center sm:w-36">
-                Cancel
-              </Link>
+            <div className="space-y-2 border-t border-slate-200 pt-3">
               <button
                 type="submit"
-                className="btn-primary sm:w-44"
+                className="btn-primary w-full"
                 disabled={isCreateDisabled}
               >
                 {submitting ? 'Creating project...' : 'Create project'}
               </button>
+              <Link href="/projects" className="btn-secondary block w-full text-center">
+                Cancel
+              </Link>
             </div>
-          </section>
+          </aside>
         </form>
 
         {workspaceError ? <p className="mt-4 text-sm text-red-600">{workspaceError}</p> : null}
