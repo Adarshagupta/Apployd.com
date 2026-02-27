@@ -745,7 +745,7 @@ export default function HomePage() {
               <ul className={styles.footerList}>
                 <li><a href="#product" className={styles.footerLink}>Features</a></li>
                 <li><a href="/pricing" className={styles.footerLink}>Pricing</a></li>
-                <li><a href="/docs" className={styles.footerLink}>Docs</a></li>
+                <li><Link href="/docs" className={styles.footerLink}>Docs</Link></li>
                 <li><a href="/security" className={styles.footerLink}>Security</a></li>
               </ul>
             </div>
