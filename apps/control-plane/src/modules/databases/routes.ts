@@ -316,7 +316,111 @@ const isNeonAlreadyExistsError = (error: unknown): boolean => {
 };
 
 const isNeonRoleMissingError = (error: unknown): boolean =>
-  neonErrorMessage(error).includes('role not found');
+  neonErrorMessage(error).includes('role not found')
+  || neonErrorMessage(error).includes('database owner not found');
+
+const isNeonRateLimitedError = (error: unknown): boolean => {
+  const message = neonErrorMessage(error);
+  return message.includes('rate limit') || message.includes('too many requests');
+};
+
+const isNeonTimeoutError = (error: unknown): boolean => {
+  const message = neonErrorMessage(error);
+  return message.includes('timeout') || message.includes('timed out');
+};
+
+const isNeonAuthError = (error: unknown): boolean => {
+  const message = neonErrorMessage(error);
+  return (
+    message.includes('invalid api key')
+    || message.includes('unauthorized')
+    || message.includes('forbidden')
+    || message.includes('status 401')
+    || message.includes('status 403')
+  );
+};
+
+const isNeonValidationError = (error: unknown): boolean => {
+  const message = neonErrorMessage(error);
+  return (
+    message.includes('invalid')
+    || message.includes('unprocessable')
+    || message.includes('must be')
+    || message.includes('status 400')
+    || message.includes('status 404')
+    || message.includes('status 422')
+  );
+};
+
+const mapNeonProvisionError = (error: unknown): {
+  statusCode: number;
+  code: string;
+  message: string;
+  retryable: boolean;
+} => {
+  const rawMessage = (error as Error)?.message?.trim() || 'Neon provisioning failed.';
+
+  if (isNeonRoleMissingError(error)) {
+    return {
+      statusCode: 409,
+      code: 'neon_role_not_ready',
+      message: `${rawMessage} Retry in a few seconds.`,
+      retryable: true,
+    };
+  }
+
+  if (isNeonAlreadyExistsError(error)) {
+    return {
+      statusCode: 409,
+      code: 'neon_resource_conflict',
+      message: rawMessage,
+      retryable: false,
+    };
+  }
+
+  if (isNeonRateLimitedError(error)) {
+    return {
+      statusCode: 429,
+      code: 'neon_rate_limited',
+      message: rawMessage,
+      retryable: true,
+    };
+  }
+
+  if (isNeonTimeoutError(error)) {
+    return {
+      statusCode: 504,
+      code: 'neon_timeout',
+      message: rawMessage,
+      retryable: true,
+    };
+  }
+
+  if (isNeonAuthError(error)) {
+    return {
+      statusCode: 503,
+      code: 'neon_auth_error',
+      message: rawMessage,
+      retryable: false,
+    };
+  }
+
+  if (isNeonValidationError(error)) {
+    return {
+      statusCode: 400,
+      code: 'neon_invalid_request',
+      message: rawMessage,
+      retryable: false,
+    };
+  }
+
+  return {
+    statusCode: 502,
+    code: 'neon_upstream_error',
+    message: rawMessage,
+    retryable: true,
+  };
+};
 
 const ensureRoleOnBranch = async (input: {
   apiKey: string;
@@ -788,7 +892,22 @@ export const databaseRoutes: FastifyPluginAsync = async (app) => {
         ...(result.connectionUrl ? { connectionUrl: result.connectionUrl } : {}),
       });
     } catch (error) {
-      return reply.badGateway((error as Error).message);
+      const mapped = mapNeonProvisionError(error);
+      request.log.warn(
+        {
+          err: error,
+          userId: user.userId,
+          organizationId: body.organizationId,
+          statusCode: mapped.statusCode,
+          code: mapped.code,
+        },
+        'Neon database provisioning request failed',
+      );
+      return reply.code(mapped.statusCode).send({
+        message: mapped.message,
+        code: mapped.code,
+        retryable: mapped.retryable,
+      });
     }
   });
 

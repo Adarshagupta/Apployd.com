@@ -500,6 +500,78 @@ a {
     line-height: 1;
   }
 
+  .dashboard-toast-viewport {
+    position: fixed;
+    top: 0.9rem;
+    right: 1rem;
+    width: min(26rem, calc(100vw - 1.2rem));
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    z-index: 130;
+    pointer-events: none;
+  }
+
+  .dashboard-toast {
+    @apply flex items-start gap-2 rounded-xl border px-3 py-2;
+    pointer-events: auto;
+    background:
+      radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent-alt) 14%, transparent), transparent 50%),
+      color-mix(in srgb, var(--bg-0) 94%, transparent);
+    border-color: color-mix(in srgb, var(--line-strong) 86%, transparent);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 14px 28px rgba(2, 6, 23, 0.22);
+    animation: dashboard-toast-enter 0.2s ease-out;
+  }
+
+  .dashboard-toast-copy {
+    @apply min-w-0 flex-1;
+  }
+
+  .dashboard-toast-title {
+    @apply text-xs font-semibold uppercase tracking-[0.08em];
+    color: var(--text-muted);
+  }
+
+  .dashboard-toast-message {
+    @apply text-sm;
+    color: var(--text);
+    line-height: 1.35;
+    word-break: break-word;
+  }
+
+  .dashboard-toast-close {
+    @apply inline-flex h-6 w-6 items-center justify-center rounded-md border text-[11px] font-semibold;
+    border-color: color-mix(in srgb, var(--line) 86%, transparent);
+    color: var(--text-soft);
+    background: color-mix(in srgb, var(--bg-1) 84%, transparent);
+    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+    flex-shrink: 0;
+  }
+
+  .dashboard-toast-close:hover {
+    border-color: var(--line-strong);
+    background: color-mix(in srgb, var(--bg-2) 88%, transparent);
+    color: var(--text);
+  }
+
+  .dashboard-toast-info {
+    border-left: 3px solid #3b82f6;
+  }
+
+  .dashboard-toast-success {
+    border-left: 3px solid #10b981;
+  }
+
+  .dashboard-toast-warning {
+    border-left: 3px solid #f59e0b;
+  }
+
+  .dashboard-toast-error {
+    border-left: 3px solid #ef4444;
+  }
+
   .panel-muted {
     @apply rounded-3xl border backdrop-blur-md;
     background: var(--card);
@@ -1846,6 +1918,13 @@ a {
     .dashboard-topbar-profile {
       @apply w-8 justify-center px-0;
     }
+
+    .dashboard-toast-viewport {
+      top: 0.6rem;
+      left: 0.6rem;
+      right: 0.6rem;
+      width: auto;
+    }
   }
 
   /* ── Workspace Switcher ─────────────────────────────── */
@@ -2348,6 +2427,17 @@ a {
   }
   100% {
     background-position: 0 240px;
+  }
+}
+
+@keyframes dashboard-toast-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 

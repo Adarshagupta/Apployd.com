@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
+import { useDashboardMessageToast } from '../../../components/dashboard-toast';
 import { SectionCard } from '../../../components/section-card';
 import { useWorkspaceContext } from '../../../components/workspace-provider';
 import { apiClient } from '../../../lib/api';
@@ -184,6 +185,7 @@ export default function SecurityPage() {
   const [appealDrafts, setAppealDrafts] = useState<Record<string, string>>({});
   const [appealingIncidentId, setAppealingIncidentId] = useState('');
   const [unblockingIncidentId, setUnblockingIncidentId] = useState('');
+  useDashboardMessageToast(message);
 
   const highlightedIncidentId = searchParams?.get('incidentId') ?? '';
   const canUnblockIncidents = selectedOrganization?.role === 'owner' || selectedOrganization?.role === 'admin';
@@ -618,8 +620,6 @@ export default function SecurityPage() {
           Attack mode applies stricter nginx rate and connection limits. Enable it during active incidents.
         </p>
       </SectionCard>
-
-      {message ? <p className="text-sm text-slate-700">{message}</p> : null}
     </div>
   );
 }

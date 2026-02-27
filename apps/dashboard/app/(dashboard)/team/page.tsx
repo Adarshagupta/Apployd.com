@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
+import { useDashboardMessageToast } from '../../../components/dashboard-toast';
 import { SectionCard } from '../../../components/section-card';
 import { apiClient } from '../../../lib/api';
 import { useWorkspaceContext } from '../../../components/workspace-provider';
@@ -78,7 +79,8 @@ export default function TeamPage() {
     signupUrl: string;
   } | null>(null);
   const [loading, setLoading] = useState(Boolean(selectedOrganizationId));
-  const [message, setMessage] = useState('Manage organization RBAC.');
+  const [message, setMessage] = useState('');
+  useDashboardMessageToast(message);
 
   const loadMembers = async () => {
     if (!selectedOrganizationId) {
@@ -397,8 +399,6 @@ export default function TeamPage() {
           <p className="text-sm text-slate-600">No pending invites.</p>
         )}
       </SectionCard>
-
-      <p className="text-sm text-slate-700">{message}</p>
     </div>
   );
 }

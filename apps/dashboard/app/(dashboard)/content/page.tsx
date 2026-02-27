@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { useDashboardMessageToast } from '../../../components/dashboard-toast';
 import { SectionCard } from '../../../components/section-card';
 import { apiClient } from '../../../lib/api';
 
@@ -102,6 +103,7 @@ export default function ContentAdminPage() {
   const [message, setMessage] = useState('');
   const [filterKind, setFilterKind] = useState<'all' | ContentPostKind>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | ContentPostStatus>('all');
+  useDashboardMessageToast(message);
 
   const selectedPost = useMemo(
     () => posts.find((post) => post.id === selectedPostId) ?? null,
@@ -395,12 +397,6 @@ export default function ContentAdminPage() {
           ) : null}
         </SectionCard>
       </div>
-
-      {message ? (
-        <SectionCard title="Status">
-          <p className="text-sm text-slate-700">{message}</p>
-        </SectionCard>
-      ) : null}
     </div>
   );
 }

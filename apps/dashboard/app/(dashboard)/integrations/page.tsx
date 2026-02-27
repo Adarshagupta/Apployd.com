@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
+import { useDashboardMessageToast } from '../../../components/dashboard-toast';
 import { SectionCard } from '../../../components/section-card';
 import { apiClient } from '../../../lib/api';
 import { useWorkspaceContext } from '../../../components/workspace-provider';
@@ -52,6 +53,7 @@ export default function IntegrationsPage() {
   const [message, setMessage] = useState('');
   const [loadingRepos, setLoadingRepos] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(true);
+  useDashboardMessageToast(message);
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
@@ -338,8 +340,6 @@ export default function IntegrationsPage() {
           </p>
         </div>
       </SectionCard>
-
-      {message ? <p className="text-sm text-slate-700">{message}</p> : null}
     </div>
   );
 }

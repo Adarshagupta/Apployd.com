@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
+import { useDashboardMessageToast } from '../../../components/dashboard-toast';
 import { SectionCard } from '../../../components/section-card';
 import { useWorkspaceContext } from '../../../components/workspace-provider';
 import { apiClient } from '../../../lib/api';
@@ -40,6 +41,7 @@ export default function DatabasesPage() {
     databaseName: '',
     roleName: '',
   });
+  useDashboardMessageToast(message);
 
   const loadDatabases = useCallback(async () => {
     if (!selectedOrganizationId) {
@@ -267,8 +269,6 @@ export default function DatabasesPage() {
           </div>
         )}
       </SectionCard>
-
-      {message ? <p className="text-sm text-slate-700">{message}</p> : null}
     </div>
   );
 }

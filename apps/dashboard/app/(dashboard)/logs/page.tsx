@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import { useDashboardMessageToast } from '../../../components/dashboard-toast';
 import { LogsTable } from '../../../components/logs-table';
 import { SectionCard } from '../../../components/section-card';
 import { apiClient, resolveWebSocketBaseUrl } from '../../../lib/api';
@@ -24,10 +25,11 @@ export default function LogsPage() {
   const { projects } = useWorkspaceContext();
   const [projectId, setProjectId] = useState('');
   const [rows, setRows] = useState<LogRow[]>([]);
-  const [message, setMessage] = useState('Select organization and project to view logs.');
+  const [message, setMessage] = useState('');
   const [deploymentId, setDeploymentId] = useState('');
   const [streamEvents, setStreamEvents] = useState<Array<{ type: string; message: string; timestamp: string }>>([]);
   const socketRef = useRef<WebSocket | null>(null);
+  useDashboardMessageToast(message);
 
   const closeSocket = () => {
     if (socketRef.current) {
@@ -164,8 +166,6 @@ export default function LogsPage() {
           )}
         </div>
       </SectionCard>
-
-      <p className="text-sm text-slate-600">{message}</p>
     </div>
   );
 }

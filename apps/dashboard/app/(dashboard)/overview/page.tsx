@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 
+import { useDashboardMessageToast } from '../../../components/dashboard-toast';
 import { IconInfo } from '../../../components/dashboard-icons';
 import { SectionCard } from '../../../components/section-card';
 import { apiClient } from '../../../lib/api';
@@ -252,6 +253,7 @@ export default function OverviewPage() {
   const [message, setMessage] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  useDashboardMessageToast(message, 'error');
 
   const selectedOrganization = useMemo(
     () => organizations.find((org) => org.id === selectedOrganizationId) ?? null,
@@ -703,8 +705,6 @@ export default function OverviewPage() {
           </div>
         )}
       </SectionCard>
-
-      {message ? <p className="text-sm" style={{ color: 'var(--danger)' }}>{message}</p> : null}
     </div>
   );
 }

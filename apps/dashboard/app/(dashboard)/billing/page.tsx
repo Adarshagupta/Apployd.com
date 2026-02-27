@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
+import { useDashboardMessageToast } from '../../../components/dashboard-toast';
 import { SectionCard } from '../../../components/section-card';
 import { useWorkspaceContext } from '../../../components/workspace-provider';
 import { apiClient } from '../../../lib/api';
@@ -171,6 +172,7 @@ export default function BillingPage() {
   const [message, setMessage] = useState('');
   const [redirectingToCheckout, setRedirectingToCheckout] = useState(false);
   const [redirectingPlanCode, setRedirectingPlanCode] = useState<string | null>(null);
+  useDashboardMessageToast(message);
 
   const availablePlansByCode = useMemo(() => {
     const map = new Map<string, Plan>();
@@ -524,9 +526,6 @@ export default function BillingPage() {
           <p className="text-sm text-slate-600">No invoices yet.</p>
         )}
       </SectionCard>
-
-      {message ? <p className="text-sm text-slate-700">{message}</p> : null}
-
       {redirectingToCheckout ? (
         <div className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/45 px-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-xl">

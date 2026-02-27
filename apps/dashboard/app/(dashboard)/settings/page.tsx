@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
+import { useDashboardMessageToast } from '../../../components/dashboard-toast';
 import { SectionCard } from '../../../components/section-card';
 import { apiClient } from '../../../lib/api';
 import { useWorkspaceContext } from '../../../components/workspace-provider';
@@ -28,6 +29,7 @@ export default function SettingsPage() {
   const [theme, setTheme] = useState<DashboardTheme>('dark');
   const [githubConnected, setGithubConnected] = useState(false);
   const [message, setMessage] = useState('');
+  useDashboardMessageToast(message);
 
   const load = async () => {
     setLoading(true);
@@ -218,8 +220,6 @@ export default function SettingsPage() {
           </Link>
         </div>
       </SectionCard>
-
-      {message ? <p className="text-sm text-slate-700">{message}</p> : null}
     </div>
   );
 }

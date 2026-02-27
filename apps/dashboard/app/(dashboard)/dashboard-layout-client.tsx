@@ -18,6 +18,7 @@ import {
   IconUsage,
 } from '../../components/dashboard-icons';
 import { TopbarNotifications } from '../../components/topbar-notifications';
+import { DashboardToastProvider } from '../../components/dashboard-toast';
 import { ThemeLogo } from '../../components/theme-logo';
 import { WorkspaceProvider, useWorkspaceContext } from '../../components/workspace-provider';
 import { apiClient, UnauthorizedError } from '../../lib/api';
@@ -289,98 +290,100 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <WorkspaceProvider>
-    <main className={shellClassName}>
-      <div className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <DashboardNav userEmail={currentUserEmail} />
+      <DashboardToastProvider>
+        <main className={shellClassName}>
+          <div className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)]">
+            <DashboardNav userEmail={currentUserEmail} />
 
-        <section className="min-w-0">
-          <header className="panel dashboard-topbar">
-            <div className="dashboard-topbar-inner">
-              <div className="dashboard-topbar-slot dashboard-topbar-left">
-                <Link href="/overview" className="dashboard-topbar-brand" aria-label="Go to overview">
-                  <ThemeLogo width={22} height={22} className="dashboard-topbar-brand-logo" />
-                </Link>
-                <div ref={topbarMenuRef} className="dashboard-topbar-menu">
-                  <button
-                    type="button"
-                    className={`dashboard-topbar-chip dashboard-topbar-chip-menu ${topbarMenuOpen ? 'dashboard-topbar-chip-open' : ''}`}
-                    aria-label="Open header menu"
-                    aria-expanded={topbarMenuOpen}
-                    aria-haspopup="menu"
-                    onClick={() => setTopbarMenuOpen((open) => !open)}
-                  >
-                    <IconProjects size={16} />
-                    <span>Menu</span>
-                    <span className={`dashboard-topbar-chevron ${topbarMenuOpen ? 'dashboard-topbar-chevron-open' : ''}`} aria-hidden="true">
-                      v
-                    </span>
-                  </button>
-
-                  <div className={`dashboard-topbar-dropdown ${topbarMenuOpen ? 'dashboard-topbar-dropdown-open' : ''}`} role="menu">
-                    <p className="dashboard-topbar-dropdown-title">Quick Actions</p>
-                    <div className="dashboard-topbar-dropdown-list">
-                      <Link href="/projects" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+            <section className="min-w-0">
+              <header className="panel dashboard-topbar">
+                <div className="dashboard-topbar-inner">
+                  <div className="dashboard-topbar-slot dashboard-topbar-left">
+                    <Link href="/overview" className="dashboard-topbar-brand" aria-label="Go to overview">
+                      <ThemeLogo width={22} height={22} className="dashboard-topbar-brand-logo" />
+                    </Link>
+                    <div ref={topbarMenuRef} className="dashboard-topbar-menu">
+                      <button
+                        type="button"
+                        className={`dashboard-topbar-chip dashboard-topbar-chip-menu ${topbarMenuOpen ? 'dashboard-topbar-chip-open' : ''}`}
+                        aria-label="Open header menu"
+                        aria-expanded={topbarMenuOpen}
+                        aria-haspopup="menu"
+                        onClick={() => setTopbarMenuOpen((open) => !open)}
+                      >
                         <IconProjects size={16} />
-                        <span>All Projects</span>
-                      </Link>
-                      <Link href="/projects/new" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
-                        <IconPlus size={16} />
-                        <span>Create Project</span>
-                      </Link>
-                      <Link href="/databases" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
-                        <IconDatabase size={16} />
-                        <span>Databases</span>
-                      </Link>
-                      {showContentMenu ? (
-                        <Link href="/content" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
-                          <IconContent size={16} />
-                          <span>Content</span>
-                        </Link>
-                      ) : null}
-                      <Link href="/usage" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
-                        <IconUsage size={16} />
-                        <span>Usage</span>
-                      </Link>
-                      <Link href="/security-center" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
-                        <IconShield size={16} />
-                        <span>Security</span>
-                      </Link>
-                      <Link href="/billing" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
-                        <IconBilling size={16} />
-                        <span>Billing</span>
-                      </Link>
-                      <Link href="/profile" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
-                        <IconProfile size={16} />
-                        <span>Profile</span>
-                      </Link>
-                      <Link href="/settings" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
-                        <IconSettings size={16} />
-                        <span>Settings</span>
-                      </Link>
+                        <span>Menu</span>
+                        <span className={`dashboard-topbar-chevron ${topbarMenuOpen ? 'dashboard-topbar-chevron-open' : ''}`} aria-hidden="true">
+                          v
+                        </span>
+                      </button>
+
+                      <div className={`dashboard-topbar-dropdown ${topbarMenuOpen ? 'dashboard-topbar-dropdown-open' : ''}`} role="menu">
+                        <p className="dashboard-topbar-dropdown-title">Quick Actions</p>
+                        <div className="dashboard-topbar-dropdown-list">
+                          <Link href="/projects" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                            <IconProjects size={16} />
+                            <span>All Projects</span>
+                          </Link>
+                          <Link href="/projects/new" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                            <IconPlus size={16} />
+                            <span>Create Project</span>
+                          </Link>
+                          <Link href="/databases" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                            <IconDatabase size={16} />
+                            <span>Databases</span>
+                          </Link>
+                          {showContentMenu ? (
+                            <Link href="/content" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                              <IconContent size={16} />
+                              <span>Content</span>
+                            </Link>
+                          ) : null}
+                          <Link href="/usage" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                            <IconUsage size={16} />
+                            <span>Usage</span>
+                          </Link>
+                          <Link href="/security-center" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                            <IconShield size={16} />
+                            <span>Security</span>
+                          </Link>
+                          <Link href="/billing" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                            <IconBilling size={16} />
+                            <span>Billing</span>
+                          </Link>
+                          <Link href="/profile" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                            <IconProfile size={16} />
+                            <span>Profile</span>
+                          </Link>
+                          <Link href="/settings" className="dashboard-topbar-dropdown-item" role="menuitem" onClick={() => setTopbarMenuOpen(false)}>
+                            <IconSettings size={16} />
+                            <span>Settings</span>
+                          </Link>
+                        </div>
+                      </div>
                     </div>
                   </div>
+                  <div className="dashboard-topbar-slot dashboard-topbar-center">
+                    <h1 className="dashboard-topbar-title">{topbarTitle}</h1>
+                  </div>
+                  <div className="dashboard-topbar-slot dashboard-topbar-right">
+                    <TopbarSubscriptionChip />
+                    <TopbarNotifications />
+                    <Link href="/profile" className="dashboard-topbar-profile" aria-label="Open profile">
+                      <IconProfile size={17} />
+                      <span className="dashboard-topbar-profile-label">Profile</span>
+                    </Link>
+                    <Link href="/settings" className="dashboard-topbar-icon" aria-label="Open settings">
+                      <IconSettings size={16} />
+                    </Link>
+                  </div>
                 </div>
-              </div>
-              <div className="dashboard-topbar-slot dashboard-topbar-center">
-                <h1 className="dashboard-topbar-title">{topbarTitle}</h1>
-              </div>
-              <div className="dashboard-topbar-slot dashboard-topbar-right">
-                <TopbarSubscriptionChip />
-                <TopbarNotifications />
-                <Link href="/profile" className="dashboard-topbar-profile" aria-label="Open profile">
-                  <IconProfile size={17} />
-                  <span className="dashboard-topbar-profile-label">Profile</span>
-                </Link>
-                <Link href="/settings" className="dashboard-topbar-icon" aria-label="Open settings">
-                  <IconSettings size={16} />
-                </Link>
-              </div>
-            </div>
-          </header>
-          <section className="space-y-0">{children}</section>
-        </section>
-      </div>
-    </main>
+              </header>
+              <section className="space-y-0">{children}</section>
+            </section>
+          </div>
+        </main>
+      </DashboardToastProvider>
     </WorkspaceProvider>
   );
 }

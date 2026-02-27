@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { useDashboardMessageToast } from '../../../components/dashboard-toast';
 import { SectionCard } from '../../../components/section-card';
 import { useWorkspaceContext } from '../../../components/workspace-provider';
 
@@ -30,6 +31,7 @@ export default function ProjectsPage() {
   const [statusFilter, setStatusFilter] = useState<ProjectStatusFilter>('all');
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
+  useDashboardMessageToast(message);
 
   const formatDecimal = (raw: string, fractionDigits = 2) => {
     const value = Number(raw);
@@ -449,8 +451,6 @@ export default function ProjectsPage() {
             </Link>
           </div>
         )}
-
-        {message && <p className="mt-4 text-sm text-slate-700">{message}</p>}
         {workspaceError && <p className="mt-2 text-sm text-slate-900">{workspaceError}</p>}
       </SectionCard>
     </div>

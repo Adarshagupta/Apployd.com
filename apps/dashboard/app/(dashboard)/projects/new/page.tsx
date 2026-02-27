@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useDashboardMessageToast } from '../../../../components/dashboard-toast';
 import { ResourceSlider } from '../../../../components/resource-slider';
 import { SectionCard } from '../../../../components/section-card';
 import { apiClient } from '../../../../lib/api';
@@ -265,6 +266,8 @@ export default function CreateProjectPage() {
   const [subscription, setSubscription] = useState<CurrentSubscription | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [guideStepIndex, setGuideStepIndex] = useState(0);
+  useDashboardMessageToast(message);
+  useDashboardMessageToast(notice, 'success');
 
   const basicsRef = useRef<HTMLDivElement | null>(null);
   const vercelToggleRef = useRef<HTMLDivElement | null>(null);
@@ -1400,8 +1403,6 @@ export default function CreateProjectPage() {
         </form>
 
         {workspaceError ? <p className="mt-4 text-sm text-red-600">{workspaceError}</p> : null}
-        {notice ? <p className="mt-2 text-sm text-slate-700">{notice}</p> : null}
-        {message ? <p className="mt-2 text-sm text-red-600">{message}</p> : null}
       </SectionCard>
 
       <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2">

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import { useDashboardMessageToast } from '../../../components/dashboard-toast';
 import { SectionCard } from '../../../components/section-card';
 import { UsageChart } from '../../../components/usage-chart';
 import { useWorkspaceContext } from '../../../components/workspace-provider';
@@ -170,6 +171,7 @@ export default function UsagePage() {
   const [projectUsage, setProjectUsage] = useState<ProjectUsageRow[]>([]);
   const [loading, setLoading] = useState(Boolean(selectedOrganizationId));
   const [message, setMessage] = useState('');
+  useDashboardMessageToast(message);
 
   const load = async () => {
     if (!selectedOrganizationId) {
@@ -363,8 +365,6 @@ export default function UsagePage() {
           <p className="text-sm text-slate-600">No project usage has been recorded yet.</p>
         )}
       </SectionCard>
-
-      {message ? <p className="text-sm text-slate-900">{message}</p> : null}
     </div>
   );
 }
