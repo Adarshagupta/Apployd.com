@@ -200,6 +200,9 @@ function SkeletonBlock({ className }: { className: string }) {
   return <div aria-hidden="true" className={`skeleton ${className}`} />;
 }
 
+const managedDatabaseProviderLabel = (provider: string): string =>
+  provider.trim().toLowerCase() === 'neon' ? 'Apployd PostgreSQL DB' : provider;
+
 /* ================================================================== */
 
 export default function ProjectDetailPage() {
@@ -1864,7 +1867,7 @@ export default function ProjectDetailPage() {
             <div className="rounded-xl border border-slate-200 p-4 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h4 className="text-sm font-semibold text-slate-900">Managed PostgreSQL (Neon)</h4>
+                  <h4 className="text-sm font-semibold text-slate-900">Managed PostgreSQL (Apployd PostgreSQL DB)</h4>
                   <p className="mt-1 text-xs text-slate-500">
                     Database provisioning is now standalone. Use the Databases page to create and copy connection strings.
                   </p>
@@ -1881,13 +1884,13 @@ export default function ProjectDetailPage() {
 
               {!neonProvisioningEnabled && (
                 <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  Neon API is not configured on this server. Set <span className="mono">NEON_API_KEY</span> in control-plane env.
+                  Database provisioning is not configured on this server. Set <span className="mono">NEON_API_KEY</span> in control-plane env.
                 </div>
               )}
 
               <div className="grid gap-3 md:grid-cols-2">
                 <label>
-                  <span className="field-label">Neon project name (optional)</span>
+                  <span className="field-label">Database project name (optional)</span>
                   <input
                     value={managedDbDraft.projectName}
                     onChange={(event) =>
@@ -1980,7 +1983,7 @@ export default function ProjectDetailPage() {
                     >
                       <p className="text-sm font-medium text-slate-900">{database.name}</p>
                       <p className="text-xs text-slate-600">
-                        {database.provider} | {database.status} | {database.regionId} | {database.branchName}
+                        {managedDatabaseProviderLabel(database.provider)} | {database.status} | {database.regionId} | {database.branchName}
                       </p>
                       <p className="mono text-xs text-slate-700 mt-1">
                         db={database.databaseName} user={database.roleName} secret={database.secretKey}

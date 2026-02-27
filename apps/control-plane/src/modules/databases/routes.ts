@@ -99,6 +99,9 @@ const getRetryDelayMs = (attempt: number): number =>
   ?? ROLE_PROPAGATION_RETRY_DELAYS_MS[ROLE_PROPAGATION_RETRY_DELAYS_MS.length - 1]
   ?? 1500;
 
+const normalizeProviderLabel = (message: string): string =>
+  message.replace(/\bneon\b/gi, 'Apployd PostgreSQL DB');
+
 const extractNeonError = (payload: unknown, status: number): string => {
   const root = asRecord(payload);
   const directMessage =
@@ -117,7 +120,7 @@ const extractNeonError = (payload: unknown, status: number): string => {
     return issues.join('; ');
   }
 
-  return `Neon API request failed with status ${status}.`;
+  return `Apployd PostgreSQL DB provider request failed with status ${status}.`;
 };
 
 const neonRequest = async <T>(input: {
@@ -389,7 +392,7 @@ const mapNeonProvisionError = (error: unknown): {
   message: string;
   retryable: boolean;
 } => {
-  const rawMessage = (error as Error)?.message?.trim() || 'Neon provisioning failed.';
+  const rawMessage = normalizeProviderLabel((error as Error)?.message?.trim() || 'Apployd PostgreSQL DB provisioning failed.');
 
   if (isNeonRoleMissingError(error)) {
     return {
@@ -872,7 +875,7 @@ const provisionNeonManagedDatabase = async (input: {
         databaseName,
         roleName: requestedRoleName ?? 'default',
       },
-      'Neon database provisioning failed',
+      'Apployd PostgreSQL DB provisioning failed',
     );
     throw error;
   }
@@ -1019,7 +1022,7 @@ export const databaseRoutes: FastifyPluginAsync = async (app) => {
 
     const apiKey = env.NEON_API_KEY?.trim();
     if (!apiKey) {
-      return reply.serviceUnavailable('Neon provisioning is not configured on the server.');
+      return reply.serviceUnavailable('Apployd PostgreSQL DB provisioning is not configured on the server.');
     }
 
     try {
@@ -1067,7 +1070,7 @@ export const databaseRoutes: FastifyPluginAsync = async (app) => {
           statusCode: mapped.statusCode,
           code: mapped.code,
         },
-        'Neon database provisioning request failed',
+        'Apployd PostgreSQL DB provisioning request failed',
       );
       return reply.code(mapped.statusCode).send({
         message: mapped.message,

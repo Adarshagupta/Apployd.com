@@ -38,6 +38,9 @@ interface CurrentSubscriptionResponse {
   } | null;
 }
 
+const providerLabel = (provider: string): string =>
+  provider.trim().toLowerCase() === 'neon' ? 'Apployd PostgreSQL DB' : provider;
+
 export default function DatabasesPage() {
   const { selectedOrganizationId } = useWorkspaceContext();
   const [databases, setDatabases] = useState<ManagedDatabaseSummary[]>([]);
@@ -151,7 +154,7 @@ export default function DatabasesPage() {
     }
 
     if (!neonConfigured) {
-      setMessage('Neon API is not configured on server.');
+      setMessage('Apployd PostgreSQL DB provisioning is not configured on server.');
       return;
     }
 
@@ -204,7 +207,7 @@ export default function DatabasesPage() {
     <div className="space-y-4">
       <SectionCard
         title="Databases"
-        subtitle="Create standalone Neon PostgreSQL databases for your workspace. No project binding is required."
+        subtitle="Create standalone Apployd PostgreSQL DB instances for your workspace. No project binding is required."
       >
         <div className="flex justify-end">
           <button
@@ -221,7 +224,7 @@ export default function DatabasesPage() {
       {!accessLoading && !hasPaidAccess ? (
         <SectionCard
           title="Managed Databases Are A Paid Feature"
-          subtitle="Upgrade your subscription to provision Neon PostgreSQL databases from the dashboard."
+          subtitle="Upgrade your subscription to provision Apployd PostgreSQL DB instances from the dashboard."
         >
           <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-sm text-slate-700">
@@ -243,19 +246,19 @@ export default function DatabasesPage() {
       {hasPaidAccess ? (
         <>
           <SectionCard
-            title="Create Neon PostgreSQL"
+            title="Create Apployd PostgreSQL DB"
             subtitle="Provision a standalone database and get a ready-to-use PostgreSQL connection string."
           >
             <div className="space-y-4">
               {!neonConfigured ? (
                 <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  Neon API is not configured on this server. Ask admin to set <span className="mono">NEON_API_KEY</span>.
+                  Database provisioning is not configured on this server. Ask admin to set <span className="mono">NEON_API_KEY</span>.
                 </div>
               ) : null}
 
               <div className="grid gap-3 md:grid-cols-2">
                 <label>
-                  <span className="field-label">Neon project name (optional)</span>
+                  <span className="field-label">Database project name (optional)</span>
                   <input
                     value={form.projectName}
                     onChange={(event) => setForm((prev) => ({ ...prev, projectName: event.target.value }))}
@@ -352,7 +355,7 @@ export default function DatabasesPage() {
               <article key={database.id} className="rounded-xl border border-slate-200 p-3">
                 <p className="text-sm font-semibold text-slate-900">{database.name}</p>
                 <p className="mt-0.5 text-xs text-slate-600">
-                  {database.provider} | {database.status} | {database.regionId}
+                  {providerLabel(database.provider)} | {database.status} | {database.regionId}
                 </p>
                 <p className="mono mt-1 text-xs text-slate-700">
                   branch={database.branchName} db={database.databaseName} role={database.roleName}
