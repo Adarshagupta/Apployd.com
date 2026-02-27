@@ -1270,7 +1270,7 @@ export default function CreateProjectPage() {
                 <span className="text-sm text-slate-700">Auto deploy on push</span>
               </label>
               {autoDeployLocked ? (
-                <p className="text-xs text-slate-500">Upgrade plan to enable auto deploy.</p>
+                <p className="text-xs text-slate-500">Auto deploy is not available for this workspace plan.</p>
               ) : null}
             </div>
           </section>

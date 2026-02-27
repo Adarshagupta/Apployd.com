@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useDashboardMessageToast } from '../../../components/dashboard-toast';
@@ -25,11 +26,28 @@ interface ManagedDatabaseSummary {
   updatedAt: string;
 }
 
+const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due']);
+
+interface CurrentSubscriptionResponse {
+  subscription?: {
+    status?: string | null;
+    plan?: {
+      code?: string | null;
+      displayName?: string | null;
+    } | null;
+  } | null;
+}
+
 export default function DatabasesPage() {
   const { selectedOrganizationId } = useWorkspaceContext();
   const [databases, setDatabases] = useState<ManagedDatabaseSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [provisioning, setProvisioning] = useState(false);
+  const [accessLoading, setAccessLoading] = useState(false);
+  const [hasPaidAccess, setHasPaidAccess] = useState(false);
+  const [planName, setPlanName] = useState('Free');
+  const [planCode, setPlanCode] = useState('free');
+  const [planStatus, setPlanStatus] = useState('inactive');
   const [message, setMessage] = useState('');
   const [lastConnectionUrl, setLastConnectionUrl] = useState('');
   const [copied, setCopied] = useState(false);
@@ -43,10 +61,51 @@ export default function DatabasesPage() {
   });
   useDashboardMessageToast(message);
 
-  const loadDatabases = useCallback(async () => {
+  const loadAccess = useCallback(async () => {
     if (!selectedOrganizationId) {
+      setHasPaidAccess(false);
+      setPlanName('Free');
+      setPlanCode('free');
+      setPlanStatus('inactive');
+      return;
+    }
+
+    try {
+      setAccessLoading(true);
+      const data = (await apiClient.get(`/plans/current?organizationId=${selectedOrganizationId}`)) as CurrentSubscriptionResponse;
+      const codeRaw = data.subscription?.plan?.code;
+      const statusRaw = data.subscription?.status;
+      const displayNameRaw = data.subscription?.plan?.displayName;
+      const code = typeof codeRaw === 'string' && codeRaw.trim().length > 0 ? codeRaw.trim().toLowerCase() : 'free';
+      const status =
+        typeof statusRaw === 'string' && statusRaw.trim().length > 0 ? statusRaw.trim().toLowerCase() : 'inactive';
+      const displayName =
+        typeof displayNameRaw === 'string' && displayNameRaw.trim().length > 0
+          ? displayNameRaw.trim()
+          : code === 'free'
+            ? 'Free'
+            : 'Plan';
+
+      setPlanCode(code);
+      setPlanStatus(status);
+      setPlanName(displayName);
+      setHasPaidAccess(code !== 'free' && ACTIVE_SUBSCRIPTION_STATUSES.has(status));
+    } catch {
+      setPlanName('Free');
+      setPlanCode('free');
+      setPlanStatus('inactive');
+      setHasPaidAccess(false);
+    } finally {
+      setAccessLoading(false);
+    }
+  }, [selectedOrganizationId]);
+
+  const loadDatabases = useCallback(async () => {
+    if (!selectedOrganizationId || !hasPaidAccess) {
       setDatabases([]);
       setNeonConfigured(true);
+      setLastConnectionUrl('');
+      setCopied(false);
       return;
     }
 
@@ -68,15 +127,26 @@ export default function DatabasesPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedOrganizationId]);
+  }, [hasPaidAccess, selectedOrganizationId]);
 
   useEffect(() => {
+    loadAccess().catch(() => undefined);
+  }, [loadAccess]);
+
+  useEffect(() => {
+    if (!hasPaidAccess) {
+      return;
+    }
     loadDatabases().catch(() => undefined);
-  }, [loadDatabases]);
+  }, [hasPaidAccess, loadDatabases]);
 
   const createDatabase = async () => {
     if (!selectedOrganizationId) {
       setMessage('Select a workspace first.');
+      return;
+    }
+    if (!hasPaidAccess) {
+      setMessage('Managed databases are available on paid plans. Upgrade to Dev or above.');
       return;
     }
 
@@ -140,85 +210,111 @@ export default function DatabasesPage() {
           <button
             type="button"
             className="btn-secondary"
-            onClick={() => loadDatabases()}
-            disabled={loading || !selectedOrganizationId}
+            onClick={() => loadAccess().catch(() => undefined)}
+            disabled={loading || accessLoading || !selectedOrganizationId}
           >
-            {loading ? 'Refreshing...' : 'Refresh'}
+            {loading || accessLoading ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
       </SectionCard>
 
-      <SectionCard
-        title="Create Neon PostgreSQL"
-        subtitle="Provision a standalone database and get a ready-to-use PostgreSQL connection string."
-      >
-        <div className="space-y-4">
-          {!neonConfigured ? (
-            <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              Neon API is not configured on this server. Ask admin to set <span className="mono">NEON_API_KEY</span>.
+      {!accessLoading && !hasPaidAccess ? (
+        <SectionCard
+          title="Managed Databases Are A Paid Feature"
+          subtitle="Upgrade your subscription to provision Neon PostgreSQL databases from the dashboard."
+        >
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm text-slate-700">
+              Current plan: <span className="font-semibold text-slate-900">{planName}</span> ({planCode.toUpperCase()}) | status:{' '}
+              <span className="font-semibold text-slate-900">{planStatus}</span>
+            </p>
+            <p className="text-sm text-slate-600">
+              Upgrade to Dev, Pro, Max, or Enterprise to unlock database provisioning.
+            </p>
+            <div className="flex justify-end">
+              <Link href="/billing" className="btn-primary">
+                Upgrade plan
+              </Link>
             </div>
-          ) : null}
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <label>
-              <span className="field-label">Neon project name (optional)</span>
-              <input
-                value={form.projectName}
-                onChange={(event) => setForm((prev) => ({ ...prev, projectName: event.target.value }))}
-                className="field-input"
-                placeholder="Bookai database"
-              />
-            </label>
-            <label>
-              <span className="field-label">Region (optional)</span>
-              <input
-                value={form.regionId}
-                onChange={(event) => setForm((prev) => ({ ...prev, regionId: event.target.value }))}
-                className="field-input"
-                placeholder="aws-us-east-1"
-              />
-            </label>
-            <label>
-              <span className="field-label">Branch</span>
-              <input
-                value={form.branchName}
-                onChange={(event) => setForm((prev) => ({ ...prev, branchName: event.target.value }))}
-                className="field-input"
-                placeholder="main"
-              />
-            </label>
-            <label>
-              <span className="field-label">Database name (optional)</span>
-              <input
-                value={form.databaseName}
-                onChange={(event) => setForm((prev) => ({ ...prev, databaseName: event.target.value }))}
-                className="field-input"
-                placeholder="app_db"
-              />
-            </label>
-            <label>
-              <span className="field-label">Role name (optional)</span>
-              <input
-                value={form.roleName}
-                onChange={(event) => setForm((prev) => ({ ...prev, roleName: event.target.value }))}
-                className="field-input"
-                placeholder="app_user"
-              />
-            </label>
           </div>
+        </SectionCard>
+      ) : null}
 
-          <div className="flex justify-end">
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={createDatabase}
-              disabled={provisioning || !neonConfigured || !selectedOrganizationId}
-            >
-              {provisioning ? 'Creating...' : 'Create database'}
-            </button>
-          </div>
-        </div>
-      </SectionCard>
+      {hasPaidAccess ? (
+        <>
+          <SectionCard
+            title="Create Neon PostgreSQL"
+            subtitle="Provision a standalone database and get a ready-to-use PostgreSQL connection string."
+          >
+            <div className="space-y-4">
+              {!neonConfigured ? (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  Neon API is not configured on this server. Ask admin to set <span className="mono">NEON_API_KEY</span>.
+                </div>
+              ) : null}
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <label>
+                  <span className="field-label">Neon project name (optional)</span>
+                  <input
+                    value={form.projectName}
+                    onChange={(event) => setForm((prev) => ({ ...prev, projectName: event.target.value }))}
+                    className="field-input"
+                    placeholder="Bookai database"
+                  />
+                </label>
+                <label>
+                  <span className="field-label">Region (optional)</span>
+                  <input
+                    value={form.regionId}
+                    onChange={(event) => setForm((prev) => ({ ...prev, regionId: event.target.value }))}
+                    className="field-input"
+                    placeholder="aws-us-east-1"
+                  />
+                </label>
+                <label>
+                  <span className="field-label">Branch</span>
+                  <input
+                    value={form.branchName}
+                    onChange={(event) => setForm((prev) => ({ ...prev, branchName: event.target.value }))}
+                    className="field-input"
+                    placeholder="main"
+                  />
+                </label>
+                <label>
+                  <span className="field-label">Database name (optional)</span>
+                  <input
+                    value={form.databaseName}
+                    onChange={(event) => setForm((prev) => ({ ...prev, databaseName: event.target.value }))}
+                    className="field-input"
+                    placeholder="app_db"
+                  />
+                </label>
+                <label>
+                  <span className="field-label">Role name (optional)</span>
+                  <input
+                    value={form.roleName}
+                    onChange={(event) => setForm((prev) => ({ ...prev, roleName: event.target.value }))}
+                    className="field-input"
+                    placeholder="app_user"
+                  />
+                </label>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={createDatabase}
+                  disabled={provisioning || !neonConfigured || !selectedOrganizationId}
+                >
+                  {provisioning ? 'Creating...' : 'Create database'}
+                </button>
+              </div>
+            </div>
+          </SectionCard>
+        </>
+      ) : null}
 
       {lastConnectionUrl ? (
         <SectionCard
@@ -238,9 +334,13 @@ export default function DatabasesPage() {
 
       <SectionCard
         title="Provisioned Databases"
-        subtitle="Standalone databases created in this workspace."
+        subtitle={hasPaidAccess ? 'Standalone databases created in this workspace.' : 'Upgrade required to provision databases.'}
       >
-        {loading ? (
+        {!hasPaidAccess ? (
+          <div className="rounded-xl border border-dashed border-slate-300 px-5 py-8 text-center text-sm text-slate-600">
+            Managed database provisioning is locked on your current plan.
+          </div>
+        ) : loading ? (
           <div className="space-y-2">
             {[0, 1].map((placeholder) => (
               <div key={placeholder} className="skeleton h-14 w-full rounded-xl" />

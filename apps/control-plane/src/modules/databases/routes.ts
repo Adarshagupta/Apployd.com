@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { env } from '../../config/env.js';
+import { getPlanEntitlements } from '../../domain/plan-entitlements.js';
 import { prisma } from '../../lib/prisma.js';
 import { encryptSecret } from '../../lib/secrets.js';
 import { AccessService } from '../../services/access-service.js';
@@ -534,8 +535,28 @@ const ensureDatabaseOnBranch = async (input: {
   neonProjectId: string;
   neonBranchId: string;
   databaseName: string;
-  roleName: string;
+  roleName?: string | null;
 }): Promise<{ ownerRoleName: string | null }> => {
+  const requestedRole = input.roleName?.trim() || null;
+  if (!requestedRole) {
+    await neonRequest<unknown>({
+      path: `/projects/${encodeURIComponent(input.neonProjectId)}/branches/${encodeURIComponent(input.neonBranchId)}/databases`,
+      method: 'POST',
+      apiKey: input.apiKey,
+      body: {
+        database: {
+          name: input.databaseName,
+        },
+      },
+    }).catch((error) => {
+      if (isNeonAlreadyExistsError(error)) {
+        return null;
+      }
+      throw error;
+    });
+    return { ownerRoleName: null };
+  }
+
   for (let attempt = 0; attempt <= ROLE_PROPAGATION_RETRY_DELAYS_MS.length; attempt += 1) {
     try {
       await neonRequest<unknown>({
@@ -545,14 +566,14 @@ const ensureDatabaseOnBranch = async (input: {
         body: {
           database: {
             name: input.databaseName,
-            owner_name: input.roleName,
+            owner_name: requestedRole,
           },
         },
       });
-      return { ownerRoleName: input.roleName };
+      return { ownerRoleName: requestedRole };
     } catch (error) {
       if (isNeonAlreadyExistsError(error)) {
-        return { ownerRoleName: input.roleName };
+        return { ownerRoleName: requestedRole };
       }
       if (!isNeonRoleMissingError(error) || attempt >= ROLE_PROPAGATION_RETRY_DELAYS_MS.length) {
         if (!isNeonRoleMissingError(error)) {
@@ -582,7 +603,7 @@ const ensureDatabaseOnBranch = async (input: {
         apiKey: input.apiKey,
         neonProjectId: input.neonProjectId,
         neonBranchId: input.neonBranchId,
-        roleName: input.roleName,
+        roleName: requestedRole,
       });
       await sleep(getRetryDelayMs(attempt));
     }
@@ -636,8 +657,10 @@ const createNeonProject = async (input: {
   regionId: string;
   branchName: string;
   databaseName: string;
-  roleName: string;
+  roleName?: string | null;
 }): Promise<string> => {
+  const requestedRole = input.roleName?.trim() || null;
+
   const primaryBody = {
     project: {
       name: input.projectName,
@@ -652,9 +675,13 @@ const createNeonProject = async (input: {
     database: {
       name: input.databaseName,
     },
-    role: {
-      name: input.roleName,
-    },
+    ...(requestedRole
+      ? {
+          role: {
+            name: requestedRole,
+          },
+        }
+      : {}),
   } as const;
 
   const fallbackBody = {
@@ -667,7 +694,7 @@ const createNeonProject = async (input: {
       branch: {
         name: input.branchName,
         database_name: input.databaseName,
-        role_name: input.roleName,
+        ...(requestedRole ? { role_name: requestedRole } : {}),
       },
     },
   } as const;
@@ -758,7 +785,7 @@ const provisionNeonManagedDatabase = async (input: {
   const nameSeed = input.project?.name ?? 'Standalone';
   const branchName = toBranchName(input.payload.branchName ?? 'main', 'main');
   const databaseName = input.payload.databaseName ?? toSnakeIdentifier(`${slugSeed}_db`, 'app_db');
-  const requestedRoleName = input.payload.roleName ?? toSnakeIdentifier(`${slugSeed}_user`, 'app_user');
+  const requestedRoleName = input.payload.roleName?.trim() || null;
   const secretKey = input.payload.secretKey?.trim().toUpperCase() || 'DATABASE_URL';
   const projectName = toProjectDisplayName(
     input.payload.projectName ?? `${nameSeed} database`,
@@ -769,7 +796,7 @@ const provisionNeonManagedDatabase = async (input: {
   let neonBranchId = '';
   let neonEndpointId: string | null = null;
   let databaseUrl = '';
-  let resolvedRoleName = requestedRoleName;
+  let resolvedRoleName = requestedRoleName ?? 'default';
 
   try {
     neonProjectId = await createNeonProject({
@@ -785,12 +812,14 @@ const provisionNeonManagedDatabase = async (input: {
       neonProjectId,
       branchName,
     });
-    await ensureRoleOnBranch({
-      apiKey: input.apiKey,
-      neonProjectId,
-      neonBranchId,
-      roleName: requestedRoleName,
-    });
+    if (requestedRoleName) {
+      await ensureRoleOnBranch({
+        apiKey: input.apiKey,
+        neonProjectId,
+        neonBranchId,
+        roleName: requestedRoleName,
+      });
+    }
     const databaseProvision = await ensureDatabaseOnBranch({
       apiKey: input.apiKey,
       neonProjectId,
@@ -841,7 +870,7 @@ const provisionNeonManagedDatabase = async (input: {
         regionId,
         branchName,
         databaseName,
-        roleName: requestedRoleName,
+        roleName: requestedRoleName ?? 'default',
       },
       'Neon database provisioning failed',
     );
@@ -930,6 +959,26 @@ const provisionNeonManagedDatabase = async (input: {
   };
 };
 
+const assertManagedDatabaseEntitlement = async (organizationId: string): Promise<void> => {
+  const subscription = await prisma.subscription.findFirst({
+    where: {
+      organizationId,
+      status: { in: ['active', 'trialing', 'past_due'] },
+    },
+    include: { plan: true },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (!subscription) {
+    throw new Error('No active subscription found for this organization.');
+  }
+
+  const entitlements = getPlanEntitlements(subscription.plan.code);
+  if (!entitlements.managedDatabases) {
+    throw new Error('Managed databases are available on paid plans. Upgrade to Dev or above.');
+  }
+};
+
 export const databaseRoutes: FastifyPluginAsync = async (app) => {
   const access = new AccessService();
   const audit = new AuditLogService();
@@ -940,8 +989,14 @@ export const databaseRoutes: FastifyPluginAsync = async (app) => {
 
     try {
       await access.requireOrganizationRole(user.userId, query.organizationId, 'developer');
+      await assertManagedDatabaseEntitlement(query.organizationId);
     } catch (error) {
-      return reply.forbidden((error as Error).message);
+      const message = (error as Error).message;
+      const lower = message.toLowerCase();
+      if (lower.includes('paid plans') || lower.includes('no active subscription')) {
+        return reply.code(402).send({ message });
+      }
+      return reply.forbidden(message);
     }
 
     const databases = await prisma.managedDatabase.findMany({
@@ -969,8 +1024,14 @@ export const databaseRoutes: FastifyPluginAsync = async (app) => {
 
     try {
       await access.requireOrganizationRole(user.userId, body.organizationId, 'developer');
+      await assertManagedDatabaseEntitlement(body.organizationId);
     } catch (error) {
-      return reply.forbidden((error as Error).message);
+      const message = (error as Error).message;
+      const lower = message.toLowerCase();
+      if (lower.includes('paid plans') || lower.includes('no active subscription')) {
+        return reply.code(402).send({ message });
+      }
+      return reply.forbidden(message);
     }
 
     try {
@@ -1033,8 +1094,14 @@ export const databaseRoutes: FastifyPluginAsync = async (app) => {
 
     try {
       await access.requireOrganizationRole(user.userId, project.organizationId, 'developer');
+      await assertManagedDatabaseEntitlement(project.organizationId);
     } catch (error) {
-      return reply.forbidden((error as Error).message);
+      const message = (error as Error).message;
+      const lower = message.toLowerCase();
+      if (lower.includes('paid plans') || lower.includes('no active subscription')) {
+        return reply.code(402).send({ message });
+      }
+      return reply.forbidden(message);
     }
 
     const databases = await prisma.managedDatabase.findMany({

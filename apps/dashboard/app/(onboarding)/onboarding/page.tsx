@@ -433,7 +433,7 @@ export default function StandaloneOnboardingPage() {
           <section className="space-y-4">
             <h2 className="text-lg font-semibold text-slate-900">Step 3: Purchase Subscription</h2>
             <p className="text-sm text-slate-600">
-              Upgrade from Free to unlock auto deploy, higher resources, and production features.
+              Upgrade when you need higher resources and advanced production features.
             </p>
             <div className="rounded-xl border border-slate-200 p-4 text-sm text-slate-700">
               Current plan: {subscriptionName} ({subscriptionStatus})

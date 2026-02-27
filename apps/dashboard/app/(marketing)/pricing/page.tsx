@@ -46,7 +46,7 @@ const plans: PlanCard[] = [
       { label: 'Sleep Mode', value: 'Yes (after inactivity)' },
       { label: 'Custom Domain', value: 'No' },
       { label: 'SSL (HTTPS)', value: 'No' },
-      { label: 'Auto Deploy', value: 'No' },
+      { label: 'Auto Deploy', value: 'Yes' },
       { label: 'Preview Environments', value: 'No' },
       { label: 'Backups', value: 'Every 3 days (1 copy)' },
       { label: 'Log Retention', value: '24 hours' },
@@ -171,7 +171,7 @@ const plans: PlanCard[] = [
 ];
 
 const quickViewRows = [
-  { feature: 'Auto Deploy', free: 'No', dev: 'Yes', pro: 'Yes', max: 'Yes', enterprise: 'Yes' },
+  { feature: 'Auto Deploy', free: 'Yes', dev: 'Yes', pro: 'Yes', max: 'Yes', enterprise: 'Yes' },
   { feature: 'Custom Domain', free: 'No', dev: 'Yes', pro: 'Yes', max: 'Yes', enterprise: 'Yes' },
   { feature: 'Backups', free: '3-day', dev: '7d', pro: '14d', max: '30d', enterprise: 'Hourly' },
   { feature: 'Preview URLs', free: 'No', dev: 'No', pro: 'Yes', max: 'Yes', enterprise: 'Yes' },

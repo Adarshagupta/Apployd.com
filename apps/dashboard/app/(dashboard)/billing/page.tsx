@@ -64,7 +64,7 @@ const planCatalog: PlanCatalogItem[] = [
     previewEnvironments: 'No',
     customDomain: 'No',
     ssl: 'No',
-    autoDeploy: 'No',
+    autoDeploy: 'Yes',
     backupPolicy: 'Every 3 days (1 copy)',
     logRetention: '24 hours',
     analytics: 'Basic',

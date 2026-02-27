@@ -1534,7 +1534,7 @@ export default function ProjectDetailPage() {
               </label>
               {autoDeployLocked && (
                 <p className="md:col-span-2 text-xs text-slate-500">
-                  Auto deploy is available on Dev plan and above.
+                  Auto deploy is not available for this workspace plan.
                 </p>
               )}
             </div>
