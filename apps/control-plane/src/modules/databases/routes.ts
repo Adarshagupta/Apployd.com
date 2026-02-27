@@ -85,13 +85,18 @@ const toProjectDisplayName = (value: string, fallback: string): string => {
   return normalized.slice(0, 120);
 };
 
-const ROLE_PROPAGATION_RETRY_DELAYS_MS = [250, 500, 1000, 1500] as const;
+const ROLE_PROPAGATION_RETRY_DELAYS_MS = [250, 500, 1000, 1500, 2000, 3000, 5000] as const;
 
 const sleep = async (ms: number): Promise<void> => {
   await new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
 };
+
+const getRetryDelayMs = (attempt: number): number =>
+  ROLE_PROPAGATION_RETRY_DELAYS_MS[attempt]
+  ?? ROLE_PROPAGATION_RETRY_DELAYS_MS[ROLE_PROPAGATION_RETRY_DELAYS_MS.length - 1]
+  ?? 1500;
 
 const extractNeonError = (payload: unknown, status: number): string => {
   const root = asRecord(payload);
@@ -182,14 +187,17 @@ const resolveConnectionUriFromNeon = async (input: {
   neonProjectId: string;
   neonBranchId: string;
   databaseName: string;
-  roleName: string;
+  roleName?: string | null;
 }): Promise<string | null> => {
   try {
     const searchParams = new URLSearchParams({
       branch_id: input.neonBranchId,
       database_name: input.databaseName,
-      role_name: input.roleName,
     });
+    const requestedRole = input.roleName?.trim();
+    if (requestedRole) {
+      searchParams.set('role_name', requestedRole);
+    }
     const payload = await neonRequest<unknown>({
       path: `/projects/${encodeURIComponent(input.neonProjectId)}/connection_uri?${searchParams.toString()}`,
       apiKey: input.apiKey,
@@ -266,15 +274,23 @@ const resolveEndpointInfo = async (input: {
 
 const ensureConnectionUri = (input: {
   connectionUri: string | null;
-  roleName: string;
-  rolePassword: string;
+  roleName?: string | null;
+  rolePassword?: string | null;
   databaseName: string;
   endpointHost: string;
 }): string => {
+  if (!input.connectionUri && !input.rolePassword) {
+    throw new Error('Neon did not return a usable connection URI.');
+  }
+
   const defaultUri = (() => {
     const url = new URL(`postgresql://${input.endpointHost}/${input.databaseName}`);
-    url.username = input.roleName;
-    url.password = input.rolePassword;
+    if (input.roleName) {
+      url.username = input.roleName;
+    }
+    if (input.rolePassword) {
+      url.password = input.rolePassword;
+    }
     url.searchParams.set('sslmode', 'require');
     return url.toString();
   })();
@@ -285,10 +301,10 @@ const ensureConnectionUri = (input: {
 
   try {
     const parsed = new URL(input.connectionUri);
-    if (!parsed.username) {
+    if (!parsed.username && input.roleName) {
       parsed.username = input.roleName;
     }
-    if (!parsed.password) {
+    if (!parsed.password && input.rolePassword) {
       parsed.password = input.rolePassword;
     }
     if (!parsed.pathname || parsed.pathname === '/') {
@@ -300,6 +316,19 @@ const ensureConnectionUri = (input: {
     return parsed.toString();
   } catch {
     return defaultUri;
+  }
+};
+
+const parseRoleNameFromConnectionUri = (connectionUri: string | null): string | null => {
+  if (!connectionUri) {
+    return null;
+  }
+  try {
+    const parsed = new URL(connectionUri);
+    const username = parsed.username?.trim();
+    return username ? username : null;
+  } catch {
+    return null;
   }
 };
 
@@ -317,7 +346,8 @@ const isNeonAlreadyExistsError = (error: unknown): boolean => {
 
 const isNeonRoleMissingError = (error: unknown): boolean =>
   neonErrorMessage(error).includes('role not found')
-  || neonErrorMessage(error).includes('database owner not found');
+  || neonErrorMessage(error).includes('database owner not found')
+  || neonErrorMessage(error).includes('not ready on neon branch');
 
 const isNeonRateLimitedError = (error: unknown): boolean => {
   const message = neonErrorMessage(error);
@@ -422,6 +452,56 @@ const mapNeonProvisionError = (error: unknown): {
   };
 };
 
+const checkRolePresenceOnBranch = async (input: {
+  apiKey: string;
+  neonProjectId: string;
+  neonBranchId: string;
+  roleName: string;
+}): Promise<'present' | 'absent' | 'unknown'> => {
+  try {
+    const payload = await neonRequest<unknown>({
+      path: `/projects/${encodeURIComponent(input.neonProjectId)}/branches/${encodeURIComponent(input.neonBranchId)}/roles`,
+      apiKey: input.apiKey,
+    });
+    const root = asRecord(payload);
+    const roles = asArray(root?.roles);
+    const rolePresent = roles.some((entry) => {
+      const role = asRecord(entry);
+      const name =
+        asString(role?.name)
+        ?? asString(asRecord(role?.role)?.name)
+        ?? asString(asRecord(role?.role)?.role_name);
+      return name === input.roleName;
+    });
+    return rolePresent ? 'present' : 'absent';
+  } catch {
+    return 'unknown';
+  }
+};
+
+const waitForRoleOnBranch = async (input: {
+  apiKey: string;
+  neonProjectId: string;
+  neonBranchId: string;
+  roleName: string;
+}): Promise<void> => {
+  for (let attempt = 0; attempt <= ROLE_PROPAGATION_RETRY_DELAYS_MS.length; attempt += 1) {
+    const presence = await checkRolePresenceOnBranch(input);
+    if (presence === 'present') {
+      return;
+    }
+    if (presence === 'unknown') {
+      // Some Neon plans/environments may not expose role listing; continue without strict verification.
+      return;
+    }
+    if (attempt >= ROLE_PROPAGATION_RETRY_DELAYS_MS.length) {
+      break;
+    }
+    await sleep(getRetryDelayMs(attempt));
+  }
+  throw new Error(`Role "${input.roleName}" is not ready on Neon branch yet.`);
+};
+
 const ensureRoleOnBranch = async (input: {
   apiKey: string;
   neonProjectId: string;
@@ -441,10 +521,12 @@ const ensureRoleOnBranch = async (input: {
     });
   } catch (error) {
     if (isNeonAlreadyExistsError(error)) {
+      await waitForRoleOnBranch(input);
       return;
     }
     throw error;
   }
+  await waitForRoleOnBranch(input);
 };
 
 const ensureDatabaseOnBranch = async (input: {
@@ -453,7 +535,7 @@ const ensureDatabaseOnBranch = async (input: {
   neonBranchId: string;
   databaseName: string;
   roleName: string;
-}): Promise<void> => {
+}): Promise<{ ownerRoleName: string | null }> => {
   for (let attempt = 0; attempt <= ROLE_PROPAGATION_RETRY_DELAYS_MS.length; attempt += 1) {
     try {
       await neonRequest<unknown>({
@@ -467,13 +549,34 @@ const ensureDatabaseOnBranch = async (input: {
           },
         },
       });
-      return;
+      return { ownerRoleName: input.roleName };
     } catch (error) {
       if (isNeonAlreadyExistsError(error)) {
-        return;
+        return { ownerRoleName: input.roleName };
       }
       if (!isNeonRoleMissingError(error) || attempt >= ROLE_PROPAGATION_RETRY_DELAYS_MS.length) {
-        throw error;
+        if (!isNeonRoleMissingError(error)) {
+          throw error;
+        }
+
+        try {
+          await neonRequest<unknown>({
+            path: `/projects/${encodeURIComponent(input.neonProjectId)}/branches/${encodeURIComponent(input.neonBranchId)}/databases`,
+            method: 'POST',
+            apiKey: input.apiKey,
+            body: {
+              database: {
+                name: input.databaseName,
+              },
+            },
+          });
+          return { ownerRoleName: null };
+        } catch (fallbackError) {
+          if (isNeonAlreadyExistsError(fallbackError)) {
+            return { ownerRoleName: null };
+          }
+          throw fallbackError;
+        }
       }
       await ensureRoleOnBranch({
         apiKey: input.apiKey,
@@ -481,13 +584,10 @@ const ensureDatabaseOnBranch = async (input: {
         neonBranchId: input.neonBranchId,
         roleName: input.roleName,
       });
-      const delayMs =
-        ROLE_PROPAGATION_RETRY_DELAYS_MS[attempt]
-        ?? ROLE_PROPAGATION_RETRY_DELAYS_MS[ROLE_PROPAGATION_RETRY_DELAYS_MS.length - 1]
-        ?? 1500;
-      await sleep(delayMs);
+      await sleep(getRetryDelayMs(attempt));
     }
   }
+  throw new Error(`Database "${input.databaseName}" was not created in Neon branch.`);
 };
 
 const resetRolePassword = async (input: {
@@ -524,11 +624,7 @@ const resetRolePassword = async (input: {
         neonBranchId: input.neonBranchId,
         roleName: input.roleName,
       });
-      const delayMs =
-        ROLE_PROPAGATION_RETRY_DELAYS_MS[attempt]
-        ?? ROLE_PROPAGATION_RETRY_DELAYS_MS[ROLE_PROPAGATION_RETRY_DELAYS_MS.length - 1]
-        ?? 1500;
-      await sleep(delayMs);
+      await sleep(getRetryDelayMs(attempt));
     }
   }
   throw new Error(`Role "${input.roleName}" not found in Neon branch after retries.`);
@@ -662,7 +758,7 @@ const provisionNeonManagedDatabase = async (input: {
   const nameSeed = input.project?.name ?? 'Standalone';
   const branchName = toBranchName(input.payload.branchName ?? 'main', 'main');
   const databaseName = input.payload.databaseName ?? toSnakeIdentifier(`${slugSeed}_db`, 'app_db');
-  const roleName = input.payload.roleName ?? toSnakeIdentifier(`${slugSeed}_user`, 'app_user');
+  const requestedRoleName = input.payload.roleName ?? toSnakeIdentifier(`${slugSeed}_user`, 'app_user');
   const secretKey = input.payload.secretKey?.trim().toUpperCase() || 'DATABASE_URL';
   const projectName = toProjectDisplayName(
     input.payload.projectName ?? `${nameSeed} database`,
@@ -673,6 +769,7 @@ const provisionNeonManagedDatabase = async (input: {
   let neonBranchId = '';
   let neonEndpointId: string | null = null;
   let databaseUrl = '';
+  let resolvedRoleName = requestedRoleName;
 
   try {
     neonProjectId = await createNeonProject({
@@ -681,7 +778,7 @@ const provisionNeonManagedDatabase = async (input: {
       regionId,
       branchName,
       databaseName,
-      roleName,
+      roleName: requestedRoleName,
     });
     neonBranchId = await resolveBranchId({
       apiKey: input.apiKey,
@@ -692,21 +789,25 @@ const provisionNeonManagedDatabase = async (input: {
       apiKey: input.apiKey,
       neonProjectId,
       neonBranchId,
-      roleName,
+      roleName: requestedRoleName,
     });
-    await ensureDatabaseOnBranch({
+    const databaseProvision = await ensureDatabaseOnBranch({
       apiKey: input.apiKey,
       neonProjectId,
       neonBranchId,
       databaseName,
-      roleName,
+      roleName: requestedRoleName,
     });
-    const rolePassword = await resetRolePassword({
-      apiKey: input.apiKey,
-      neonProjectId,
-      neonBranchId,
-      roleName,
-    });
+    let rolePassword: string | null = null;
+    if (databaseProvision.ownerRoleName) {
+      rolePassword = await resetRolePassword({
+        apiKey: input.apiKey,
+        neonProjectId,
+        neonBranchId,
+        roleName: databaseProvision.ownerRoleName,
+      });
+      resolvedRoleName = databaseProvision.ownerRoleName;
+    }
     const endpoint = await resolveEndpointInfo({
       apiKey: input.apiKey,
       neonProjectId,
@@ -718,11 +819,15 @@ const provisionNeonManagedDatabase = async (input: {
       neonProjectId,
       neonBranchId,
       databaseName,
-      roleName,
+      roleName: databaseProvision.ownerRoleName,
     });
+    const roleNameFromUri = parseRoleNameFromConnectionUri(connectionUri);
+    if (roleNameFromUri) {
+      resolvedRoleName = roleNameFromUri;
+    }
     databaseUrl = ensureConnectionUri({
       connectionUri,
-      roleName,
+      roleName: resolvedRoleName,
       rolePassword,
       databaseName,
       endpointHost: endpoint.host,
@@ -736,7 +841,7 @@ const provisionNeonManagedDatabase = async (input: {
         regionId,
         branchName,
         databaseName,
-        roleName,
+        roleName: requestedRoleName,
       },
       'Neon database provisioning failed',
     );
@@ -786,7 +891,7 @@ const provisionNeonManagedDatabase = async (input: {
         regionId,
         branchName,
         databaseName,
-        roleName,
+        roleName: resolvedRoleName,
         secretKey,
         externalProjectId: neonProjectId,
         externalBranchId: neonBranchId,
@@ -813,7 +918,7 @@ const provisionNeonManagedDatabase = async (input: {
       regionId,
       branchName,
       databaseName,
-      roleName,
+      roleName: resolvedRoleName,
       secretKey,
     },
   });
