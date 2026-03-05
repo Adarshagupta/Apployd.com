@@ -17,6 +17,7 @@ const complianceItems = [
   { name: 'CCPA/CPRA', status: 'Active', details: 'Processes support access, deletion, and disclosure obligations.' },
   { name: 'SOC 2 Type II', status: 'In Progress', details: 'Control evidence collection and policy documentation are ongoing.' },
   { name: 'ISO 27001', status: 'In Progress', details: 'Security management framework mapping and control alignment are underway.' },
+  { name: 'HIPAA', status: 'Not Supported', details: 'Apployd is not currently HIPAA-compliant and does not provide a default BAA.' },
   { name: 'Encryption in Transit', status: 'Active', details: 'TLS is enforced across dashboard, API, and service communications.' },
   { name: 'Encryption at Rest', status: 'Active', details: 'Platform data and secrets storage are protected with encryption controls.' },
 ];
@@ -79,6 +80,7 @@ export default function CompliancePage() {
           >
             {complianceItems.map((item, index) => {
               const isActive = item.status === 'Active';
+              const isUnsupported = item.status === 'Not Supported';
               return (
                 <article
                   key={item.name}
@@ -97,9 +99,19 @@ export default function CompliancePage() {
                         textTransform: 'uppercase',
                         borderRadius: 999,
                         padding: '0.22rem 0.55rem',
-                        color: isActive ? '#4ade80' : '#facc15',
-                        background: isActive ? 'rgba(74,222,128,0.1)' : 'rgba(250,204,21,0.1)',
-                        border: `1px solid ${isActive ? 'rgba(74,222,128,0.25)' : 'rgba(250,204,21,0.25)'}`,
+                        color: isActive ? '#4ade80' : isUnsupported ? '#f87171' : '#facc15',
+                        background: isActive
+                          ? 'rgba(74,222,128,0.1)'
+                          : isUnsupported
+                            ? 'rgba(248,113,113,0.1)'
+                            : 'rgba(250,204,21,0.1)',
+                        border: `1px solid ${
+                          isActive
+                            ? 'rgba(74,222,128,0.25)'
+                            : isUnsupported
+                              ? 'rgba(248,113,113,0.3)'
+                              : 'rgba(250,204,21,0.25)'
+                        }`,
                       }}
                     >
                       {item.status}

@@ -4,6 +4,7 @@ import { redis } from '../lib/redis.js';
 
 const DEPLOY_QUEUE = 'apployd:deployments:queue';
 const CONTAINER_ACTION_QUEUE = 'apployd:container-actions:queue';
+const CANARY_ACTION_QUEUE = 'apployd:canary-actions:queue';
 
 export class DeployQueueService {
   async enqueue(payload: {
@@ -12,6 +13,9 @@ export class DeployQueueService {
     projectId: string;
     environment?: string;
     request: DeploymentRequest;
+    isCanary?: boolean;
+    canaryWeight?: number;
+    stableContainerHostPort?: number;
   }): Promise<void> {
     await redis.rpush(DEPLOY_QUEUE, JSON.stringify(payload));
   }
@@ -35,6 +39,22 @@ export class DeployQueueService {
     await redis.rpush(CONTAINER_ACTION_QUEUE, JSON.stringify(payload));
   }
 
+  async enqueueCanaryAction(
+    payload:
+      | {
+        action: 'set_percent';
+        deploymentId: string;
+        percent: number;
+      }
+      | {
+        action: 'promote' | 'abort';
+        deploymentId: string;
+        stableDeploymentId: string;
+      },
+  ): Promise<void> {
+    await redis.rpush(CANARY_ACTION_QUEUE, JSON.stringify(payload));
+  }
+
   async hasActiveWorkers(): Promise<boolean> {
     const keys = await redis.keys('apployd:engine:heartbeat:*');
     return keys.length > 0;
@@ -43,3 +63,4 @@ export class DeployQueueService {
 
 export const deployQueueKey = DEPLOY_QUEUE;
 export const containerActionQueueKey = CONTAINER_ACTION_QUEUE;
+export const canaryActionQueueKey = CANARY_ACTION_QUEUE;

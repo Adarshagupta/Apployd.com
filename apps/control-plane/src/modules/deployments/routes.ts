@@ -50,6 +50,30 @@ const createDeploymentSchema = z.object({
   outputDirectory: z.string().max(300).optional(),
 });
 
+const canaryStartSchema = z
+  .object({
+    percent: z.number().int().min(1).max(99),
+    previewDeploymentId: z.string().cuid().optional(),
+    candidateDeploymentId: z.string().cuid().optional(),
+    branch: z.string().trim().min(1).max(255).optional(),
+    commitSha: z.string().trim().regex(/^[a-f0-9]{7,64}$/i, 'Commit SHA must be 7 to 64 hex characters').optional(),
+    imageTag: z.string().trim().min(1).max(512).optional(),
+  })
+  .superRefine((value, ctx) => {
+    const hasExplicitCandidate = Boolean(value.branch || value.commitSha || value.imageTag);
+    const sourceCount =
+      Number(Boolean(value.previewDeploymentId))
+      + Number(Boolean(value.candidateDeploymentId))
+      + Number(hasExplicitCandidate);
+
+    if (sourceCount > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Choose exactly one canary source: preview deployment, candidate deployment, or explicit branch/commit/image.',
+      });
+    }
+  });
+
 export const deploymentRoutes: FastifyPluginAsync = async (app) => {
   const access = new AccessService();
   const deploymentService = new DeploymentRequestService();
@@ -196,6 +220,8 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
             branch: true,
             serviceType: true,
             activeDeploymentId: true,
+            canaryDeploymentId: true,
+            canaryPercent: true,
             createdById: true,
           },
         },
@@ -228,10 +254,10 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
       ? /\.(localhost)$/i.test(deployment.domain)
         ? null
         : /^(https?:\/\/)/i.test(deployment.domain)
-        ? deployment.domain
-        : /^(localhost|\d+\.\d+\.\d+\.\d+)(:\d+)?$/i.test(deployment.domain)
-          ? `http://${deployment.domain}`
-          : `https://${deployment.domain}`
+          ? deployment.domain
+          : /^(localhost|\d+\.\d+\.\d+\.\d+)(:\d+)?$/i.test(deployment.domain)
+            ? `http://${deployment.domain}`
+            : `https://${deployment.domain}`
       : null;
 
     return {
@@ -247,6 +273,9 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
       deployLogs: deployment.deployLogs,
       errorMessage: deployment.errorMessage,
       gitUrl: deployment.gitUrl,
+      isCanary: deployment.isCanary,
+      canaryStartedAt: deployment.canaryStartedAt,
+      canaryPromotedAt: deployment.canaryPromotedAt,
       createdAt: deployment.createdAt,
       startedAt: deployment.startedAt,
       finishedAt: deployment.finishedAt,
@@ -258,6 +287,8 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
         repoFullName: deployment.project.repoFullName,
         serviceType: deployment.project.serviceType,
         activeDeploymentId: deployment.project.activeDeploymentId,
+        canaryDeploymentId: deployment.project.canaryDeploymentId,
+        canaryPercent: deployment.project.canaryPercent,
       },
       createdByName,
       websocket: resolveDeploymentWebsocketUrl(deployment.id),
@@ -630,5 +661,401 @@ export const deploymentRoutes: FastifyPluginAsync = async (app) => {
       }
       throw error;
     }
+  });
+
+  app.post('/deployments/:deploymentId/canary', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
+    const params = z.object({ deploymentId: z.string().cuid() }).parse(request.params);
+    const body = canaryStartSchema.parse(request.body);
+
+    const stableDeployment = await prisma.deployment.findUnique({
+      where: { id: params.deploymentId },
+      include: {
+        project: {
+          select: {
+            id: true,
+            organizationId: true,
+            repoUrl: true,
+            branch: true,
+            startCommand: true,
+            buildCommand: true,
+            targetPort: true,
+            rootDirectory: true,
+            canaryDeploymentId: true,
+            activeDeploymentId: true,
+          },
+        },
+        container: {
+          select: { id: true, hostPort: true, status: true },
+        },
+      },
+    });
+
+    if (!stableDeployment) {
+      return reply.notFound('Deployment not found');
+    }
+
+    try {
+      await access.requireOrganizationRole(user.userId, stableDeployment.project.organizationId, 'developer');
+    } catch (error) {
+      return reply.forbidden((error as Error).message);
+    }
+
+    if (stableDeployment.environment !== 'production') {
+      return reply.badRequest('Canary releases are only supported for production deployments');
+    }
+
+    if (stableDeployment.project.activeDeploymentId !== params.deploymentId) {
+      return reply.badRequest('Canary releases can only start from the active production deployment');
+    }
+
+    if (stableDeployment.status !== 'ready') {
+      return reply.badRequest('Only a ready deployment can be used as the stable baseline for a canary release');
+    }
+
+    if (!stableDeployment.imageTag) {
+      return reply.badRequest('Cannot start a canary: deployment has no built image');
+    }
+
+    if (!stableDeployment.serverId) {
+      return reply.badRequest('Cannot start a canary: stable deployment is not assigned to a server');
+    }
+
+    if (!stableDeployment.container || stableDeployment.container.status !== 'running') {
+      return reply.badRequest('Cannot start a canary: stable container is not running');
+    }
+
+    if (stableDeployment.project.canaryDeploymentId) {
+      return reply.conflict('A canary release is already active for this project. Promote or abort it first.');
+    }
+
+    let candidateSource: 'latest_branch_head' | 'preview_deployment' | 'existing_deployment' | 'explicit' = 'latest_branch_head';
+    let candidateDeploymentId: string | undefined;
+    let candidateGitUrl = stableDeployment.gitUrl;
+    let candidateBranch: string | undefined = stableDeployment.branch ?? stableDeployment.project.branch ?? undefined;
+    let candidateCommitSha: string | undefined;
+    let candidateImageTag: string | undefined;
+
+    if (body.previewDeploymentId || body.candidateDeploymentId) {
+      const candidate = await prisma.deployment.findUnique({
+        where: { id: body.previewDeploymentId ?? body.candidateDeploymentId! },
+        select: {
+          id: true,
+          projectId: true,
+          environment: true,
+          status: true,
+          gitUrl: true,
+          branch: true,
+          commitSha: true,
+          imageTag: true,
+        },
+      });
+
+      if (!candidate) {
+        return reply.notFound('Candidate deployment not found');
+      }
+
+      if (candidate.projectId !== stableDeployment.project.id) {
+        return reply.badRequest('Canary source deployment must belong to the same project');
+      }
+
+      if (candidate.id === params.deploymentId) {
+        return reply.badRequest('Select a different deployment as the canary candidate');
+      }
+
+      if (body.previewDeploymentId && candidate.environment !== 'preview') {
+        return reply.badRequest('previewDeploymentId must reference a preview deployment');
+      }
+
+      if (body.previewDeploymentId && candidate.status !== 'ready') {
+        return reply.badRequest('Only a ready preview deployment can be used as a canary candidate');
+      }
+
+      if (body.candidateDeploymentId && !['ready', 'rolled_back'].includes(candidate.status)) {
+        return reply.badRequest('Candidate deployment must be ready or previously rolled back');
+      }
+
+      if (!candidate.imageTag && !candidate.commitSha && !candidate.branch) {
+        return reply.badRequest('Candidate deployment does not include a reusable image or source reference');
+      }
+
+      candidateSource = body.previewDeploymentId ? 'preview_deployment' : 'existing_deployment';
+      candidateDeploymentId = candidate.id;
+      candidateGitUrl = candidate.gitUrl;
+      candidateBranch = candidate.branch ?? stableDeployment.project.branch ?? undefined;
+      candidateCommitSha = candidate.commitSha ?? undefined;
+      candidateImageTag = candidate.imageTag ?? undefined;
+    } else if (body.branch || body.commitSha || body.imageTag) {
+      candidateSource = 'explicit';
+      candidateBranch = body.branch ?? stableDeployment.project.branch ?? undefined;
+      candidateCommitSha = body.commitSha;
+      candidateImageTag = body.imageTag;
+    }
+
+    try {
+      const result = await deploymentService.create({
+        projectId: stableDeployment.project.id,
+        actorUserId: user.userId,
+        trigger: 'manual',
+        environment: 'production',
+        gitUrl: candidateGitUrl,
+        ...(candidateBranch && { branch: candidateBranch }),
+        ...(candidateCommitSha && { commitSha: candidateCommitSha }),
+        ...(candidateImageTag && { imageTag: candidateImageTag }),
+        ...(stableDeployment.project.startCommand && { startCommand: stableDeployment.project.startCommand }),
+        ...(stableDeployment.project.buildCommand && { buildCommand: stableDeployment.project.buildCommand }),
+        ...(stableDeployment.project.rootDirectory && { rootDirectory: stableDeployment.project.rootDirectory }),
+        port: stableDeployment.project.targetPort,
+        canary: {
+          stableDeploymentId: params.deploymentId,
+          stableContainerHostPort: stableDeployment.container.hostPort,
+          weight: body.percent,
+        },
+        placement: {
+          serverId: stableDeployment.serverId,
+          requireServerAffinity: true,
+          forceReserveCapacity: true,
+        },
+      });
+
+      await audit.record({
+        organizationId: stableDeployment.project.organizationId,
+        actorUserId: user.userId,
+        action: 'deployment.canary_started',
+        entityType: 'deployment',
+        entityId: result.deploymentId,
+        metadata: {
+          stableDeploymentId: params.deploymentId,
+          canaryPercent: body.percent,
+          candidateSource,
+          ...(candidateDeploymentId && { candidateDeploymentId }),
+          ...(candidateBranch && { branch: candidateBranch }),
+          ...(candidateCommitSha && { commitSha: candidateCommitSha }),
+          ...(candidateImageTag && { imageTag: candidateImageTag }),
+        },
+      });
+
+      return reply.code(202).send({
+        ...result,
+        canaryPercent: body.percent,
+        stableDeploymentId: params.deploymentId,
+        candidateSource,
+        ...(candidateDeploymentId && { candidateDeploymentId }),
+        message: `Canary release queued. ${body.percent}% of traffic will shift after the new deployment is ready.`,
+      });
+    } catch (error) {
+      if (error instanceof DeploymentRequestError) {
+        return reply.code(error.statusCode).send({ message: error.message });
+      }
+      throw error;
+    }
+  });
+
+  app.patch('/deployments/:deploymentId/canary/percent', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
+    const params = z.object({ deploymentId: z.string().cuid() }).parse(request.params);
+    const body = z.object({ percent: z.number().int().min(1).max(99) }).parse(request.body);
+
+    const canaryDeployment = await prisma.deployment.findUnique({
+      where: { id: params.deploymentId },
+      include: {
+        project: {
+          include: {
+            activeDeployment: {
+              include: { container: { select: { hostPort: true, status: true } } },
+            },
+          },
+        },
+        container: { select: { hostPort: true, status: true } },
+      },
+    });
+
+    if (!canaryDeployment) {
+      return reply.notFound('Deployment not found');
+    }
+
+    try {
+      await access.requireOrganizationRole(user.userId, canaryDeployment.project.organizationId, 'developer');
+    } catch (error) {
+      return reply.forbidden((error as Error).message);
+    }
+
+    if (!canaryDeployment.isCanary || canaryDeployment.project.canaryDeploymentId !== params.deploymentId) {
+      return reply.badRequest('This deployment is not an active canary');
+    }
+
+    if (!canaryDeployment.container || canaryDeployment.container.status !== 'running') {
+      return reply.badRequest('Canary container is not running');
+    }
+
+    const stableContainer = canaryDeployment.project.activeDeployment?.container;
+    if (!stableContainer || stableContainer.status !== 'running') {
+      return reply.badRequest('Stable container is not running');
+    }
+
+    await queue.enqueueCanaryAction({
+      action: 'set_percent',
+      deploymentId: params.deploymentId,
+      percent: body.percent,
+    });
+
+    await queue.publishEvent({
+      deploymentId: params.deploymentId,
+      type: 'canary_percent_update_queued',
+      message: `Canary traffic update queued (${body.percent}%).`,
+    });
+
+    await audit.record({
+      organizationId: canaryDeployment.project.organizationId,
+      actorUserId: user.userId,
+      action: 'deployment.canary_percent_update_requested',
+      entityType: 'deployment',
+      entityId: params.deploymentId,
+      metadata: { newPercent: body.percent },
+    });
+
+    return reply.code(202).send({
+      success: true,
+      deploymentId: params.deploymentId,
+      canaryPercent: body.percent,
+      message: `Canary traffic update queued for ${body.percent}%.`,
+    });
+  });
+
+  app.post('/deployments/:deploymentId/canary/promote', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
+    const params = z.object({ deploymentId: z.string().cuid() }).parse(request.params);
+
+    const canaryDeployment = await prisma.deployment.findUnique({
+      where: { id: params.deploymentId },
+      include: {
+        project: {
+          include: {
+            activeDeployment: {
+              include: { container: { select: { id: true, dockerContainerId: true, status: true, hostPort: true } } },
+            },
+          },
+        },
+        container: { select: { id: true, hostPort: true, status: true } },
+      },
+    });
+
+    if (!canaryDeployment) {
+      return reply.notFound('Deployment not found');
+    }
+
+    try {
+      await access.requireOrganizationRole(user.userId, canaryDeployment.project.organizationId, 'developer');
+    } catch (error) {
+      return reply.forbidden((error as Error).message);
+    }
+
+    if (!canaryDeployment.isCanary || canaryDeployment.project.canaryDeploymentId !== params.deploymentId) {
+      return reply.badRequest('This deployment is not an active canary');
+    }
+
+    if (canaryDeployment.status !== 'ready') {
+      return reply.badRequest('Only a ready canary can be promoted');
+    }
+
+    if (!canaryDeployment.project.activeDeploymentId) {
+      return reply.badRequest('Cannot promote canary: no stable deployment is currently recorded');
+    }
+
+    await queue.enqueueCanaryAction({
+      action: 'promote',
+      deploymentId: params.deploymentId,
+      stableDeploymentId: canaryDeployment.project.activeDeploymentId,
+    });
+
+    await queue.publishEvent({
+      deploymentId: params.deploymentId,
+      type: 'canary_promote_queued',
+      message: 'Canary promotion queued.',
+    });
+
+    await audit.record({
+      organizationId: canaryDeployment.project.organizationId,
+      actorUserId: user.userId,
+      action: 'deployment.canary_promote_requested',
+      entityType: 'deployment',
+      entityId: params.deploymentId,
+      metadata: {
+        previousActiveDeploymentId: canaryDeployment.project.activeDeploymentId,
+      },
+    });
+
+    return reply.code(202).send({
+      success: true,
+      deploymentId: params.deploymentId,
+      message: 'Canary promotion queued.',
+    });
+  });
+
+  app.post('/deployments/:deploymentId/canary/abort', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
+    const params = z.object({ deploymentId: z.string().cuid() }).parse(request.params);
+
+    const canaryDeployment = await prisma.deployment.findUnique({
+      where: { id: params.deploymentId },
+      include: {
+        project: {
+          include: {
+            activeDeployment: {
+              include: { container: { select: { id: true, hostPort: true, status: true } } },
+            },
+          },
+        },
+        container: { select: { id: true, dockerContainerId: true, hostPort: true, status: true } },
+      },
+    });
+
+    if (!canaryDeployment) {
+      return reply.notFound('Deployment not found');
+    }
+
+    try {
+      await access.requireOrganizationRole(user.userId, canaryDeployment.project.organizationId, 'developer');
+    } catch (error) {
+      return reply.forbidden((error as Error).message);
+    }
+
+    if (!canaryDeployment.isCanary || canaryDeployment.project.canaryDeploymentId !== params.deploymentId) {
+      return reply.badRequest('This deployment is not an active canary');
+    }
+
+    if (!canaryDeployment.project.activeDeploymentId) {
+      return reply.badRequest('Cannot abort canary: no stable deployment is currently recorded');
+    }
+
+    await queue.enqueueCanaryAction({
+      action: 'abort',
+      deploymentId: params.deploymentId,
+      stableDeploymentId: canaryDeployment.project.activeDeploymentId,
+    });
+
+    await queue.publishEvent({
+      deploymentId: params.deploymentId,
+      type: 'canary_abort_queued',
+      message: 'Canary abort queued.',
+    });
+
+    await audit.record({
+      organizationId: canaryDeployment.project.organizationId,
+      actorUserId: user.userId,
+      action: 'deployment.canary_abort_requested',
+      entityType: 'deployment',
+      entityId: params.deploymentId,
+      metadata: {
+        restoredDeploymentId: canaryDeployment.project.activeDeploymentId,
+      },
+    });
+
+    return reply.code(202).send({
+      success: true,
+      deploymentId: params.deploymentId,
+      restoredDeploymentId: canaryDeployment.project.activeDeploymentId,
+      message: 'Canary abort queued.',
+    });
   });
 };

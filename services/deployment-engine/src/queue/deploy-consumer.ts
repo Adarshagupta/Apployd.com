@@ -14,6 +14,9 @@ const payloadSchema = z.object({
   organizationId: z.string().cuid(),
   projectId: z.string().cuid(),
   environment: z.enum(['production', 'preview']).default('production'),
+  isCanary: z.boolean().optional(),
+  canaryWeight: z.number().int().min(1).max(99).optional(),
+  stableContainerHostPort: z.number().int().min(1).max(65535).optional(),
   request: z.object({
     projectId: z.string().cuid(),
     gitUrl: z.string().url(),
@@ -38,13 +41,16 @@ const payloadSchema = z.object({
     return result;
   }),
 }).transform(payload => {
-  // Ensure request doesn't have undefined values
-  return {
-    ...payload,
-    request: Object.fromEntries(
-      Object.entries(payload.request).filter(([, v]) => v !== undefined)
-    ) as any,
-  };
+  const result = Object.fromEntries(
+    Object.entries({
+      ...payload,
+      request: Object.fromEntries(
+        Object.entries(payload.request).filter(([, v]) => v !== undefined)
+      ) as any,
+    }).filter(([, v]) => v !== undefined)
+  ) as any;
+
+  return result;
 });
 
 export class DeployQueueConsumer {

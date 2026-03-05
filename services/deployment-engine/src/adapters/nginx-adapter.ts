@@ -23,6 +23,32 @@ interface ConfigureTlsProxyInput extends ConfigureProxyInput {
   certificateDomain?: string;
 }
 
+/**
+ * Input for a weighted (canary) proxy configuration.
+ * Traffic is split between the stable upstream and the canary upstream
+ * according to `canaryWeight` (1–99). The remaining weight goes to stable.
+ */
+interface ConfigureWeightedProxyInput {
+  domain: string;
+  /** Stable (currently live) container */
+  stableUpstreamHost: string;
+  stableUpstreamPort: number;
+  /** Canary (new) container */
+  canaryUpstreamHost: string;
+  canaryUpstreamPort: number;
+  upstreamScheme?: 'http' | 'https';
+  /** Percentage of traffic to route to the canary, 1–99 */
+  canaryWeight: number;
+  noIndex?: boolean;
+  attackModeEnabled?: boolean;
+  aliases?: string[];
+  wakePath?: string;
+}
+
+interface ConfigureWeightedTlsProxyInput extends ConfigureWeightedProxyInput {
+  certificateDomain?: string;
+}
+
 interface ProxyProbeResult {
   httpStatus: string;
   httpsStatus: string;
@@ -91,6 +117,213 @@ export class NginxAdapter {
 
     writeFileSync(configPath, rendered, { encoding: 'utf8' });
 
+    await runHostCommand('nginx -t');
+    await runHostCommand('systemctl reload nginx');
+  }
+
+  // ── Weighted (canary) proxy — HTTP only ──────────────────────────────────────
+  async configureWeightedProjectProxy(input: ConfigureWeightedProxyInput): Promise<void> {
+    const domain = assertValidHostname(input.domain, 'domain');
+    const aliases = (input.aliases ?? []).map((alias, index) =>
+      assertValidHostname(alias, `alias #${index + 1}`),
+    );
+    const upstreamScheme = this.normalizeUpstreamScheme(input.upstreamScheme);
+    const canaryWeight = Math.max(1, Math.min(99, Math.round(input.canaryWeight)));
+    const stableWeight = 100 - canaryWeight;
+
+    const upstreamName = this.buildUpstreamName(domain);
+    const wakeConfig = this.buildWakeConfig(input.wakePath);
+    const attackMode = this.buildAttackModeConfig(domain, input.attackModeEnabled === true);
+    const aliasString = aliases.join(' ');
+
+    const upstreamBlock = [
+      `upstream ${upstreamName} {`,
+      `  server ${input.stableUpstreamHost}:${input.stableUpstreamPort} weight=${stableWeight};`,
+      `  server ${input.canaryUpstreamHost}:${input.canaryUpstreamPort} weight=${canaryWeight};`,
+      '  keepalive 64;',
+      '}',
+    ].join('\n');
+
+    const seoConfig = this.buildSeoConfig({
+      domain,
+      noIndex: input.noIndex === true,
+      upstreamPassTarget: `${upstreamScheme}://${upstreamName}`,
+      indent: '    ',
+    });
+
+    const serverBlock = [
+      '{{ATTACK_MODE_HTTP_DIRECTIVES}}',
+      upstreamBlock,
+      '',
+      'server {',
+      '    listen 80;',
+      `    server_name ${domain} ${aliasString};`,
+      '    server_tokens off;',
+      '    add_header X-Frame-Options "SAMEORIGIN" always;',
+      '    add_header X-Content-Type-Options "nosniff" always;',
+      '    add_header Referrer-Policy "strict-origin-when-cross-origin" always;',
+      '    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;',
+      '    add_header Cross-Origin-Opener-Policy "same-origin" always;',
+      '{{SEO_SERVER_DIRECTIVES}}',
+      '{{SEO_LOCATION_BLOCKS}}',
+      '    location / {',
+      '        proxy_http_version 1.1;',
+      '        proxy_set_header Upgrade $http_upgrade;',
+      '        proxy_set_header Connection "upgrade";',
+      '        proxy_set_header Host $host;',
+      '{{ATTACK_MODE_LOCATION_DIRECTIVES}}',
+      '{{WAKE_PROXY_DIRECTIVES}}',
+      `        proxy_pass ${upstreamScheme}://${upstreamName};`,
+      '    }',
+      '{{SEO_FALLBACK_LOCATIONS}}',
+      '{{WAKE_FALLBACK_LOCATION}}',
+      '}',
+    ].join('\n');
+
+    let rendered = serverBlock
+      .replaceAll('{{ATTACK_MODE_HTTP_DIRECTIVES}}', attackMode.httpDirectives)
+      .replaceAll('{{ATTACK_MODE_LOCATION_DIRECTIVES}}', attackMode.locationDirectives)
+      .replaceAll('{{WAKE_PROXY_DIRECTIVES}}', wakeConfig.proxyDirectives)
+      .replaceAll('{{WAKE_FALLBACK_LOCATION}}', wakeConfig.locationBlock)
+      .replaceAll('{{SEO_SERVER_DIRECTIVES}}', seoConfig.serverDirectives)
+      .replaceAll('{{SEO_LOCATION_BLOCKS}}', seoConfig.locationBlocks)
+      .replaceAll('{{SEO_FALLBACK_LOCATIONS}}', seoConfig.fallbackLocations);
+
+    rendered = this.ensureWakeFallback(rendered, wakeConfig);
+    rendered = this.ensureAttackModeFallback(rendered, attackMode);
+
+    const configPath = join(env.NGINX_SITES_PATH, `${domain}.conf`);
+    writeFileSync(configPath, rendered, { encoding: 'utf8' });
+    await runHostCommand('nginx -t');
+    await runHostCommand('systemctl reload nginx');
+  }
+
+  // ── Weighted (canary) proxy — TLS ────────────────────────────────────────────
+  async configureWeightedProjectProxyWithTls(input: ConfigureWeightedTlsProxyInput): Promise<void> {
+    const domain = assertValidHostname(input.domain, 'domain');
+    const aliases = (input.aliases ?? []).map((alias, index) =>
+      assertValidHostname(alias, `alias #${index + 1}`),
+    );
+    const upstreamScheme = this.normalizeUpstreamScheme(input.upstreamScheme);
+    const canaryWeight = Math.max(1, Math.min(99, Math.round(input.canaryWeight)));
+    const stableWeight = 100 - canaryWeight;
+
+    const certDomain = input.certificateDomain
+      ? assertValidHostname(input.certificateDomain, 'certificateDomain')
+      : domain;
+    const certPath = `/etc/letsencrypt/live/${certDomain}/fullchain.pem`;
+    const keyPath = `/etc/letsencrypt/live/${certDomain}/privkey.pem`;
+
+    const upstreamName = this.buildUpstreamName(domain);
+    const aliasString = aliases.join(' ');
+    const wakeConfig = this.buildWakeConfig(input.wakePath);
+    const attackMode = this.buildAttackModeConfig(domain, input.attackModeEnabled === true);
+    const seoConfig = this.buildSeoConfig({
+      domain,
+      noIndex: input.noIndex === true,
+      upstreamPassTarget: `${upstreamScheme}://${upstreamName}`,
+      indent: '  ',
+    });
+    const seoRedirectDirectives = input.noIndex === true
+      ? '  add_header X-Robots-Tag "noindex, nofollow, noarchive, nosnippet" always;'
+      : '';
+
+    const upstreamBlock = [
+      `upstream ${upstreamName} {`,
+      `  server ${input.stableUpstreamHost}:${input.stableUpstreamPort} weight=${stableWeight};`,
+      `  server ${input.canaryUpstreamHost}:${input.canaryUpstreamPort} weight=${canaryWeight};`,
+      '  keepalive 64;',
+      '}',
+    ].join('\n');
+
+    const rendered = [
+      '{{ATTACK_MODE_HTTP_DIRECTIVES}}',
+      upstreamBlock,
+      '',
+      'server {',
+      '  listen 80;',
+      `  server_name ${domain} ${aliasString};`,
+      '  server_tokens off;',
+      seoRedirectDirectives,
+      '',
+      '  location /.well-known/acme-challenge/ {',
+      '    root /var/www/html;',
+      '  }',
+      '',
+      '  location /healthz {',
+      '    access_log off;',
+      "    return 200 'ok';",
+      '  }',
+      '',
+      '  location / {',
+      '    set $apployd_forwarded_proto $scheme;',
+      '    if ($http_x_forwarded_proto ~* "^https$") {',
+      '      set $apployd_forwarded_proto https;',
+      '    }',
+      '    if ($apployd_forwarded_proto != "https") {',
+      '      return 301 https://$host$request_uri;',
+      '    }',
+      '    proxy_http_version 1.1;',
+      '    proxy_set_header Upgrade $http_upgrade;',
+      '    proxy_set_header Connection $connection_upgrade;',
+      '    proxy_set_header Host $host;',
+      '    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;',
+      '    proxy_set_header X-Forwarded-Proto $apployd_forwarded_proto;',
+      '    proxy_read_timeout 300;',
+      '    proxy_send_timeout 300;',
+      `    proxy_pass ${upstreamScheme}://${upstreamName};`,
+      '  }',
+      '}',
+      '',
+      'server {',
+      '  listen 443 ssl http2;',
+      `  server_name ${domain} ${aliasString};`,
+      '  server_tokens off;',
+      '  add_header X-Frame-Options "SAMEORIGIN" always;',
+      '  add_header X-Content-Type-Options "nosniff" always;',
+      '  add_header Referrer-Policy "strict-origin-when-cross-origin" always;',
+      '  add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;',
+      '  add_header Cross-Origin-Opener-Policy "same-origin" always;',
+      '  add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;',
+      '{{SEO_SERVER_DIRECTIVES}}',
+      '',
+      `  ssl_certificate ${certPath};`,
+      `  ssl_certificate_key ${keyPath};`,
+      '',
+      '{{SEO_LOCATION_BLOCKS}}',
+      '  location /healthz {',
+      '    access_log off;',
+      "    return 200 'ok';",
+      '  }',
+      '',
+      '  location / {',
+      '    proxy_http_version 1.1;',
+      '    proxy_set_header Upgrade $http_upgrade;',
+      '    proxy_set_header Connection $connection_upgrade;',
+      '    proxy_set_header Host $host;',
+      '    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;',
+      '    proxy_set_header X-Forwarded-Proto $scheme;',
+      '    proxy_read_timeout 300;',
+      '    proxy_send_timeout 300;',
+      '{{ATTACK_MODE_LOCATION_DIRECTIVES}}',
+      '{{WAKE_PROXY_DIRECTIVES}}',
+      `    proxy_pass ${upstreamScheme}://${upstreamName};`,
+      '  }',
+      '{{SEO_FALLBACK_LOCATIONS}}',
+      '{{WAKE_FALLBACK_LOCATION}}',
+      '}',
+    ]
+      .join('\n')
+      .replaceAll('{{ATTACK_MODE_HTTP_DIRECTIVES}}', attackMode.httpDirectives)
+      .replaceAll('{{ATTACK_MODE_LOCATION_DIRECTIVES}}', attackMode.locationDirectives)
+      .replaceAll('{{WAKE_PROXY_DIRECTIVES}}', wakeConfig.proxyDirectives)
+      .replaceAll('{{WAKE_FALLBACK_LOCATION}}', wakeConfig.locationBlock)
+      .replaceAll('{{SEO_SERVER_DIRECTIVES}}', seoConfig.serverDirectives)
+      .replaceAll('{{SEO_LOCATION_BLOCKS}}', seoConfig.locationBlocks)
+      .replaceAll('{{SEO_FALLBACK_LOCATIONS}}', seoConfig.fallbackLocations);
+
+    const configPath = join(env.NGINX_SITES_PATH, `${domain}.conf`);
+    writeFileSync(configPath, rendered, { encoding: 'utf8' });
     await runHostCommand('nginx -t');
     await runHostCommand('systemctl reload nginx');
   }
@@ -241,7 +474,7 @@ export class NginxAdapter {
         // Fall through to default template
       }
     }
-    
+
     return [
       '{{ATTACK_MODE_HTTP_DIRECTIVES}}',
       'server {',

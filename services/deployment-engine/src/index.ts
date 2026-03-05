@@ -7,6 +7,7 @@ import { DockerAdapter } from './adapters/docker-adapter.js';
 import { startActiveContainerRecoveryLoop } from './monitoring/container-recovery.js';
 import { metricsRegistry } from './monitoring/metrics.js';
 import { startStatsCollector } from './monitoring/stats-collector.js';
+import { CanaryActionConsumer } from './queue/canary-action-consumer.js';
 import { ContainerActionConsumer } from './queue/container-action-consumer.js';
 import { DeployQueueConsumer } from './queue/deploy-consumer.js';
 
@@ -62,6 +63,7 @@ const start = async () => {
 
   const consumer = new DeployQueueConsumer();
   const containerActionConsumer = new ContainerActionConsumer();
+  const canaryActionConsumer = new CanaryActionConsumer();
   const docker = new DockerAdapter();
 
   await docker.enforcePoliciesForRunningContainers().catch((error) => {
@@ -82,7 +84,7 @@ const start = async () => {
   }, 5_000);
   heartbeatInterval.unref();
 
-  await Promise.all([consumer.run(), containerActionConsumer.run()]);
+  await Promise.all([consumer.run(), containerActionConsumer.run(), canaryActionConsumer.run()]);
 };
 
 start().catch(async (error) => {

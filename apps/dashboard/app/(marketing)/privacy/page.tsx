@@ -63,6 +63,14 @@ const privacySections = [
       'Requests can be submitted through support channels listed in the Help page.',
     ],
   },
+  {
+    title: 'Regulated Health Information (HIPAA)',
+    points: [
+      'Apployd is not a HIPAA-compliant service and is not designed for Protected Health Information (PHI).',
+      'Do not submit PHI or other HIPAA-regulated data to the platform unless a separate written agreement explicitly allows it.',
+      'Apployd does not provide a Business Associate Agreement (BAA) by default.',
+    ],
+  },
 ];
 
 export default function PrivacyPage() {

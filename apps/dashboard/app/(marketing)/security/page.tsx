@@ -86,7 +86,7 @@ const practices = [
 const compliance = [
   { name: 'SOC 2 Type II', status: 'In Progress', badge: 'progress' },
   { name: 'GDPR', status: 'Active', badge: 'active' },
-  { name: 'HIPAA', status: 'In Progress', badge: 'progress' },
+  { name: 'HIPAA', status: 'Not Supported', badge: 'unsupported' },
   { name: 'ISO 27001', status: 'In Progress', badge: 'progress' },
   { name: 'Data Residency', status: 'Active', badge: 'active' },
   { name: 'Encryption at Rest', status: 'Active', badge: 'active' },
@@ -205,9 +205,25 @@ export default function SecurityPage() {
                     textTransform: 'uppercase',
                     borderRadius: 999,
                     padding: '0.22rem 0.6rem',
-                    color: c.badge === 'active' ? '#4ade80' : '#facc15',
-                    background: c.badge === 'active' ? 'rgba(74,222,128,0.1)' : 'rgba(250,204,21,0.1)',
-                    border: `1px solid ${c.badge === 'active' ? 'rgba(74,222,128,0.25)' : 'rgba(250,204,21,0.25)'}`,
+                    color:
+                      c.badge === 'active'
+                        ? '#4ade80'
+                        : c.badge === 'unsupported'
+                          ? '#f87171'
+                          : '#facc15',
+                    background:
+                      c.badge === 'active'
+                        ? 'rgba(74,222,128,0.1)'
+                        : c.badge === 'unsupported'
+                          ? 'rgba(248,113,113,0.1)'
+                          : 'rgba(250,204,21,0.1)',
+                    border: `1px solid ${
+                      c.badge === 'active'
+                        ? 'rgba(74,222,128,0.25)'
+                        : c.badge === 'unsupported'
+                          ? 'rgba(248,113,113,0.3)'
+                          : 'rgba(250,204,21,0.25)'
+                    }`,
                   }}
                 >
                   {c.status}
@@ -215,6 +231,10 @@ export default function SecurityPage() {
               </div>
             ))}
           </div>
+          <p style={{ margin: '0.8rem 0 0', fontSize: '0.84rem', color: 'rgba(200,210,240,0.62)', lineHeight: 1.55 }}>
+            Apployd is not currently HIPAA-compliant and does not provide a default Business Associate Agreement (BAA).
+            Do not use the platform for PHI/HIPAA-regulated workloads unless a separate written agreement explicitly states support.
+          </p>
         </div>
       </section>
 

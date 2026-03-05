@@ -37,12 +37,14 @@ interface DeploymentRecordInput {
   imageTag: string | null;
   domain: string;
   capacityReserved: boolean;
+  isCanary?: boolean;
 }
 
 interface AtomicReservationInput {
   initialServer: Server | null;
   capacityRequest: CapacityRequest;
   deployment: Omit<DeploymentRecordInput, 'serverId'>;
+  allowReschedule?: boolean;
 }
 
 class CapacityReservationContentionError extends Error {
@@ -81,6 +83,16 @@ interface CreateDeploymentInput {
   outputDirectory?: string;
   /** For rollback: reuse an existing image without building */
   imageTag?: string;
+  canary?: {
+    stableDeploymentId: string;
+    stableContainerHostPort: number;
+    weight: number;
+  };
+  placement?: {
+    serverId: string;
+    requireServerAffinity?: boolean;
+    forceReserveCapacity?: boolean;
+  };
 }
 
 export interface QueuedDeploymentResult {
@@ -152,6 +164,9 @@ export class DeploymentRequestService {
         400,
       );
     }
+    if (input.canary && resolvedEnvironment !== 'production') {
+      throw new DeploymentRequestError('Canary deployments are only supported for production.', 400);
+    }
     assertSafeGitUrl(resolvedGitUrl);
     if (resolvedBuildCommand) {
       assertSafeDeploymentCommand('buildCommand', resolvedBuildCommand);
@@ -161,17 +176,20 @@ export class DeploymentRequestService {
     }
 
     const providedCommitSha = normalizeCommitSha(input.commitSha);
-    const resolvedCommitSha = providedCommitSha
-      ?? await this.resolveLatestGitHubCommitSha({
-        gitProvider: project.gitProvider,
-        repoOwner: project.repoOwner,
-        repoName: project.repoName,
-        repoFullName: project.repoFullName,
-        gitUrl: resolvedGitUrl,
-        branch: resolvedBranch,
-        ...(input.actorUserId && { actorUserId: input.actorUserId }),
-        projectOwnerUserId: project.createdById,
-      });
+    const resolvedCommitSha =
+      input.imageTag && !providedCommitSha
+        ? undefined
+        : providedCommitSha
+          ?? await this.resolveLatestGitHubCommitSha({
+            gitProvider: project.gitProvider,
+            repoOwner: project.repoOwner,
+            repoName: project.repoName,
+            repoFullName: project.repoFullName,
+            gitUrl: resolvedGitUrl,
+            branch: resolvedBranch,
+            ...(input.actorUserId && { actorUserId: input.actorUserId }),
+            projectOwnerUserId: project.createdById,
+          });
 
     // Preview deployments keep existing style behavior.
     // Production deployments now default to a unique single-label domain while
@@ -259,6 +277,19 @@ export class DeploymentRequestService {
       region: env.DEFAULT_REGION,
     };
 
+    let requestedServer: Server | null = null;
+    if (input.placement?.serverId) {
+      requestedServer = await prisma.server.findUnique({
+        where: { id: input.placement.serverId },
+      });
+      if (!requestedServer) {
+        throw new DeploymentRequestError('Requested deployment server was not found.', 409);
+      }
+      if (requestedServer.status !== ServerStatus.healthy) {
+        throw new DeploymentRequestError('Requested deployment server is not healthy.', 409);
+      }
+    }
+
     const activeContainer = await prisma.container.findFirst({
       where: {
         projectId: project.id,
@@ -270,8 +301,8 @@ export class DeploymentRequestService {
       orderBy: { updatedAt: 'desc' },
     });
 
-    let reusableServer: Server | null = null;
-    if (activeContainer) {
+    let reusableServer: Server | null = requestedServer;
+    if (!reusableServer && activeContainer) {
       const activeServer = await prisma.server.findUnique({
         where: { id: activeContainer.serverId },
       });
@@ -293,7 +324,11 @@ export class DeploymentRequestService {
 
     let server: Server;
     let deployment: Deployment;
-    const reserveCapacity = !reusableServer || !activeContainer || reusableServer.id !== activeContainer.serverId;
+    const reserveCapacity =
+      input.placement?.forceReserveCapacity === true
+      || !reusableServer
+      || !activeContainer
+      || reusableServer.id !== activeContainer.serverId;
 
     try {
       if (!reserveCapacity && reusableServer) {
@@ -309,6 +344,7 @@ export class DeploymentRequestService {
             imageTag: input.imageTag ?? null,
             domain: resolvedDomain,
             capacityReserved: false,
+            isCanary: Boolean(input.canary),
           }),
         });
       } else {
@@ -324,7 +360,9 @@ export class DeploymentRequestService {
             imageTag: input.imageTag ?? null,
             domain: resolvedDomain,
             capacityReserved: true,
+            isCanary: Boolean(input.canary),
           },
+          allowReschedule: input.placement?.requireServerAffinity === true ? false : true,
         });
         server = reserved.server;
         deployment = reserved.deployment;
@@ -349,6 +387,12 @@ export class DeploymentRequestService {
       }
 
       if (error instanceof CapacityReservationContentionError) {
+        if (input.placement?.requireServerAffinity) {
+          throw new DeploymentRequestError(
+            'Insufficient capacity on the active server to run this canary alongside the stable deployment.',
+            503,
+          );
+        }
         throw new DeploymentRequestError(
           'Server capacity is currently contended. Retry this deployment request.',
           503,
@@ -393,16 +437,25 @@ export class DeploymentRequestService {
     };
 
     try {
+      const queuedMessage = input.canary
+        ? `Deployment queued (${input.trigger}, canary)`
+        : `Deployment queued (${input.trigger})`;
+
       await prisma.logEntry.create({
         data: {
           projectId: project.id,
           deploymentId: deployment.id,
           level: 'info',
           source: 'control-plane',
-          message: `Deployment queued (${input.trigger})`,
+          message: queuedMessage,
           metadata: {
             eventType: 'queued',
             trigger: input.trigger,
+            ...(input.canary && {
+              isCanary: true,
+              canaryWeight: input.canary.weight,
+              stableDeploymentId: input.canary.stableDeploymentId,
+            }),
           },
         },
       });
@@ -413,12 +466,17 @@ export class DeploymentRequestService {
         projectId: project.id,
         environment: resolvedEnvironment,
         request: payload,
+        ...(input.canary && {
+          isCanary: true,
+          canaryWeight: input.canary.weight,
+          stableContainerHostPort: input.canary.stableContainerHostPort,
+        }),
       });
 
       await this.queue.publishEvent({
         deploymentId: deployment.id,
         type: 'queued',
-        message: `Deployment queued (${input.trigger})`,
+        message: queuedMessage,
       });
     } catch (error) {
       await prisma.deployment.update({
@@ -469,6 +527,12 @@ export class DeploymentRequestService {
         domain: deployment.domain,
         branch: resolvedBranch,
         ...(resolvedCommitSha && { commitSha: resolvedCommitSha }),
+        ...(input.canary && {
+          isCanary: true,
+          canaryWeight: input.canary.weight,
+          stableDeploymentId: input.canary.stableDeploymentId,
+          serverAffinity: input.placement?.serverId ?? server.id,
+        }),
       },
     });
 
@@ -494,6 +558,7 @@ export class DeploymentRequestService {
       imageTag: input.imageTag,
       domain: input.domain,
       capacityReserved: input.capacityReserved,
+      ...(input.isCanary && { isCanary: true }),
     };
   }
 
@@ -579,6 +644,9 @@ export class DeploymentRequestService {
       attempt += 1;
 
       if (!candidateServer) {
+        if (input.allowReschedule === false) {
+          throw new CapacityReservationContentionError();
+        }
         candidateServer = await this.scheduler.schedule(input.capacityRequest);
       }
 
@@ -611,7 +679,9 @@ export class DeploymentRequestService {
           throw error;
         }
 
-        candidateServer = null;
+        if (input.allowReschedule !== false) {
+          candidateServer = null;
+        }
         await sleep(15 * attempt);
       }
     }

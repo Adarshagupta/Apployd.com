@@ -277,11 +277,16 @@ model Project {
   resourceCpuMillicore Int          @default(250)
   resourceBandwidthGb  Int          @default(25)
   activeDeploymentId   String?      @unique
+  /// ID of the in-progress canary deployment (null when no canary is active)
+  canaryDeploymentId   String?      @unique
+  /// Percentage of traffic (0–100) currently routed to the canary deployment
+  canaryPercent        Int          @default(0)
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
   organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy            User         @relation(fields: [createdById], references: [id], onDelete: Restrict)
   activeDeployment     Deployment?  @relation("ActiveDeployment", fields: [activeDeploymentId], references: [id], onDelete: SetNull)
+  canaryDeployment     Deployment?  @relation("CanaryDeployment", fields: [canaryDeploymentId], references: [id], onDelete: SetNull)
   deployments          Deployment[] @relation("ProjectDeployments")
   containers           Container[]
   usageRecords         UsageRecord[]
@@ -342,10 +347,17 @@ model Deployment {
   domain          String?
   startedAt       DateTime?
   finishedAt      DateTime?
+  /// Whether this deployment was started as a canary (gradual rollout)
+  isCanary        Boolean          @default(false)
+  /// Timestamp when the canary rollout was initiated
+  canaryStartedAt DateTime?
+  /// Timestamp when this canary was promoted to 100% (becomes the active deployment)
+  canaryPromotedAt DateTime?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   project         Project          @relation("ProjectDeployments", fields: [projectId], references: [id], onDelete: Cascade)
   activeForProject Project?        @relation("ActiveDeployment")
+  canaryForProject Project?        @relation("CanaryDeployment")
   server          Server?          @relation(fields: [serverId], references: [id], onDelete: SetNull)
   container       Container?       @relation(fields: [containerId], references: [id], onDelete: SetNull)
   logs            LogEntry[]
@@ -355,6 +367,7 @@ model Deployment {
   @@index([serverId, status])
   @@index([status, createdAt])
   @@index([projectId, environment, status])
+  @@index([projectId, isCanary])
   @@map("deployments")
 }
 

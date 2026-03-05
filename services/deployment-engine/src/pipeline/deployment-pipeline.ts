@@ -208,18 +208,18 @@ export class DeploymentPipeline {
       const domain = env.ENGINE_LOCAL_MODE
         ? `localhost:${run.hostPort}`
         : deployment.domain ?? buildFallbackDomain({
-            environment: payload.environment,
-            projectSlug: deployment.project.slug,
-            organizationSlug: deployment.project.organization.slug,
-            ref: payload.request.commitSha ?? payload.request.branch ?? 'preview',
-          });
+          environment: payload.environment,
+          projectSlug: deployment.project.slug,
+          organizationSlug: deployment.project.organization.slug,
+          ref: payload.request.commitSha ?? payload.request.branch ?? 'preview',
+        });
       const protectedPlatformDomains = env.ENGINE_LOCAL_MODE
         ? new Set<string>()
         : buildProtectedPlatformDomains({
-            baseDomain: env.BASE_DOMAIN,
-            previewBaseDomain: env.PREVIEW_BASE_DOMAIN,
-            dashboardBaseUrl: env.DASHBOARD_BASE_URL,
-          });
+          baseDomain: env.BASE_DOMAIN,
+          previewBaseDomain: env.PREVIEW_BASE_DOMAIN,
+          dashboardBaseUrl: env.DASHBOARD_BASE_URL,
+        });
       if (!env.ENGINE_LOCAL_MODE && protectedPlatformDomains.has(normalizeHostname(domain))) {
         throw new Error(
           `Refusing deployment routing for reserved platform domain "${domain}". Use a project/preview hostname or custom domain instead.`,
@@ -229,12 +229,12 @@ export class DeploymentPipeline {
       const autoAliases = env.ENGINE_LOCAL_MODE
         ? []
         : buildAutomaticDomainAliases({
-            environment: payload.environment,
-            primaryDomain: domain,
-            projectSlug: deployment.project.slug,
-            organizationSlug: deployment.project.organization.slug,
-            baseDomain: env.BASE_DOMAIN,
-          });
+          environment: payload.environment,
+          primaryDomain: domain,
+          projectSlug: deployment.project.slug,
+          organizationSlug: deployment.project.organization.slug,
+          baseDomain: env.BASE_DOMAIN,
+        });
 
       // Collect verified custom domain aliases for this project.
       const customAliases = (deployment.project.customDomains ?? []).map((d: { domain: string }) => d.domain);
@@ -287,21 +287,47 @@ export class DeploymentPipeline {
         );
 
         onLog('Setting up reverse proxy...');
-        await withRetry(
-          () =>
-            this.nginx.configureProjectProxy({
-              domain,
-              upstreamHost: '127.0.0.1',
-              upstreamPort: run.hostPort,
-              upstreamScheme,
-              noIndex: isPreview,
-              attackModeEnabled: deployment.project.attackModeEnabled,
-              aliases: routeAliases,
-              wakePath: `/api/v1/edge/deployments/${deployment.id}/wake`,
-            }),
-          { retries: 2, delayMs: 1000 },
-        );
-        onLog('Reverse proxy configured');
+        const isCanaryDeploy = payload.isCanary === true
+          && typeof payload.stableContainerHostPort === 'number'
+          && typeof payload.canaryWeight === 'number';
+
+        if (isCanaryDeploy) {
+          // ── Canary weighted routing (keep stable container alive) ──────────
+          await withRetry(
+            () =>
+              this.nginx.configureWeightedProjectProxy({
+                domain,
+                stableUpstreamHost: '127.0.0.1',
+                stableUpstreamPort: payload.stableContainerHostPort!,
+                canaryUpstreamHost: '127.0.0.1',
+                canaryUpstreamPort: run.hostPort,
+                upstreamScheme,
+                noIndex: isPreview,
+                attackModeEnabled: deployment.project.attackModeEnabled,
+                aliases: routeAliases,
+                wakePath: `/api/v1/edge/deployments/${deployment.id}/wake`,
+                canaryWeight: payload.canaryWeight!,
+              }),
+            { retries: 2, delayMs: 1000 },
+          );
+          onLog(`Canary reverse proxy configured (${payload.canaryWeight}% → new, ${100 - payload.canaryWeight!}% → stable)`);
+        } else {
+          await withRetry(
+            () =>
+              this.nginx.configureProjectProxy({
+                domain,
+                upstreamHost: '127.0.0.1',
+                upstreamPort: run.hostPort,
+                upstreamScheme,
+                noIndex: isPreview,
+                attackModeEnabled: deployment.project.attackModeEnabled,
+                aliases: routeAliases,
+                wakePath: `/api/v1/edge/deployments/${deployment.id}/wake`,
+              }),
+            { retries: 2, delayMs: 1000 },
+          );
+          onLog('Reverse proxy configured');
+        }
 
         onLog('Provisioning SSL certificate...');
         await withRetry(() => this.ssl.ensureCertificate(domain, routeAliases), {
@@ -311,22 +337,44 @@ export class DeploymentPipeline {
         onLog('SSL certificate ready');
 
         onLog('Applying TLS reverse proxy configuration...');
-        await withRetry(
-          () =>
-            this.nginx.configureProjectProxyWithTls({
-              domain,
-              certificateDomain: domain,
-              upstreamHost: '127.0.0.1',
-              upstreamPort: run.hostPort,
-              upstreamScheme,
-              noIndex: isPreview,
-              attackModeEnabled: deployment.project.attackModeEnabled,
-              aliases: routeAliases,
-              wakePath: `/api/v1/edge/deployments/${deployment.id}/wake`,
-            }),
-          { retries: 2, delayMs: 1000 },
-        );
-        onLog('TLS reverse proxy configured');
+        if (isCanaryDeploy) {
+          await withRetry(
+            () =>
+              this.nginx.configureWeightedProjectProxyWithTls({
+                domain,
+                certificateDomain: domain,
+                stableUpstreamHost: '127.0.0.1',
+                stableUpstreamPort: payload.stableContainerHostPort!,
+                canaryUpstreamHost: '127.0.0.1',
+                canaryUpstreamPort: run.hostPort,
+                upstreamScheme,
+                noIndex: isPreview,
+                attackModeEnabled: deployment.project.attackModeEnabled,
+                aliases: routeAliases,
+                wakePath: `/api/v1/edge/deployments/${deployment.id}/wake`,
+                canaryWeight: payload.canaryWeight!,
+              }),
+            { retries: 2, delayMs: 1000 },
+          );
+          onLog('Canary TLS reverse proxy configured');
+        } else {
+          await withRetry(
+            () =>
+              this.nginx.configureProjectProxyWithTls({
+                domain,
+                certificateDomain: domain,
+                upstreamHost: '127.0.0.1',
+                upstreamPort: run.hostPort,
+                upstreamScheme,
+                noIndex: isPreview,
+                attackModeEnabled: deployment.project.attackModeEnabled,
+                aliases: routeAliases,
+                wakePath: `/api/v1/edge/deployments/${deployment.id}/wake`,
+              }),
+            { retries: 2, delayMs: 1000 },
+          );
+          onLog('TLS reverse proxy configured');
+        }
 
         onLog('Verifying edge route...');
         const probe = await this.nginx.waitForRouteReady(
@@ -402,13 +450,13 @@ export class DeploymentPipeline {
       const previousContainer = isPreview
         ? null
         : await prisma.container.findFirst({
-            where: {
-              projectId: deployment.projectId,
-              id: { not: container.id },
-              status: { in: [ContainerStatus.running, ContainerStatus.sleeping, ContainerStatus.pending] },
-            },
-            orderBy: { updatedAt: 'desc' },
-          });
+          where: {
+            projectId: deployment.projectId,
+            id: { not: container.id },
+            status: { in: [ContainerStatus.running, ContainerStatus.sleeping, ContainerStatus.pending] },
+          },
+          orderBy: { updatedAt: 'desc' },
+        });
 
       if (previousContainer && previousContainer.serverId !== deployment.serverId) {
         if (deployment.capacityReserved) {
@@ -442,7 +490,8 @@ export class DeploymentPipeline {
         }
       }
 
-      // ── Mark deployment ready ──────────────────────────────────
+      // ── Mark deployment ready ──────────────────────────────────────────────
+      const isCanaryMode = payload.isCanary === true && typeof payload.stableContainerHostPort === 'number';
       await prisma.deployment.update({
         where: { id: payload.deploymentId },
         data: {
@@ -450,19 +499,33 @@ export class DeploymentPipeline {
           containerId: container.id,
           finishedAt: new Date(),
           domain,
+          ...(isCanaryMode && {
+            isCanary: true,
+            canaryStartedAt: new Date(),
+          }),
         },
       });
 
-      // ── Update activeDeploymentId (production only) ────────────
+      // ── Update activeDeploymentId / canaryDeploymentId (production only) ──
       if (!isPreview) {
-        await prisma.project.update({
-          where: { id: deployment.projectId },
-          data: { activeDeploymentId: payload.deploymentId },
-        });
+        if (isCanaryMode) {
+          await prisma.project.update({
+            where: { id: deployment.projectId },
+            data: {
+              canaryDeploymentId: payload.deploymentId,
+              canaryPercent: payload.canaryWeight ?? 10,
+            },
+          });
+        } else {
+          await prisma.project.update({
+            where: { id: deployment.projectId },
+            data: { activeDeploymentId: payload.deploymentId },
+          });
+        }
       }
 
-      // ── Stop previous container (production only) ──────────────
-      if (previousContainer) {
+      // ── Stop previous container (production only, skip for canary) ─────────
+      if (previousContainer && !isCanaryMode) {
         onLog('Stopping previous container...');
         await this.docker.stopContainer(previousContainer.dockerContainerId).catch(() => undefined);
         await prisma.container.update({
@@ -475,12 +538,13 @@ export class DeploymentPipeline {
         });
       }
 
-      const envLabel = isPreview ? '🔀 Preview' : '🚀 Production';
+      const envLabel = isPreview ? 'Preview' : isCanaryMode ? 'Canary' : 'Production';
       const commitSuffix = deploymentCommit ? ` @ ${deploymentCommit.slice(0, 12)}` : '';
+      const canarySuffix = isCanaryMode ? ` (${payload.canaryWeight}% traffic)` : '';
       await this.publishEvent(
         payload.deploymentId,
         'ready',
-        `${envLabel} deployment${commitSuffix} ready at ${this.resolvePublicUrl(domain)}`,
+        `${envLabel} deployment${commitSuffix}${canarySuffix} ready at ${this.resolvePublicUrl(domain)}`,
         deployment.projectId,
       );
 

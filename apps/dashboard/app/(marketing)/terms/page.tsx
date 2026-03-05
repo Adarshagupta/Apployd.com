@@ -58,7 +58,15 @@ const termsSections = [
     ],
   },
   {
-    title: '7. Changes and Termination',
+    title: '7. Regulated Health Data (HIPAA)',
+    body: [
+      'Apployd is not a HIPAA-compliant service and is not intended for the storage, processing, or transmission of Protected Health Information (PHI).',
+      'Customers must not use Apployd for HIPAA-regulated workloads unless and until a separate written agreement explicitly states HIPAA support.',
+      'Apployd does not provide a Business Associate Agreement (BAA) by default.',
+    ],
+  },
+  {
+    title: '8. Changes and Termination',
     body: [
       'We may update these terms from time to time. Material changes will be communicated through product or email notices.',
       'Either party may terminate the agreement according to cancellation terms and any negotiated enterprise addendum.',

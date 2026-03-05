@@ -49,6 +49,9 @@ interface DeploymentSummary {
   imageTag?: string | null;
   createdAt: string;
   finishedAt?: string | null;
+  isCanary?: boolean;
+  canaryStartedAt?: string | null;
+  canaryPromotedAt?: string | null;
 }
 
 interface CustomDomainSummary {
@@ -1253,6 +1256,16 @@ export default function ProjectDetailPage() {
                               Current
                             </span>
                           )}
+                          {dep.isCanary && (
+                            <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                              {dep.status === 'rolled_back' ? 'Aborted canary' : 'Canary'}
+                            </span>
+                          )}
+                          {!dep.isCanary && dep.canaryPromotedAt && (
+                            <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                              Promoted canary
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -1325,8 +1338,39 @@ export default function ProjectDetailPage() {
 
                         {dep.environment === 'production' &&
                           dep.status === 'ready' &&
+                          isActive &&
+                          !dep.isCanary && (
+                            <button
+                              type="button"
+                              className="rounded-md bg-slate-700 px-2.5 py-1 text-[11px] font-medium text-white transition hover:bg-slate-800"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/projects/${projectId}/deployments/${dep.id}`);
+                              }}
+                            >
+                              Canary
+                            </button>
+                          )}
+
+                        {dep.isCanary &&
+                          dep.status === 'ready' && (
+                            <button
+                              type="button"
+                              className="rounded-md bg-amber-100 px-2.5 py-1 text-[11px] font-medium text-amber-900 transition hover:bg-amber-200"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/projects/${projectId}/deployments/${dep.id}`);
+                              }}
+                            >
+                              Manage canary
+                            </button>
+                          )}
+
+                        {dep.environment === 'production' &&
+                          dep.status === 'ready' &&
                           dep.imageTag &&
-                          !isActive && (
+                          !isActive &&
+                          !dep.isCanary && (
                             <button
                               type="button"
                               className="rounded-md bg-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-900 transition hover:bg-slate-300"
