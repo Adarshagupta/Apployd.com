@@ -150,6 +150,10 @@ export default function DeploymentDetailPage() {
   const [explicitBranch, setExplicitBranch] = useState('');
   const [explicitCommitSha, setExplicitCommitSha] = useState('');
   const [explicitImageTag, setExplicitImageTag] = useState('');
+  const syncedDeploymentId = deployment?.deploymentId ?? null;
+  const syncedDeploymentStatus = deployment?.status ?? null;
+  const syncedDeploymentBranch = deployment?.branch ?? null;
+  const syncedProjectCanaryPercent = deployment?.project.canaryPercent ?? null;
 
   const load = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
@@ -190,27 +194,27 @@ export default function DeploymentDetailPage() {
   }, [load, loadProjectDeployments]);
 
   useEffect(() => {
-    if (!deployment) {
+    if (!syncedDeploymentId) {
       return;
     }
 
     const nextPercent =
-      deployment.project.canaryPercent && deployment.project.canaryPercent > 0
-        ? deployment.project.canaryPercent
+      syncedProjectCanaryPercent && syncedProjectCanaryPercent > 0
+        ? syncedProjectCanaryPercent
         : 10;
     setCanaryPercentInput(String(nextPercent));
-    setExplicitBranch(deployment.branch ?? '');
-  }, [deployment?.deploymentId, deployment?.project.canaryPercent, deployment?.branch]);
+    setExplicitBranch(syncedDeploymentBranch ?? '');
+  }, [syncedDeploymentId, syncedProjectCanaryPercent, syncedDeploymentBranch]);
 
   /* Auto-poll while building/deploying */
   useEffect(() => {
-    if (!deployment) return;
-    if (!['queued', 'building', 'deploying'].includes(deployment.status)) return;
+    if (!syncedDeploymentStatus) return;
+    if (!['queued', 'building', 'deploying'].includes(syncedDeploymentStatus)) return;
     const interval = setInterval(() => {
       load({ silent: true }).catch(() => undefined);
     }, 4000);
     return () => clearInterval(interval);
-  }, [deployment?.status, load]);
+  }, [syncedDeploymentStatus, load]);
 
   useEffect(() => {
     if (!queuedRefreshUntil) {

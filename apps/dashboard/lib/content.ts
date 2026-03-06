@@ -2,6 +2,7 @@ import { siteUrl } from './seo';
 
 const LOCAL_API_FALLBACK = 'http://localhost:4000/api/v1';
 const API_PATH_FALLBACK = '/api/v1';
+const DEFAULT_FETCH_TIMEOUT_MS = 5000;
 
 export type ContentPostKind = 'blog' | 'news';
 export type ContentPostStatus = 'draft' | 'published' | 'archived';
@@ -71,62 +72,83 @@ const parsePost = (payload: unknown): ContentPostRecord | null => {
 
 const toAbsoluteUrl = (path: string): string => `${toAbsoluteApiBase(resolveServerApiUrl())}${path}`;
 
+async function fetchContentPayload(
+  path: string,
+  options?: {
+    revalidateSeconds?: number | undefined;
+    timeoutMs?: number | undefined;
+  },
+): Promise<unknown | null> {
+  const revalidateSeconds = options?.revalidateSeconds ?? 180;
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(toAbsoluteUrl(path), {
+      next: { revalidate: revalidateSeconds },
+      headers: {
+        Accept: 'application/json',
+      },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return await response.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export async function fetchPublishedContentPosts(options?: {
   kind?: 'all' | ContentPostKind;
   limit?: number;
-  revalidateSeconds?: number;
+  revalidateSeconds?: number | undefined;
+  timeoutMs?: number | undefined;
 }): Promise<ContentPostRecord[]> {
   const kind = options?.kind ?? 'all';
   const limit = options?.limit ?? 48;
-  const revalidateSeconds = options?.revalidateSeconds ?? 180;
   const query = new URLSearchParams({
     kind,
     limit: String(limit),
   });
 
-  try {
-    const response = await fetch(toAbsoluteUrl(`/content/posts?${query.toString()}`), {
-      next: { revalidate: revalidateSeconds },
-      headers: {
-        Accept: 'application/json',
-      },
-    });
-    if (!response.ok) {
-      return [];
-    }
-    const payload = await response.json();
-    return parsePosts(payload);
-  } catch {
+  const payload = await fetchContentPayload(`/content/posts?${query.toString()}`, {
+    revalidateSeconds: options?.revalidateSeconds,
+    timeoutMs: options?.timeoutMs,
+  });
+
+  if (!payload) {
     return [];
   }
+
+  return parsePosts(payload);
 }
 
 export async function fetchPublishedContentPostBySlug(
   slug: string,
-  options?: { revalidateSeconds?: number },
+  options?: { revalidateSeconds?: number | undefined; timeoutMs?: number | undefined },
 ): Promise<ContentPostRecord | null> {
   const cleanSlug = slug.trim().toLowerCase();
   if (!cleanSlug) {
     return null;
   }
 
-  const revalidateSeconds = options?.revalidateSeconds ?? 180;
+  const payload = await fetchContentPayload(`/content/posts/${encodeURIComponent(cleanSlug)}`, {
+    revalidateSeconds: options?.revalidateSeconds,
+    timeoutMs: options?.timeoutMs,
+  });
 
-  try {
-    const response = await fetch(toAbsoluteUrl(`/content/posts/${encodeURIComponent(cleanSlug)}`), {
-      next: { revalidate: revalidateSeconds },
-      headers: {
-        Accept: 'application/json',
-      },
-    });
-    if (!response.ok) {
-      return null;
-    }
-    const payload = await response.json();
-    return parsePost(payload);
-  } catch {
+  if (!payload) {
     return null;
   }
+
+  return parsePost(payload);
 }
 
 export const toContentCanonicalPath = (slug: string): string => `/blog/${slug}`;

@@ -1,6 +1,7 @@
 import { ImageResponse } from 'next/og';
 
 export const alt = 'Apployd - Managed SaaS Deployment Platform';
+export const runtime = 'edge';
 export const size = {
   width: 1200,
   height: 630,

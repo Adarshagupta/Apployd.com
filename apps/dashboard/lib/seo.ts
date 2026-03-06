@@ -143,6 +143,7 @@ export function buildPageMetadata({
   const canonicalPath = normalizePath(path);
 
   return {
+    metadataBase: siteMetadataBase,
     title,
     description,
     keywords,
