@@ -6,6 +6,7 @@ import { runHostCommand } from '../core/run-host-command.js';
 const CHAIN_NAME = 'APLOYD_EGRESS';
 const COMMENT_PREFIX = 'apployd';
 const MULTIPORT_MAX = 15;
+type FirewallFamily = 4 | 6;
 
 const PRIVATE_EGRESS_CIDRS = [
   '10.0.0.0/8',
@@ -71,7 +72,8 @@ export class EgressGuard {
       return;
     }
 
-    await this.ensureChainReady();
+    const family = this.addressFamily(identity.ipAddress);
+    await this.ensureChainReady(family);
     await this.deleteRulesByPolicyKey(identity.policyKey);
     await this.deleteRulesBySourceIp(identity.ipAddress);
 
@@ -85,6 +87,7 @@ export class EgressGuard {
         policyKey: identity.policyKey,
         action: 'DROP',
         suffix: 'block-tcp',
+        family,
       });
       await this.insertPortRules({
         sourceIp,
@@ -93,24 +96,24 @@ export class EgressGuard {
         policyKey: identity.policyKey,
         action: 'DROP',
         suffix: 'block-udp',
+        family,
       });
     }
 
     if (mode === 'lockdown') {
       await this.insertRule(
         `-s ${sourceIp} -m comment --comment "${commentTag(identity.policyKey, 'deny-all')}" -j DROP`,
+        family,
       );
     }
 
-    await this.insertAllowRules(identity.policyKey, sourceIp);
+    await this.insertAllowRules(identity.policyKey, sourceIp, family);
   }
 
   async removePolicy(containerNameOrId: string): Promise<void> {
     if (env.ENGINE_SECURITY_MODE === 'off') {
       return;
     }
-
-    await this.ensureChainReady().catch(() => undefined);
 
     const identity = await this.resolveContainerIdentity(containerNameOrId);
     const fallbackPolicyKey = normalizePolicyKey(containerNameOrId);
@@ -126,8 +129,6 @@ export class EgressGuard {
       return;
     }
 
-    await this.ensureChainReady();
-
     const output = await runHostCommand(
       'docker ps --format "{{.ID}} {{.Names}}" | awk \'$2 ~ /^apployd-/ {print $1}\'',
     ).catch(() => '');
@@ -141,11 +142,12 @@ export class EgressGuard {
     }
   }
 
-  private async insertAllowRules(policyKey: string, sourceIp: string): Promise<void> {
+  private async insertAllowRules(policyKey: string, sourceIp: string, family: FirewallFamily): Promise<void> {
     if (env.ENGINE_SECURITY_ALLOW_PRIVATE_EGRESS) {
-      for (const cidr of PRIVATE_EGRESS_CIDRS) {
+      for (const cidr of PRIVATE_EGRESS_CIDRS.filter((entry) => this.addressFamily(entry) === family)) {
         await this.insertRule(
           `-s ${sourceIp} -d ${cidr} -m comment --comment "${commentTag(policyKey, 'allow-private')}" -j RETURN`,
+          family,
         );
       }
     }
@@ -157,6 +159,7 @@ export class EgressGuard {
       policyKey,
       action: 'RETURN',
       suffix: 'allow-tcp',
+      family,
     });
     await this.insertPortRules({
       sourceIp,
@@ -165,6 +168,7 @@ export class EgressGuard {
       policyKey,
       action: 'RETURN',
       suffix: 'allow-udp',
+      family,
     });
   }
 
@@ -175,6 +179,7 @@ export class EgressGuard {
     policyKey: string;
     action: 'RETURN' | 'DROP';
     suffix: string;
+    family: FirewallFamily;
   }): Promise<void> {
     if (input.ports.length === 0) {
       return;
@@ -189,6 +194,7 @@ export class EgressGuard {
       const multiport = ports.join(',');
       await this.insertRule(
         `-s ${input.sourceIp} -p ${input.protocol} -m multiport --dports ${multiport} -m comment --comment "${commentTag(input.policyKey, `${input.suffix}-${index + 1}`)}" -j ${input.action}`,
+        input.family,
       );
     }
   }
@@ -221,52 +227,70 @@ export class EgressGuard {
     };
   }
 
-  private async ensureChainReady(): Promise<void> {
+  private async ensureChainReady(family: FirewallFamily): Promise<void> {
+    const command = this.firewallBinary(family);
     await runHostCommand(
-      `iptables -nL ${CHAIN_NAME} >/dev/null 2>&1 || iptables -N ${CHAIN_NAME}`,
+      `${command} -nL ${CHAIN_NAME} >/dev/null 2>&1 || ${command} -N ${CHAIN_NAME}`,
     );
     await runHostCommand(
-      `iptables -C DOCKER-USER -j ${CHAIN_NAME} >/dev/null 2>&1 || iptables -I DOCKER-USER 1 -j ${CHAIN_NAME}`,
+      `${command} -C DOCKER-USER -j ${CHAIN_NAME} >/dev/null 2>&1 || ${command} -I DOCKER-USER 1 -j ${CHAIN_NAME}`,
     );
     await runHostCommand(
-      `iptables -C ${CHAIN_NAME} -j RETURN >/dev/null 2>&1 || iptables -A ${CHAIN_NAME} -j RETURN`,
+      `${command} -C ${CHAIN_NAME} -j RETURN >/dev/null 2>&1 || ${command} -A ${CHAIN_NAME} -j RETURN`,
     );
   }
 
-  private async insertRule(ruleTail: string): Promise<void> {
-    await runHostCommand(`iptables -I ${CHAIN_NAME} 1 ${ruleTail}`);
+  private async insertRule(ruleTail: string, family: FirewallFamily): Promise<void> {
+    await runHostCommand(`${this.firewallBinary(family)} -I ${CHAIN_NAME} 1 ${ruleTail}`);
   }
 
   private async deleteRulesByPolicyKey(policyKey: string): Promise<void> {
     const marker = `${COMMENT_PREFIX}:${normalizePolicyKey(policyKey)}:`;
-    const rules = await this.listChainRules();
-    const matches = rules.filter((line) => line.includes(marker));
-    await this.deleteRules(matches);
+    for (const family of [4, 6] as const) {
+      const rules = await this.listChainRules(family);
+      const matches = rules.filter((line) => line.includes(marker));
+      await this.deleteRules(matches, family);
+    }
   }
 
   private async deleteRulesBySourceIp(sourceIp: string): Promise<void> {
-    const rules = await this.listChainRules();
+    const family = this.addressFamily(sourceIp);
+    const rules = await this.listChainRules(family);
     const sourceMarker = `-s ${this.sourceCidr(sourceIp)}`;
     const matches = rules.filter((line) => line.includes(sourceMarker));
-    await this.deleteRules(matches);
+    await this.deleteRules(matches, family);
   }
 
-  private async listChainRules(): Promise<string[]> {
-    const rulesOutput = await runHostCommand(`iptables -S ${CHAIN_NAME} 2>/dev/null || true`).catch(() => '');
+  private async listChainRules(family: FirewallFamily): Promise<string[]> {
+    const rulesOutput = await runHostCommand(
+      `${this.firewallBinary(family)} -S ${CHAIN_NAME} 2>/dev/null || true`,
+    ).catch(() => '');
     return rulesOutput
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter((line) => line.startsWith(`-A ${CHAIN_NAME} `));
   }
 
-  private async deleteRules(rules: string[]): Promise<void> {
+  private async deleteRules(rules: string[], family: FirewallFamily): Promise<void> {
     for (const line of [...rules].reverse()) {
       const deleteRule = line.replace(/^-A\s+/, '-D ');
-      await runHostCommand(`iptables ${deleteRule}`).catch(() => undefined);
+      await runHostCommand(`${this.firewallBinary(family)} ${deleteRule}`).catch(() => undefined);
     }
   }
 
+  private firewallBinary(family: FirewallFamily): 'iptables' | 'ip6tables' {
+    return family === 6 ? 'ip6tables' : 'iptables';
+  }
+
+  private addressFamily(value: string): FirewallFamily {
+    const family = isIP(value.split('/')[0] ?? value);
+    if (family !== 4 && family !== 6) {
+      throw new Error(`Invalid IP address: ${value}`);
+    }
+    return family;
+  }
+
   private sourceCidr(ipAddress: string): string {
-    return isIP(ipAddress) === 6 ? `${ipAddress}/128` : `${ipAddress}/32`;
+    return this.addressFamily(ipAddress) === 6 ? `${ipAddress}/128` : `${ipAddress}/32`;
   }
 }
