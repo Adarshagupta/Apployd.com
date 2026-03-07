@@ -41,8 +41,8 @@ interface TreeNode {
   name: string;
   path: string;
   type: 'file' | 'directory';
-  children?: TreeNode[];
-  entry?: FileEntry;
+  children?: TreeNode[] | undefined;
+  entry?: FileEntry | undefined;
 }
 
 function buildTree(entries: FileEntry[]): TreeNode[] {
