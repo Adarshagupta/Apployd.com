@@ -11,6 +11,7 @@ Apployd is a SaaS backend hosting platform focused on affordability, container i
 - Deployment idempotency for create-deploy requests (`Idempotency-Key`) and Stripe webhook deduplication (`webhook_events`).
 - PostgreSQL schema (Prisma) covering users, organizations, projects, deployments, servers, containers, plans, subscriptions, usage, invoices, logs, metrics, and audit data.
 - Next.js + Tailwind dashboard with pages for login/signup/projects/deploy/usage/billing/logs/settings/team and live deployment event streaming.
+- Code Studio now includes a Codex-powered AI agent sidebar that can inspect repo files from the running dev container and propose applyable file edits.
 - Detailed per-project usage accounting with BigInt-safe aggregation (CPU/RAM/bandwidth/requests), utilization percentages, and daily breakdown endpoints.
 - Nginx templates with WebSocket proxying + rate limiting.
 - Prometheus + Grafana observability stack.
@@ -74,6 +75,7 @@ apployd/
 6. Live progress over WebSocket (`/ws/deployments/:deploymentId?token=<jwt>`)
 
 Important:
+
 - `BASE_DOMAIN` controls generated deployment hostnames (for example `project.org.BASE_DOMAIN`).
 - `PREVIEW_BASE_DOMAIN` controls preview deployment hostnames.
 - `PREVIEW_DOMAIN_STYLE` controls preview hostname pattern:
@@ -85,6 +87,7 @@ Important:
 - `ENGINE_METRICS_PORT` controls the engine `/metrics` port (change it if `9102` is already in use).
 - `DOCKER_HOST` must match your local Docker runtime (Windows Docker Desktop usually needs `npipe:////./pipe/docker_engine`).
 - SMTP env vars (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`) enable signup verification and deployment notification emails.
+- `OPENAI_API_KEY` enables the Code Studio Codex agent. `OPENAI_BASE_URL` and `OPENAI_CODEX_MODEL` are optional overrides.
 
 ### Resource Rules
 
@@ -182,6 +185,7 @@ bash infra/scripts/deploy-ubuntu.sh \
 ```
 
 This script:
+
 - provisions Ubuntu dependencies (optional flag),
 - configures base Nginx + platform reverse proxy,
 - generates production env files for control-plane, engine, and dashboard,
@@ -189,11 +193,13 @@ This script:
 - uses host Nginx by default (Docker Nginx service is skipped unless `DEPLOY_WITH_NGINX_CONTAINER=true`).
 
 DNS records to create:
+
 - `apployd.com` -> your server public IP
 - `*.apployd.com` -> your server public IP
 - `*.preview.apployd.com` -> your server public IP (only if preview base differs)
 
 Generated deployment URL patterns:
+
 - Production: `<project>.<organization>.<BASE_DOMAIN>`
 - Preview (`PREVIEW_DOMAIN_STYLE=project`): `<project>.<PREVIEW_BASE_DOMAIN>`
 - Preview (`PREVIEW_DOMAIN_STYLE=project_ref`): `<project>-<ref>-<hash>.<organization>.<PREVIEW_BASE_DOMAIN>`

@@ -62,18 +62,21 @@ const optionalCsvEmails = z.preprocess((value) => {
   return values.length > 0 ? values : undefined;
 }, z.array(z.string().email()).optional());
 
-const optionalCsvDomains = z.preprocess((value) => {
-  if (typeof value !== 'string') {
-    return value;
-  }
+const optionalCsvDomains = z.preprocess(
+  (value) => {
+    if (typeof value !== 'string') {
+      return value;
+    }
 
-  const values = value
-    .split(',')
-    .map((entry) => entry.trim().toLowerCase())
-    .filter((entry) => entry.length > 0);
+    const values = value
+      .split(',')
+      .map((entry) => entry.trim().toLowerCase())
+      .filter((entry) => entry.length > 0);
 
-  return values.length > 0 ? values : undefined;
-}, z.array(z.string().regex(/^[a-z0-9.-]+\.[a-z]{2,}$/)).optional());
+    return values.length > 0 ? values : undefined;
+  },
+  z.array(z.string().regex(/^[a-z0-9.-]+\.[a-z]{2,}$/)).optional(),
+);
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -136,6 +139,9 @@ const envSchema = z.object({
   DEV_SERVER_TOTAL_BANDWIDTH_GB: z.coerce.number().int().min(1).default(1000),
   EDGE_WAKE_TOKEN: optionalString,
   EDGE_WAKE_RETRY_SECONDS: z.coerce.number().int().min(1).max(60).default(5),
+  OPENAI_API_KEY: optionalString,
+  OPENAI_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
+  OPENAI_CODEX_MODEL: z.string().min(1).default('gpt-5.2-codex'),
 });
 
 const parsedEnv = envSchema.parse(process.env);

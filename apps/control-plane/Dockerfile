@@ -14,6 +14,7 @@ RUN npm --workspace packages/shared run build && npm --workspace apps/control-pl
 FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
+RUN apk add --no-cache docker-cli util-linux
 COPY --from=base /app /app
 EXPOSE 4000
 CMD ["npm", "--workspace", "apps/control-plane", "run", "start"]

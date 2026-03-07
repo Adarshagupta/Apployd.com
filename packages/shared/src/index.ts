@@ -20,6 +20,7 @@ export type DeploymentEnvironment = 'production' | 'preview';
 export interface DeploymentRequest {
   projectId: string;
   gitUrl: string;
+  gitAuthToken?: string;
   commitSha?: string;
   branch?: string;
   rootDirectory?: string;

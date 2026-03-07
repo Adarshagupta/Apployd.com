@@ -285,8 +285,24 @@ export function DeployForm({
           ? window.crypto.randomUUID()
           : `${Date.now()}-${Math.random()}`;
 
+      const deploymentPayload = {
+        projectId,
+        environment,
+        env: envPayload,
+        serviceType,
+        ...(domain ? { domain } : {}),
+        ...(gitUrl ? { gitUrl } : {}),
+        ...(branch ? { branch } : {}),
+        ...(rootDirectory ? { rootDirectory } : {}),
+        ...(startCommand ? { startCommand } : {}),
+        ...(buildCommand ? { buildCommand } : {}),
+        ...(typeof port === 'number' && Number.isFinite(port) ? { port } : {}),
+        ...(serviceType === 'static_site' && outputDirectory ? { outputDirectory } : {}),
+      };
+
       const response = await apiClient.post(
         '/deployments',
+<<<<<<< HEAD
         {
           projectId,
           environment,
@@ -301,6 +317,9 @@ export function DeployForm({
           serviceType,
           outputDirectory: serviceType === 'static_site' ? outputDirectory || undefined : undefined,
         },
+=======
+        deploymentPayload,
+>>>>>>> 13e613b3fcfa34d8c8694c6a4aa681685e899601
         {
           headers: {
             'Idempotency-Key': idempotencyKey,

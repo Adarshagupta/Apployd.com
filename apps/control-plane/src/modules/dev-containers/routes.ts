@@ -13,6 +13,15 @@ const shellEscape = (value: string): string =>
   `'${value.replace(/'/g, `'\"'\"'`)}'`;
 
 const DEV_IMAGE = 'apployd/dev-container:latest';
+const DEV_NETWORK = 'apployd-net';
+
+async function ensureDockerNetwork(): Promise<void> {
+  try {
+    await exec(`docker network inspect ${shellEscape(DEV_NETWORK)}`);
+  } catch {
+    await exec(`docker network create ${shellEscape(DEV_NETWORK)}`);
+  }
+}
 
 export const devContainerRoutes: FastifyPluginAsync = async (app) => {
   const access = new AccessService();
@@ -118,12 +127,13 @@ export const devContainerRoutes: FastifyPluginAsync = async (app) => {
       await exec(`docker volume create ${shellEscape(volumeName)}`);
       await exec(`docker volume create ${shellEscape(`${volumeName}-config`)}`);
       await exec(`docker volume create ${shellEscape(`${volumeName}-ssh`)}`);
+      await ensureDockerNetwork();
 
       // Run container: sleep infinity so it stays alive for exec sessions
       const { stdout: dockerId } = await exec(
         `docker run -d \
           --name ${shellEscape(containerName)} \
-          --network apployd-net \
+          --network ${shellEscape(DEV_NETWORK)} \
           --volume ${shellEscape(volumeName)}:/home/coder/project \
           --volume ${shellEscape(`${volumeName}-config`)}:/home/coder/.config \
           --volume ${shellEscape(`${volumeName}-ssh`)}:/home/coder/.ssh \

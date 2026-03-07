@@ -9,7 +9,9 @@ import { env } from '../core/env.js';
 import { EgressGuard } from '../security/egress-guard.js';
 
 const shellEscape = (value: string) =>
-  process.platform === 'win32' ? `"${value.replace(/"/g, '\\"')}"` : `'${value.replace(/'/g, `'\"'\"'`)}'`;
+  process.platform === 'win32'
+    ? `"${value.replace(/"/g, '\\"')}"`
+    : `'${value.replace(/'/g, `'\"'\"'`)}'`;
 
 const DOCKER_NETWORK_TIMEOUT_MS = 10_000;
 const DOCKER_RUN_TIMEOUT_MS = 30_000;
@@ -63,7 +65,10 @@ function sanitizeEnvForLog(env: Record<string, string>): string {
  *
  * Result: First build is full speed; subsequent builds are 2-10× faster.
  */
-function universalDockerfile(serviceType: 'web_service' | 'static_site' | 'python' = 'web_service', projectId = 'default'): string {
+export function universalDockerfile(
+  serviceType: 'web_service' | 'static_site' | 'python' = 'web_service',
+  projectId = 'default',
+): string {
   if (serviceType === 'static_site') {
     return staticSiteDockerfile(projectId);
   }
@@ -71,6 +76,118 @@ function universalDockerfile(serviceType: 'web_service' | 'static_site' | 'pytho
     return pythonDockerfile(projectId);
   }
   return webServiceDockerfile(projectId);
+}
+
+function gitSourceStageLines(): string[] {
+  return [
+    '# ---- Stage 1: Clone repository ----',
+    'FROM alpine/git:latest AS source',
+    'ARG GIT_URL',
+    'ARG GIT_BRANCH=""',
+    'ARG GIT_SHA=""',
+    'ARG SOURCE_REFRESH_NONCE=""',
+    'WORKDIR /repo',
+    'RUN --mount=type=secret,id=git_auth_token,required=false \\',
+    '    set -eu; \\',
+    '    echo ">>> Source refresh nonce: ${SOURCE_REFRESH_NONCE}"; \\',
+    '    auth_header=""; \\',
+    '    if [ -s /run/secrets/git_auth_token ] && printf "%s" "${GIT_URL}" | grep -Eq "^https://github\\.com/"; then \\',
+    '      token="$(cat /run/secrets/git_auth_token)"; \\',
+    '      auth_header="Authorization: Basic $(printf "x-access-token:%s" "$token" | base64 | tr -d \'\\n\')"; \\',
+    '    fi; \\',
+    '    git_with_auth() { \\',
+    '      if [ -n "$auth_header" ]; then git -c http.extraHeader="$auth_header" "$@"; else git "$@"; fi; \\',
+    '    }; \\',
+    '    if [ -n "${GIT_BRANCH}" ]; then git_with_auth clone --depth=1 --branch "${GIT_BRANCH}" "${GIT_URL}" .; else git_with_auth clone --depth=1 "${GIT_URL}" .; fi; \\',
+    '    if [ -n "${GIT_SHA}" ]; then git_with_auth fetch --depth=1 origin "${GIT_SHA}" && git checkout "${GIT_SHA}"; else git_with_auth pull --ff-only; fi; \\',
+    '    echo ">>> Source commit: $(git rev-parse HEAD)"',
+    '',
+  ];
+}
+
+function nodeSourceRootLines(): string[] {
+  return [
+    '# Resolve configured root directory before later COPY steps',
+    'ARG ROOT_DIR=.',
+    'RUN set -eu; \\',
+    '    requested="${ROOT_DIR:-.}"; \\',
+    '    [ -n "$requested" ] || requested="."; \\',
+    '    resolved="$requested"; \\',
+    '    has_package_json() { \\',
+    '      dir="$1"; \\',
+    '      [ -f "$dir/package.json" ]; \\',
+    '    }; \\',
+    '    detect_single_package_dir() { \\',
+    '      candidates="$(find /repo \\',
+    '        -path /repo/.git -prune -o \\',
+    '        -path "*/node_modules" -prune -o \\',
+    '        -name package.json -print | sed "s#^/repo/##" | while read -r file; do dirname "$file"; done | sort -u)"; \\',
+    '      first="$(printf "%s\\n" "$candidates" | sed -n "1p")"; \\',
+    '      second="$(printf "%s\\n" "$candidates" | sed -n "2p")"; \\',
+    '      if [ -n "$first" ] && [ -z "$second" ]; then printf "%s" "$first"; fi; \\',
+    '    }; \\',
+    '    source_dir="/repo"; \\',
+    '    [ "$resolved" = "." ] || source_dir="/repo/$resolved"; \\',
+    '    if ! has_package_json "$source_dir"; then \\',
+    '      if has_package_json "/repo"; then \\',
+    '        echo ">>> Requested root directory ${requested} does not contain package.json; falling back to repository root"; \\',
+    '        resolved="."; \\',
+    '        source_dir="/repo"; \\',
+    '      else \\',
+    '        auto_dir="$(detect_single_package_dir)"; \\',
+    '        if [ -n "$auto_dir" ]; then \\',
+    '          echo ">>> Requested root directory ${requested} does not contain package.json; auto-detected ${auto_dir}"; \\',
+    '          resolved="$auto_dir"; \\',
+    '          source_dir="/repo/$resolved"; \\',
+    '        else \\',
+    '          echo ">>> Unable to resolve Node app root. Checked ${requested} and repository root for package.json."; \\',
+    '          exit 1; \\',
+    '        fi; \\',
+    '      fi; \\',
+    '    fi; \\',
+    '    rm -rf /apployd-target && mkdir -p /apployd-target; \\',
+    '    cp -a "$source_dir/." /apployd-target/; \\',
+    '    echo ">>> Resolved application root: ${resolved}"',
+    '',
+  ];
+}
+
+function pythonSourceRootLines(): string[] {
+  return [
+    '# Resolve configured root directory before later COPY steps',
+    'ARG ROOT_DIR=.',
+    'RUN set -eu; \\',
+    '    requested="${ROOT_DIR:-.}"; \\',
+    '    [ -n "$requested" ] || requested="."; \\',
+    '    resolved="$requested"; \\',
+    '    has_python_marker() { \\',
+    '      dir="$1"; \\',
+    '      for f in requirements.txt pyproject.toml Pipfile setup.py manage.py app.py main.py wsgi.py asgi.py; do \\',
+    '        [ -f "$dir/$f" ] && return 0; \\',
+    '      done; \\',
+    '      return 1; \\',
+    '    }; \\',
+    '    source_dir="/repo"; \\',
+    '    [ "$resolved" = "." ] || source_dir="/repo/$resolved"; \\',
+    '    if [ "$resolved" != "." ] && ! has_python_marker "$source_dir"; then \\',
+    '      if has_python_marker "/repo"; then \\',
+    '        echo ">>> Requested root directory ${requested} does not look like a Python app; falling back to repository root"; \\',
+    '        resolved="."; \\',
+    '        source_dir="/repo"; \\',
+    '      elif [ -d "$source_dir" ]; then \\',
+    '        echo ">>> Requested root directory ${requested} has no common Python manifest; continuing with configured directory"; \\',
+    '      else \\',
+    '        echo ">>> Requested root directory ${requested} was not found in the repository"; \\',
+    '        exit 1; \\',
+    '      fi; \\',
+    '    elif [ "$resolved" = "." ] && ! has_python_marker "$source_dir"; then \\',
+    '      echo ">>> No common Python manifest detected at repository root; continuing with repository root"; \\',
+    '    fi; \\',
+    '    rm -rf /apployd-target && mkdir -p /apployd-target; \\',
+    '    cp -a "$source_dir/." /apployd-target/; \\',
+    '    echo ">>> Resolved application root: ${resolved}"',
+    '',
+  ];
 }
 
 /**
@@ -81,18 +198,8 @@ function pythonDockerfile(projectId: string): string {
   return [
     '# syntax=docker/dockerfile:1',
     '',
-    '# ---- Stage 1: Clone repository ----',
-    'FROM alpine/git:latest AS source',
-    'ARG GIT_URL',
-    'ARG GIT_BRANCH=""',
-    'ARG GIT_SHA=""',
-    'ARG SOURCE_REFRESH_NONCE=""',
-    'WORKDIR /repo',
-    'RUN echo ">>> Source refresh nonce: ${SOURCE_REFRESH_NONCE}" && \\',
-    '    if [ -n "${GIT_BRANCH}" ]; then git clone --depth=1 --branch "${GIT_BRANCH}" "${GIT_URL}" .; else git clone --depth=1 "${GIT_URL}" .; fi && \\',
-    '    if [ -n "${GIT_SHA}" ]; then git fetch --depth=1 origin "${GIT_SHA}" && git checkout "${GIT_SHA}"; else git pull --ff-only; fi && \\',
-    '    echo ">>> Source commit: $(git rev-parse HEAD)"',
-    '',
+    ...gitSourceStageLines(),
+    ...pythonSourceRootLines(),
     '# ---- Stage 2: Build Python application ----',
     'FROM python:3.11-slim',
     '',
@@ -106,14 +213,13 @@ function pythonDockerfile(projectId: string): string {
     '    curl git ca-certificates \\',
     '    && rm -rf /var/lib/apt/lists/*',
     '',
-    'ARG ROOT_DIR=.',
     'WORKDIR /app',
     '',
     '# ── Copy dependency files first for better caching ──',
-    'COPY --from=source /repo/${ROOT_DIR}/requirements.txt* ./requirements.txt',
-    'RUN --mount=type=bind,from=source,source=/repo,target=/src \\',
+    'RUN --mount=type=bind,from=source,source=/apployd-target,target=/src \\',
+    '    [ -f /src/requirements.txt ] && cp /src/requirements.txt ./requirements.txt || true; \\',
     '    for f in Pipfile Pipfile.lock pyproject.toml poetry.lock setup.py setup.cfg; do \\',
-    '      [ -f "/src/${ROOT_DIR}/$f" ] && cp "/src/${ROOT_DIR}/$f" ./ || true ; \\',
+    '      [ -f "/src/$f" ] && cp "/src/$f" ./ || true ; \\',
     '    done',
     '',
     '# ── Install Python dependencies with persistent pip cache ──',
@@ -144,7 +250,7 @@ function pythonDockerfile(projectId: string): string {
     'RUN pip install gunicorn uvicorn 2>/dev/null || true',
     '',
     '# ── Copy application code ──',
-    'COPY --from=source /repo/${ROOT_DIR}/ .',
+    'COPY --from=source /apployd-target/ .',
     '',
     '# ── Run build command if provided ──',
     'ARG BUILD_CMD=""',
@@ -171,38 +277,38 @@ function pythonDockerfile(projectId: string): string {
     '        printf \'#!/bin/sh\\nexec gunicorn --bind 0.0.0.0:${PORT:-3000} --workers 1 --threads 2 --worker-class gthread $(python manage.py diffsettings 2>/dev/null | grep -oP "WSGI_APPLICATION = .\\047\\K[^\\047]+" || echo "$(basename $(pwd)).wsgi:application")\\n\' > /entrypoint.sh; \\',
 
     '      else \\',
-    '        printf \'#!/bin/sh\\nexec python manage.py runserver 0.0.0.0:${PORT:-3000}\\n\' > /entrypoint.sh; \\',
+    "        printf '#!/bin/sh\\nexec python manage.py runserver 0.0.0.0:${PORT:-3000}\\n' > /entrypoint.sh; \\",
     '      fi; \\',
     '    elif [ -f app.py ]; then \\',
     '      echo ">>> Detected Flask app (app.py)"; \\',
     '      if python -c "import gunicorn" 2>/dev/null; then \\',
-    '        printf \'#!/bin/sh\\nexec gunicorn --bind 0.0.0.0:${PORT:-3000} --workers 1 --threads 2 --worker-class gthread app:app\\n\' > /entrypoint.sh; \\',
+    "        printf '#!/bin/sh\\nexec gunicorn --bind 0.0.0.0:${PORT:-3000} --workers 1 --threads 2 --worker-class gthread app:app\\n' > /entrypoint.sh; \\",
     '      else \\',
-    '        printf \'#!/bin/sh\\nexec python -m flask run --host=0.0.0.0 --port=${PORT:-3000}\\n\' > /entrypoint.sh; \\',
+    "        printf '#!/bin/sh\\nexec python -m flask run --host=0.0.0.0 --port=${PORT:-3000}\\n' > /entrypoint.sh; \\",
     '      fi; \\',
 
     '    elif [ -f main.py ]; then \\',
     '      echo ">>> Detected main.py"; \\',
     '      if grep -q "fastapi\\|FastAPI" main.py; then \\',
     '        echo ">>> FastAPI detected, using uvicorn"; \\',
-    '        printf \'#!/bin/sh\\nexec uvicorn main:app --host 0.0.0.0 --port ${PORT:-3000}\\n\' > /entrypoint.sh; \\',
+    "        printf '#!/bin/sh\\nexec uvicorn main:app --host 0.0.0.0 --port ${PORT:-3000}\\n' > /entrypoint.sh; \\",
     '      elif grep -q "flask\\|Flask" main.py; then \\',
     '        echo ">>> Flask detected"; \\',
     '        if python -c "import gunicorn" 2>/dev/null; then \\',
-    '          printf \'#!/bin/sh\\nexec gunicorn --bind 0.0.0.0:${PORT:-3000} --workers 1 --threads 2 --worker-class gthread main:app\\n\' > /entrypoint.sh; \\',
+    "          printf '#!/bin/sh\\nexec gunicorn --bind 0.0.0.0:${PORT:-3000} --workers 1 --threads 2 --worker-class gthread main:app\\n' > /entrypoint.sh; \\",
     '        else \\',
-    '          printf \'#!/bin/sh\\nexec python main.py\\n\' > /entrypoint.sh; \\',
+    "          printf '#!/bin/sh\\nexec python main.py\\n' > /entrypoint.sh; \\",
     '        fi; \\',
     '      else \\',
-    '        printf \'#!/bin/sh\\nexec python main.py\\n\' > /entrypoint.sh; \\',
+    "        printf '#!/bin/sh\\nexec python main.py\\n' > /entrypoint.sh; \\",
     '      fi; \\',
     '    elif [ -f wsgi.py ]; then \\',
     '      echo ">>> Detected wsgi.py"; \\',
-    '      printf \'#!/bin/sh\\nexec gunicorn --bind 0.0.0.0:${PORT:-3000} --workers 1 --threads 2 --worker-class gthread wsgi:application\\n\' > /entrypoint.sh; \\',
+    "      printf '#!/bin/sh\\nexec gunicorn --bind 0.0.0.0:${PORT:-3000} --workers 1 --threads 2 --worker-class gthread wsgi:application\\n' > /entrypoint.sh; \\",
 
     '    elif [ -f asgi.py ]; then \\',
     '      echo ">>> Detected asgi.py"; \\',
-    '      printf \'#!/bin/sh\\nexec uvicorn asgi:application --host 0.0.0.0 --port ${PORT:-3000}\\n\' > /entrypoint.sh; \\',
+    "      printf '#!/bin/sh\\nexec uvicorn asgi:application --host 0.0.0.0 --port ${PORT:-3000}\\n' > /entrypoint.sh; \\",
     '    else \\',
     '      echo ">>> No Python entry point detected, will try to run main.py"; \\',
     '      printf \'#!/bin/sh\\nif [ -f main.py ]; then exec python main.py; elif [ -f app.py ]; then exec python app.py; else echo "Error: No entry point found"; exit 1; fi\\n\' > /entrypoint.sh; \\',
@@ -220,18 +326,8 @@ function webServiceDockerfile(projectId: string): string {
   return [
     '# syntax=docker/dockerfile:1',
     '',
-    '# ---- Stage 1: Clone repository ----',
-    'FROM alpine/git:latest AS source',
-    'ARG GIT_URL',
-    'ARG GIT_BRANCH=""',
-    'ARG GIT_SHA=""',
-    'ARG SOURCE_REFRESH_NONCE=""',
-    'WORKDIR /repo',
-    'RUN echo ">>> Source refresh nonce: ${SOURCE_REFRESH_NONCE}" && \\',
-    '    if [ -n "${GIT_BRANCH}" ]; then git clone --depth=1 --branch "${GIT_BRANCH}" "${GIT_URL}" .; else git clone --depth=1 "${GIT_URL}" .; fi && \\',
-    '    if [ -n "${GIT_SHA}" ]; then git fetch --depth=1 origin "${GIT_SHA}" && git checkout "${GIT_SHA}"; else git pull --ff-only; fi && \\',
-    '    echo ">>> Source commit: $(git rev-parse HEAD)"',
-    '',
+    ...gitSourceStageLines(),
+    ...nodeSourceRootLines(),
     '# ---- Stage 2: Build application ----',
     'FROM node:20-bookworm-slim',
     '# Install comprehensive native dependencies for Node.js and Python',
@@ -249,14 +345,13 @@ function webServiceDockerfile(projectId: string): string {
     '    zlib1g-dev \\',
     '    && rm -rf /var/lib/apt/lists/*',
     '',
-    'ARG ROOT_DIR=.',
     'WORKDIR /app',
     '',
     '# ── Lockfile-first: copy ONLY lockfiles so deps layer is cached ──',
-    'COPY --from=source /repo/${ROOT_DIR}/package.json ./package.json',
-    'RUN --mount=type=bind,from=source,source=/repo,target=/src \\',
+    'COPY --from=source /apployd-target/package.json ./package.json',
+    'RUN --mount=type=bind,from=source,source=/apployd-target,target=/src \\',
     '    for f in package-lock.json yarn.lock pnpm-lock.yaml bun.lockb .npmrc .yarnrc.yml; do \\',
-    '      [ -f "/src/${ROOT_DIR}/$f" ] && cp "/src/${ROOT_DIR}/$f" ./ ; \\',
+    '      [ -f "/src/$f" ] && cp "/src/$f" ./ ; \\',
     '    done; true',
     '',
     '# ── Install dependencies with persistent caches ──',
@@ -279,7 +374,7 @@ function webServiceDockerfile(projectId: string): string {
     '    cp -a /app/node_modules /tmp/_node_modules 2>/dev/null || true',
     '',
     '# ── Copy full source (after deps are cached) ──',
-    'COPY --from=source /repo/${ROOT_DIR}/ .',
+    'COPY --from=source /apployd-target/ .',
     '# Restore node_modules from cache snapshot',
     'RUN if [ -d /tmp/_node_modules ]; then rm -rf node_modules && mv /tmp/_node_modules node_modules; fi',
     '',
@@ -293,7 +388,7 @@ function webServiceDockerfile(projectId: string): string {
     '      echo ">>> Running custom build: ${BUILD_CMD}"; \\',
     '      sh -c "${BUILD_CMD}"; \\',
     '    elif [ -f package.json ]; then \\',
-    '      HAS_BUILD=$(node -e "var s=JSON.parse(require(\'fs\').readFileSync(\'package.json\',\'utf8\')).scripts||{}; var cmd=s.build||\'\'; if(!cmd||/\\b(ts-node-dev|tsx watch|nodemon|next dev|nuxt dev|vite dev|remix dev|ng serve)\\b/.test(cmd)){process.exit(1)} process.exit(0)" 2>/dev/null && echo yes || echo no); \\',
+    "      HAS_BUILD=$(node -e \"var s=JSON.parse(require('fs').readFileSync('package.json','utf8')).scripts||{}; var cmd=s.build||''; if(!cmd||/\\b(ts-node-dev|tsx watch|nodemon|next dev|nuxt dev|vite dev|remix dev|ng serve)\\b/.test(cmd)){process.exit(1)} process.exit(0)\" 2>/dev/null && echo yes || echo no); \\",
     '      if [ "$HAS_BUILD" = "yes" ]; then \\',
     '        echo ">>> Running: npm run build"; \\',
     '        npm run build; \\',
@@ -321,10 +416,10 @@ function webServiceDockerfile(projectId: string): string {
     '      echo ">>> Using custom start command: ${START_CMD}"; \\',
     '      printf \'#!/bin/sh\\nexec %s\\n\' "${START_CMD}" > /entrypoint.sh; \\',
     '    elif [ -f package.json ]; then \\',
-    '      SCRIPTS=$(node -e "var s=JSON.parse(require(\'fs\').readFileSync(\'package.json\',\'utf8\')).scripts||{}; console.log(JSON.stringify(s))" 2>/dev/null || echo "{}"); \\',
-    '      MAIN=$(node -e "console.log(JSON.parse(require(\'fs\').readFileSync(\'package.json\',\'utf8\')).main||\'\')" 2>/dev/null || echo ""); \\',
+    "      SCRIPTS=$(node -e \"var s=JSON.parse(require('fs').readFileSync('package.json','utf8')).scripts||{}; console.log(JSON.stringify(s))\" 2>/dev/null || echo \"{}\"); \\",
+    "      MAIN=$(node -e \"console.log(JSON.parse(require('fs').readFileSync('package.json','utf8')).main||'')\" 2>/dev/null || echo \"\"); \\",
     '      is_dev_cmd() { echo "$1" | grep -qiE "(ts-node-dev|ts-node([[:space:]]|$)|tsx([[:space:]]|$)|nodemon|next[[:space:]]+dev|nuxt[[:space:]]+dev|vite[[:space:]]+dev|remix[[:space:]]+dev|nest[[:space:]]+start|ng[[:space:]]+serve|webpack-dev-server|node[[:space:]]+--watch)"; }; \\',
-    '      get_script() { echo "$SCRIPTS" | node -e "var s=JSON.parse(require(\'fs\').readFileSync(\'/dev/stdin\',\'utf8\')); console.log(s[\'$1\']||\'\')" 2>/dev/null; }; \\',
+    "      get_script() { echo \"$SCRIPTS\" | node -e \"var s=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); console.log(s['$1']||'')\" 2>/dev/null; }; \\",
     '      START_PROD=$(get_script "start:prod"); \\',
     '      START_SERVE=$(get_script "serve"); \\',
     '      START=$(get_script "start"); \\',
@@ -353,31 +448,31 @@ function webServiceDockerfile(projectId: string): string {
     '          printf \'#!/bin/sh\\nexec node %s\\n\' "$ENTRY" > /entrypoint.sh; \\',
     '        elif [ -n "$START" ]; then \\',
     '          echo ">>> No compiled entry detected; falling back to npm start (${START})"; \\',
-    '          printf \'#!/bin/sh\\nexec npm start\\n\' > /entrypoint.sh; \\',
+    "          printf '#!/bin/sh\\nexec npm start\\n' > /entrypoint.sh; \\",
     '        else \\',
     '          echo ">>> No start script or entry point found, defaulting to: node server.js"; \\',
-    '          printf \'#!/bin/sh\\nexec node server.js\\n\' > /entrypoint.sh; \\',
+    "          printf '#!/bin/sh\\nexec node server.js\\n' > /entrypoint.sh; \\",
     '        fi; \\',
     '      fi; \\',
     '    elif [ -f manage.py ]; then \\',
     '      echo ">>> Detected Django project"; \\',
-    '      printf \'#!/bin/sh\\nexec python3 manage.py runserver 0.0.0.0:${PORT:-3000}\\n\' > /entrypoint.sh; \\',
+    "      printf '#!/bin/sh\\nexec python3 manage.py runserver 0.0.0.0:${PORT:-3000}\\n' > /entrypoint.sh; \\",
     '    elif [ -f app.py ] || [ -f wsgi.py ]; then \\',
     '      echo ">>> Detected Python web app"; \\',
     '      if python3 -c "import gunicorn" 2>/dev/null; then \\',
-    '        printf \'#!/bin/sh\\nexec gunicorn --bind 0.0.0.0:${PORT:-3000} app:app\\n\' > /entrypoint.sh; \\',
+    "        printf '#!/bin/sh\\nexec gunicorn --bind 0.0.0.0:${PORT:-3000} app:app\\n' > /entrypoint.sh; \\",
     '      else \\',
-    '        printf \'#!/bin/sh\\nexec python3 -m flask run --host=0.0.0.0 --port=${PORT:-3000}\\n\' > /entrypoint.sh; \\',
+    "        printf '#!/bin/sh\\nexec python3 -m flask run --host=0.0.0.0 --port=${PORT:-3000}\\n' > /entrypoint.sh; \\",
     '      fi; \\',
     '    elif [ -f requirements.txt ] || [ -f Pipfile ] || [ -f pyproject.toml ]; then \\',
     '      echo ">>> Detected Python project, defaulting to Flask"; \\',
-    '      printf \'#!/bin/sh\\nexec python3 -m flask run --host=0.0.0.0 --port=${PORT:-3000}\\n\' > /entrypoint.sh; \\',
+    "      printf '#!/bin/sh\\nexec python3 -m flask run --host=0.0.0.0 --port=${PORT:-3000}\\n' > /entrypoint.sh; \\",
     '    elif [ -f main.go ]; then \\',
     '      echo ">>> Detected Go project"; \\',
-    '      printf \'#!/bin/sh\\nexec ./main\\n\' > /entrypoint.sh; \\',
+    "      printf '#!/bin/sh\\nexec ./main\\n' > /entrypoint.sh; \\",
     '    else \\',
     '      echo ">>> No runtime detected, defaulting to: node server.js"; \\',
-    '      printf \'#!/bin/sh\\nexec node server.js\\n\' > /entrypoint.sh; \\',
+    "      printf '#!/bin/sh\\nexec node server.js\\n' > /entrypoint.sh; \\",
     '    fi && chmod +x /entrypoint.sh',
     'ENTRYPOINT ["/entrypoint.sh"]',
   ].join('\n');
@@ -394,18 +489,8 @@ function staticSiteDockerfile(projectId: string): string {
   return [
     '# syntax=docker/dockerfile:1',
     '',
-    '# ---- Stage 1: Clone repository ----',
-    'FROM alpine/git:latest AS source',
-    'ARG GIT_URL',
-    'ARG GIT_BRANCH=""',
-    'ARG GIT_SHA=""',
-    'ARG SOURCE_REFRESH_NONCE=""',
-    'WORKDIR /repo',
-    'RUN echo ">>> Source refresh nonce: ${SOURCE_REFRESH_NONCE}" && \\',
-    '    if [ -n "${GIT_BRANCH}" ]; then git clone --depth=1 --branch "${GIT_BRANCH}" "${GIT_URL}" .; else git clone --depth=1 "${GIT_URL}" .; fi && \\',
-    '    if [ -n "${GIT_SHA}" ]; then git fetch --depth=1 origin "${GIT_SHA}" && git checkout "${GIT_SHA}"; else git pull --ff-only; fi && \\',
-    '    echo ">>> Source commit: $(git rev-parse HEAD)"',
-    '',
+    ...gitSourceStageLines(),
+    ...nodeSourceRootLines(),
     '# ---- Stage 2: Install & Build ----',
     'FROM node:20-bookworm-slim AS builder',
     'RUN apt-get update && apt-get install -y --no-install-recommends \\',
@@ -419,14 +504,13 @@ function staticSiteDockerfile(projectId: string): string {
     '    libpq-dev libffi-dev libssl-dev \\',
     '    zlib1g-dev \\',
     '    && rm -rf /var/lib/apt/lists/*',
-    'ARG ROOT_DIR=.',
     'WORKDIR /app',
     '',
     '# ── Lockfile-first: copy ONLY lockfiles so deps layer is cached ──',
-    'COPY --from=source /repo/${ROOT_DIR}/package.json ./package.json',
-    'RUN --mount=type=bind,from=source,source=/repo,target=/src \\',
+    'COPY --from=source /apployd-target/package.json ./package.json',
+    'RUN --mount=type=bind,from=source,source=/apployd-target,target=/src \\',
     '    for f in package-lock.json yarn.lock pnpm-lock.yaml bun.lockb .npmrc .yarnrc.yml; do \\',
-    '      [ -f "/src/${ROOT_DIR}/$f" ] && cp "/src/${ROOT_DIR}/$f" ./ ; \\',
+    '      [ -f "/src/$f" ] && cp "/src/$f" ./ ; \\',
     '    done; true',
     '',
     '# ── Install dependencies with persistent caches ──',
@@ -444,7 +528,7 @@ function staticSiteDockerfile(projectId: string): string {
     '    cp -a /app/node_modules /tmp/_node_modules 2>/dev/null || true',
     '',
     '# ── Copy full source (after deps are cached) ──',
-    'COPY --from=source /repo/${ROOT_DIR}/ .',
+    'COPY --from=source /apployd-target/ .',
     'RUN if [ -d /tmp/_node_modules ]; then rm -rf node_modules && mv /tmp/_node_modules node_modules; fi',
     '',
     '# ── Build with framework cache persistence ──',
@@ -457,7 +541,7 @@ function staticSiteDockerfile(projectId: string): string {
     '      echo ">>> Running custom build: ${BUILD_CMD}"; \\',
     '      sh -c "${BUILD_CMD}"; \\',
     '    elif [ -f package.json ]; then \\',
-    '      HAS_BUILD=$(node -e "var s=JSON.parse(require(\'fs\').readFileSync(\'package.json\',\'utf8\')).scripts||{}; var cmd=s.build||\'\'; if(!cmd||/\\\\b(ts-node-dev|tsx watch|nodemon|next dev|nuxt dev|vite dev|remix dev|ng serve)\\\\b/.test(cmd)){process.exit(1)} process.exit(0)" 2>/dev/null && echo yes || echo no); \\',
+    "      HAS_BUILD=$(node -e \"var s=JSON.parse(require('fs').readFileSync('package.json','utf8')).scripts||{}; var cmd=s.build||''; if(!cmd||/\\\\b(ts-node-dev|tsx watch|nodemon|next dev|nuxt dev|vite dev|remix dev|ng serve)\\\\b/.test(cmd)){process.exit(1)} process.exit(0)\" 2>/dev/null && echo yes || echo no); \\",
     '      if [ "$HAS_BUILD" = "yes" ]; then \\',
     '        echo ">>> Running: npm run build"; \\',
     '        npm run build; \\',
@@ -506,6 +590,7 @@ interface BuildImageInput {
   deploymentId: string;
   projectId: string;
   gitUrl: string;
+  gitAuthToken?: string;
   branch: string;
   commitSha?: string;
   rootDirectory?: string;
@@ -602,10 +687,14 @@ export class DockerAdapter {
 
     // Minimal build-context: just our generated Dockerfile
     const ctxDir = await mkdtemp(join(tmpdir(), 'apployd-ctx-'));
+    let secretDir: string | null = null;
 
     try {
       // Validate rootDirectory to prevent path traversal
-      if (input.rootDirectory && (input.rootDirectory.includes('..') || input.rootDirectory.startsWith('/'))) {
+      if (
+        input.rootDirectory &&
+        (input.rootDirectory.includes('..') || input.rootDirectory.startsWith('/'))
+      ) {
         throw new Error('Invalid rootDirectory: must be a relative path without ".."');
       }
 
@@ -615,7 +704,17 @@ export class DockerAdapter {
         '://[REDACTED]:[REDACTED]@',
       );
 
-      await writeFile(join(ctxDir, 'Dockerfile'), universalDockerfile(input.serviceType, input.projectId), 'utf8');
+      await writeFile(
+        join(ctxDir, 'Dockerfile'),
+        universalDockerfile(input.serviceType, input.projectId),
+        'utf8',
+      );
+      let gitAuthTokenPath: string | undefined;
+      if (input.gitAuthToken) {
+        secretDir = await mkdtemp(join(tmpdir(), 'apployd-secret-'));
+        gitAuthTokenPath = join(secretDir, 'git-auth-token');
+        await writeFile(gitAuthTokenPath, input.gitAuthToken, { encoding: 'utf8', mode: 0o600 });
+      }
 
       const isStatic = input.serviceType === 'static_site';
 
@@ -625,14 +724,20 @@ export class DockerAdapter {
         `--build-arg GIT_BRANCH=${shellEscape(input.branch)}`,
         `--build-arg APP_PORT=${input.port}`,
       ];
+      if (gitAuthTokenPath) {
+        args.push(`--secret id=git_auth_token,src=${shellEscape(gitAuthTokenPath)}`);
+      }
       const sourceRefreshNonce = `${input.deploymentId}-${Date.now()}`;
       args.push(`--build-arg SOURCE_REFRESH_NONCE=${shellEscape(sourceRefreshNonce)}`);
       if (input.commitSha) args.push(`--build-arg GIT_SHA=${shellEscape(input.commitSha)}`);
-      if (input.rootDirectory) args.push(`--build-arg ROOT_DIR=${shellEscape(input.rootDirectory)}`);
+      if (input.rootDirectory)
+        args.push(`--build-arg ROOT_DIR=${shellEscape(input.rootDirectory)}`);
       if (input.buildCommand) args.push(`--build-arg BUILD_CMD=${shellEscape(input.buildCommand)}`);
       if (!isStatic && input.startCommand) {
         if (isDevCommand(input.startCommand)) {
-          safeLog?.(`Ignoring dev-mode start command "${input.startCommand}" — auto-detecting production command instead`);
+          safeLog?.(
+            `Ignoring dev-mode start command "${input.startCommand}" — auto-detecting production command instead`,
+          );
         } else if (isAmbiguousStartCommand(input.startCommand)) {
           safeLog?.(
             `Ignoring ambiguous start command "${input.startCommand}" — auto-detecting startup command (prefers start:prod and compiled entrypoints)`,
@@ -641,10 +746,15 @@ export class DockerAdapter {
           args.push(`--build-arg START_CMD=${shellEscape(input.startCommand)}`);
         }
       }
-      if (isStatic && input.outputDirectory) args.push(`--build-arg OUTPUT_DIR=${shellEscape(input.outputDirectory)}`);
+      if (isStatic && input.outputDirectory)
+        args.push(`--build-arg OUTPUT_DIR=${shellEscape(input.outputDirectory)}`);
 
-      const sourceRef = input.commitSha ? `${input.branch}@${input.commitSha.slice(0, 12)}` : input.branch;
-      safeLog?.(`Building ${isStatic ? 'static site' : 'web service'} image from ${sanitizedGitUrl} (${sourceRef})...`);
+      const sourceRef = input.commitSha
+        ? `${input.branch}@${input.commitSha.slice(0, 12)}`
+        : input.branch;
+      safeLog?.(
+        `Building ${isStatic ? 'static site' : 'web service'} image from ${sanitizedGitUrl} (${sourceRef})...`,
+      );
       // Use BuildKit for cache mounts — dramatically speeds up rebuilds
       // DOCKER_BUILDKIT=1 enables BuildKit; --progress=plain streams full logs
       await runCommandStreaming(
@@ -659,18 +769,27 @@ export class DockerAdapter {
       return { imageTag, sourceCommitSha };
     } finally {
       await rm(ctxDir, { recursive: true, force: true }).catch(() => undefined);
+      if (secretDir) {
+        await rm(secretDir, { recursive: true, force: true }).catch(() => undefined);
+      }
     }
   }
 
-  async runContainer(input: RunContainerInput): Promise<{ dockerContainerId: string; hostPort: number }> {
+  async runContainer(
+    input: RunContainerInput,
+  ): Promise<{ dockerContainerId: string; hostPort: number }> {
     const hostPort = this.allocateHostPort();
     const memoryLimit = `${input.memoryMb}m`;
     const cpuQuota = Math.floor((input.cpuMillicores / 1000) * 100000);
 
     try {
-      await runCommand('docker network inspect apployd-net', { timeoutMs: DOCKER_NETWORK_TIMEOUT_MS });
+      await runCommand('docker network inspect apployd-net', {
+        timeoutMs: DOCKER_NETWORK_TIMEOUT_MS,
+      });
     } catch {
-      await runCommand('docker network create apployd-net', { timeoutMs: DOCKER_NETWORK_TIMEOUT_MS });
+      await runCommand('docker network create apployd-net', {
+        timeoutMs: DOCKER_NETWORK_TIMEOUT_MS,
+      });
     }
 
     const envArgs = Object.entries(input.env)
@@ -883,7 +1002,9 @@ export class DockerAdapter {
     await this.enforceContainerEgressPolicy(containerNameOrId);
   }
 
-  async inspectOutboundConnections(containerNameOrId: string): Promise<OutboundConnectionSummary | null> {
+  async inspectOutboundConnections(
+    containerNameOrId: string,
+  ): Promise<OutboundConnectionSummary | null> {
     try {
       const raw = await runCommand(
         `docker exec ${shellEscape(containerNameOrId)} sh -lc ${shellEscape('cat /proc/net/tcp /proc/net/tcp6 2>/dev/null || true')}`,
@@ -916,7 +1037,10 @@ export class DockerAdapter {
         if (!endpoint) {
           continue;
         }
-        if (env.ENGINE_SECURITY_ALLOW_PRIVATE_EGRESS && this.isPrivateOrLoopbackAddress(endpoint.host)) {
+        if (
+          env.ENGINE_SECURITY_ALLOW_PRIVATE_EGRESS &&
+          this.isPrivateOrLoopbackAddress(endpoint.host)
+        ) {
           continue;
         }
 
@@ -934,9 +1058,9 @@ export class DockerAdapter {
       }
 
       const suspicious =
-        distinctRemotePorts.size >= env.ENGINE_SECURITY_MAX_DISTINCT_REMOTE_PORTS
-        || distinctRemoteHosts.size >= env.ENGINE_SECURITY_MAX_DISTINCT_REMOTE_HOSTS
-        || synSentConnections >= env.ENGINE_SECURITY_MAX_SYN_SENT_CONNECTIONS;
+        distinctRemotePorts.size >= env.ENGINE_SECURITY_MAX_DISTINCT_REMOTE_PORTS ||
+        distinctRemoteHosts.size >= env.ENGINE_SECURITY_MAX_DISTINCT_REMOTE_HOSTS ||
+        synSentConnections >= env.ENGINE_SECURITY_MAX_SYN_SENT_CONNECTIONS;
 
       return {
         suspicious,
@@ -992,8 +1116,14 @@ export class DockerAdapter {
           resolve(true);
         });
         socket.setTimeout(timeoutMs);
-        socket.on('timeout', () => { socket.destroy(); resolve(false); });
-        socket.on('error', () => { socket.destroy(); resolve(false); });
+        socket.on('timeout', () => {
+          socket.destroy();
+          resolve(false);
+        });
+        socket.on('error', () => {
+          socket.destroy();
+          resolve(false);
+        });
       } catch {
         resolve(false);
       }
@@ -1053,7 +1183,9 @@ export class DockerAdapter {
     }
   }
 
-  private async inspectContainerState(containerNameOrId: string): Promise<ContainerRuntimeState | null> {
+  private async inspectContainerState(
+    containerNameOrId: string,
+  ): Promise<ContainerRuntimeState | null> {
     try {
       const format = '{{json .State}}@@{{.RestartCount}}';
       const output = await runCommand(
@@ -1139,9 +1271,7 @@ export class DockerAdapter {
       return null;
     }
 
-    const octets = [...bytes]
-      .reverse()
-      .map((part) => Number.parseInt(part, 16));
+    const octets = [...bytes].reverse().map((part) => Number.parseInt(part, 16));
     if (octets.some((octet) => Number.isNaN(octet) || octet < 0 || octet > 255)) {
       return null;
     }
@@ -1157,12 +1287,12 @@ export class DockerAdapter {
 
     const [a = 0, b = 0] = parts;
     return (
-      a === 10
-      || a === 127
-      || a === 0
-      || (a === 169 && b === 254)
-      || (a === 172 && b >= 16 && b <= 31)
-      || (a === 192 && b === 168)
+      a === 10 ||
+      a === 127 ||
+      a === 0 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168)
     );
   }
 }

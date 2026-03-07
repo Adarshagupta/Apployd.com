@@ -63,7 +63,12 @@ export class DeploymentPipeline {
     }
 
     if (deployment.status === DeploymentStatus.ready) {
-      await this.publishEvent(payload.deploymentId, 'ready', 'Deployment already completed', deployment.projectId);
+      await this.publishEvent(
+        payload.deploymentId,
+        'ready',
+        'Deployment already completed',
+        deployment.projectId,
+      );
       return;
     }
 
@@ -94,7 +99,8 @@ export class DeploymentPipeline {
       const onLog = (line: string) => {
         this.publishEvent(payload.deploymentId, 'log', line, deployment.projectId);
       };
-      let deploymentCommit = payload.request.commitSha?.trim() || deployment.commitSha?.trim() || '';
+      let deploymentCommit =
+        payload.request.commitSha?.trim() || deployment.commitSha?.trim() || '';
       if (deploymentCommit) {
         onLog(`Deploy request commit: ${deploymentCommit}`);
       } else {
@@ -113,14 +119,19 @@ export class DeploymentPipeline {
                 deploymentId: payload.deploymentId,
                 projectId: deployment.projectId,
                 gitUrl: payload.request.gitUrl,
+                ...(payload.request.gitAuthToken && { gitAuthToken: payload.request.gitAuthToken }),
                 branch: payload.request.branch ?? '',
                 commitSha: deploymentCommit,
-                ...(payload.request.rootDirectory && { rootDirectory: payload.request.rootDirectory }),
+                ...(payload.request.rootDirectory && {
+                  rootDirectory: payload.request.rootDirectory,
+                }),
                 ...(payload.request.buildCommand && { buildCommand: payload.request.buildCommand }),
                 ...(payload.request.startCommand && { startCommand: payload.request.startCommand }),
                 port: payload.request.port,
                 ...(payload.request.serviceType && { serviceType: payload.request.serviceType }),
-                ...(payload.request.outputDirectory && { outputDirectory: payload.request.outputDirectory }),
+                ...(payload.request.outputDirectory && {
+                  outputDirectory: payload.request.outputDirectory,
+                }),
               },
               onLog,
             ),
@@ -191,16 +202,14 @@ export class DeploymentPipeline {
         }
 
         // Extract the first real error line from container logs for a clearer failure message
-        const errorLine = logLines.find(
-          (l) => /^(Error:|TypeError:|ReferenceError:|SyntaxError:|\s+throw\s|\s+- property)/.test(l),
+        const errorLine = logLines.find((l) =>
+          /^(Error:|TypeError:|ReferenceError:|SyntaxError:|\s+throw\s|\s+- property)/.test(l),
         );
         const hint = errorLine
           ? `Container crashed: ${errorLine.trim().slice(0, 200)}`
           : `Health check failed — app did not respond on container port ${payload.request.port} (host ${run.hostPort}) within ${env.ENGINE_HEALTHCHECK_TIMEOUT_SECONDS} s.`;
 
-        throw new Error(
-          `${hint} Check the container logs above for startup errors.`,
-        );
+        throw new Error(`${hint} Check the container logs above for startup errors.`);
       }
 
       await this.assertDeploymentCanContinue(payload.deploymentId);
@@ -208,19 +217,20 @@ export class DeploymentPipeline {
       // ── Domain resolution ──────────────────────────────────────
       const domain = env.ENGINE_LOCAL_MODE
         ? `localhost:${run.hostPort}`
-        : deployment.domain ?? buildFallbackDomain({
-          environment: payload.environment,
-          projectSlug: deployment.project.slug,
-          organizationSlug: deployment.project.organization.slug,
-          ref: payload.request.commitSha ?? payload.request.branch ?? 'preview',
-        });
+        : (deployment.domain ??
+          buildFallbackDomain({
+            environment: payload.environment,
+            projectSlug: deployment.project.slug,
+            organizationSlug: deployment.project.organization.slug,
+            ref: payload.request.commitSha ?? payload.request.branch ?? 'preview',
+          }));
       const protectedPlatformDomains = env.ENGINE_LOCAL_MODE
         ? new Set<string>()
         : buildProtectedPlatformDomains({
-          baseDomain: env.BASE_DOMAIN,
-          previewBaseDomain: env.PREVIEW_BASE_DOMAIN,
-          dashboardBaseUrl: env.DASHBOARD_BASE_URL,
-        });
+            baseDomain: env.BASE_DOMAIN,
+            previewBaseDomain: env.PREVIEW_BASE_DOMAIN,
+            dashboardBaseUrl: env.DASHBOARD_BASE_URL,
+          });
       if (!env.ENGINE_LOCAL_MODE && protectedPlatformDomains.has(normalizeHostname(domain))) {
         throw new Error(
           `Refusing deployment routing for reserved platform domain "${domain}". Use a project/preview hostname or custom domain instead.`,
@@ -230,18 +240,26 @@ export class DeploymentPipeline {
       const autoAliases = env.ENGINE_LOCAL_MODE
         ? []
         : buildAutomaticDomainAliases({
-          environment: payload.environment,
-          primaryDomain: domain,
-          projectSlug: deployment.project.slug,
-          organizationSlug: deployment.project.organization.slug,
-          baseDomain: env.BASE_DOMAIN,
-        });
+            environment: payload.environment,
+            primaryDomain: domain,
+            projectSlug: deployment.project.slug,
+            organizationSlug: deployment.project.organization.slug,
+            baseDomain: env.BASE_DOMAIN,
+          });
 
       // Collect verified custom domain aliases for this project.
-      const customAliases = (deployment.project.customDomains ?? []).map((d: { domain: string }) => d.domain);
-      const allRouteAliases = Array.from(new Set([...autoAliases, ...customAliases])).filter((alias) => alias !== domain);
-      const blockedAliases = allRouteAliases.filter((alias) => protectedPlatformDomains.has(normalizeHostname(alias)));
-      const routeAliases = allRouteAliases.filter((alias) => !protectedPlatformDomains.has(normalizeHostname(alias)));
+      const customAliases = (deployment.project.customDomains ?? []).map(
+        (d: { domain: string }) => d.domain,
+      );
+      const allRouteAliases = Array.from(new Set([...autoAliases, ...customAliases])).filter(
+        (alias) => alias !== domain,
+      );
+      const blockedAliases = allRouteAliases.filter((alias) =>
+        protectedPlatformDomains.has(normalizeHostname(alias)),
+      );
+      const routeAliases = allRouteAliases.filter(
+        (alias) => !protectedPlatformDomains.has(normalizeHostname(alias)),
+      );
       if (blockedAliases.length > 0) {
         onLog(`Skipping reserved platform alias(es): ${blockedAliases.join(', ')}`);
       }
@@ -256,15 +274,15 @@ export class DeploymentPipeline {
 
         if (this.cloudflare) {
           onLog('Configuring DNS records...');
-          await withRetry(
-            () => this.cloudflare!.upsertARecord(domain, dnsTargetIpv4),
-            { retries: 2, delayMs: 1000 },
-          );
+          await withRetry(() => this.cloudflare!.upsertARecord(domain, dnsTargetIpv4), {
+            retries: 2,
+            delayMs: 1000,
+          });
           for (const autoAlias of autoAliases) {
-            await withRetry(
-              () => this.cloudflare!.upsertARecord(autoAlias, dnsTargetIpv4),
-              { retries: 2, delayMs: 1000 },
-            );
+            await withRetry(() => this.cloudflare!.upsertARecord(autoAlias, dnsTargetIpv4), {
+              retries: 2,
+              delayMs: 1000,
+            });
           }
           onLog(`DNS configured (A -> ${dnsTargetIpv4})`);
         }
@@ -294,9 +312,10 @@ export class DeploymentPipeline {
         );
 
         onLog('Setting up reverse proxy...');
-        const isCanaryDeploy = payload.isCanary === true
-          && typeof payload.stableContainerHostPort === 'number'
-          && typeof payload.canaryWeight === 'number';
+        const isCanaryDeploy =
+          payload.isCanary === true &&
+          typeof payload.stableContainerHostPort === 'number' &&
+          typeof payload.canaryWeight === 'number';
 
         if (isCanaryDeploy) {
           // ── Canary weighted routing (keep stable container alive) ──────────
@@ -317,7 +336,9 @@ export class DeploymentPipeline {
               }),
             { retries: 2, delayMs: 1000 },
           );
-          onLog(`Canary reverse proxy configured (${payload.canaryWeight}% → new, ${100 - payload.canaryWeight!}% → stable)`);
+          onLog(
+            `Canary reverse proxy configured (${payload.canaryWeight}% → new, ${100 - payload.canaryWeight!}% → stable)`,
+          );
         } else {
           await withRetry(
             () =>
@@ -457,13 +478,15 @@ export class DeploymentPipeline {
       const previousContainer = isPreview
         ? null
         : await prisma.container.findFirst({
-          where: {
-            projectId: deployment.projectId,
-            id: { not: container.id },
-            status: { in: [ContainerStatus.running, ContainerStatus.sleeping, ContainerStatus.pending] },
-          },
-          orderBy: { updatedAt: 'desc' },
-        });
+            where: {
+              projectId: deployment.projectId,
+              id: { not: container.id },
+              status: {
+                in: [ContainerStatus.running, ContainerStatus.sleeping, ContainerStatus.pending],
+              },
+            },
+            orderBy: { updatedAt: 'desc' },
+          });
 
       if (previousContainer && previousContainer.serverId !== deployment.serverId) {
         if (deployment.capacityReserved) {
@@ -498,7 +521,8 @@ export class DeploymentPipeline {
       }
 
       // ── Mark deployment ready ──────────────────────────────────────────────
-      const isCanaryMode = payload.isCanary === true && typeof payload.stableContainerHostPort === 'number';
+      const isCanaryMode =
+        payload.isCanary === true && typeof payload.stableContainerHostPort === 'number';
       await prisma.deployment.update({
         where: { id: payload.deploymentId },
         data: {
@@ -555,17 +579,23 @@ export class DeploymentPipeline {
         deployment.projectId,
       );
 
-      await this.emailNotifier.sendDeploymentStatusEmail({
-        organizationId: deployment.project.organizationId,
-        projectId: deployment.projectId,
-        projectName: deployment.project.name,
-        deploymentId: payload.deploymentId,
-        environment: payload.environment,
-        status: 'ready',
-        domain,
-      }).catch((emailError) => {
-        console.error('Failed to send deployment success email', payload.deploymentId, emailError);
-      });
+      await this.emailNotifier
+        .sendDeploymentStatusEmail({
+          organizationId: deployment.project.organizationId,
+          projectId: deployment.projectId,
+          projectName: deployment.project.name,
+          deploymentId: payload.deploymentId,
+          environment: payload.environment,
+          status: 'ready',
+          domain,
+        })
+        .catch((emailError) => {
+          console.error(
+            'Failed to send deployment success email',
+            payload.deploymentId,
+            emailError,
+          );
+        });
     } catch (error) {
       if (startedDockerContainerId) {
         await this.docker.stopContainer(startedDockerContainerId).catch(() => undefined);
@@ -591,20 +621,31 @@ export class DeploymentPipeline {
         });
       }
 
-      await this.publishEvent(payload.deploymentId, 'failed', (error as Error).message, deployment.projectId);
+      await this.publishEvent(
+        payload.deploymentId,
+        'failed',
+        (error as Error).message,
+        deployment.projectId,
+      );
 
-      await this.emailNotifier.sendDeploymentStatusEmail({
-        organizationId: deployment.project.organizationId,
-        projectId: deployment.projectId,
-        projectName: deployment.project.name,
-        deploymentId: payload.deploymentId,
-        environment: payload.environment,
-        status: 'failed',
-        domain: deployment.domain,
-        errorMessage: (error as Error).message,
-      }).catch((emailError) => {
-        console.error('Failed to send deployment failure email', payload.deploymentId, emailError);
-      });
+      await this.emailNotifier
+        .sendDeploymentStatusEmail({
+          organizationId: deployment.project.organizationId,
+          projectId: deployment.projectId,
+          projectName: deployment.project.name,
+          deploymentId: payload.deploymentId,
+          environment: payload.environment,
+          status: 'failed',
+          domain: deployment.domain,
+          errorMessage: (error as Error).message,
+        })
+        .catch((emailError) => {
+          console.error(
+            'Failed to send deployment failure email',
+            payload.deploymentId,
+            emailError,
+          );
+        });
       throw error;
     }
   }
@@ -634,16 +675,18 @@ export class DeploymentPipeline {
   ): Promise<void> {
     // Only persist status-level events to the database, not individual build log lines
     if (projectId && type !== 'log') {
-      await prisma.logEntry.create({
-        data: {
-          projectId,
-          deploymentId,
-          level: type === 'failed' ? 'error' : 'info',
-          source: 'deployment-engine',
-          message,
-          metadata: { eventType: type },
-        },
-      }).catch(() => undefined);
+      await prisma.logEntry
+        .create({
+          data: {
+            projectId,
+            deploymentId,
+            level: type === 'failed' ? 'error' : 'info',
+            source: 'deployment-engine',
+            message,
+            metadata: { eventType: type },
+          },
+        })
+        .catch(() => undefined);
     }
 
     await redis.publish(
@@ -717,8 +760,7 @@ const sanitizeDomainLabel = (value: string, fallback: string): string => {
   return normalized.slice(0, 63).replace(/-+$/g, '') || fallback;
 };
 
-const normalizeHostname = (value: string): string =>
-  value.trim().toLowerCase().replace(/\.$/, '');
+const normalizeHostname = (value: string): string => value.trim().toLowerCase().replace(/\.$/, '');
 
 const hostnameFromUrl = (value: string): string | null => {
   try {
@@ -832,7 +874,9 @@ const buildAutomaticDomainAliases = (input: {
     baseDomain: input.baseDomain,
   });
 
-  return Array.from(new Set([legacyDomain, uniqueDomain])).filter((domain) => domain !== input.primaryDomain);
+  return Array.from(new Set([legacyDomain, uniqueDomain])).filter(
+    (domain) => domain !== input.primaryDomain,
+  );
 };
 
 const buildFallbackDomain = (input: {

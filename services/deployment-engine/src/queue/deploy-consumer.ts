@@ -9,49 +9,54 @@ import { deploymentDurationHistogram, deploymentProcessedCounter } from '../moni
 import { DeploymentEmailNotifier } from '../notifications/deployment-email-notifier.js';
 import { DeploymentPipeline } from '../pipeline/deployment-pipeline.js';
 
-const payloadSchema = z.object({
-  deploymentId: z.string().cuid(),
-  organizationId: z.string().cuid(),
-  projectId: z.string().cuid(),
-  environment: z.enum(['production', 'preview']).default('production'),
-  isCanary: z.boolean().optional(),
-  canaryWeight: z.number().int().min(1).max(99).optional(),
-  stableContainerHostPort: z.number().int().min(1).max(65535).optional(),
-  request: z.object({
+const payloadSchema = z
+  .object({
+    deploymentId: z.string().cuid(),
+    organizationId: z.string().cuid(),
     projectId: z.string().cuid(),
-    gitUrl: z.string().url(),
-    commitSha: z.string().optional(),
-    branch: z.string().optional(),
-    rootDirectory: z.string().optional(),
-    env: z.record(z.string()),
-    buildCommand: z.string().optional(),
-    startCommand: z.string().optional(),
-    port: z.number().int(),
-    environment: z.enum(['production', 'preview']).optional(),
-    serviceType: z.enum(['web_service', 'static_site', 'python']).optional(),
-    outputDirectory: z.string().optional(),
-  }).transform(req => {
-    // Remove undefined values from optional fields for exactOptionalPropertyTypes compliance
-    const result = { ...req } as any;
-    Object.keys(result).forEach(key => {
-      if (result[key] === undefined) {
-        delete result[key];
-      }
-    });
-    return result;
-  }),
-}).transform(payload => {
-  const result = Object.fromEntries(
-    Object.entries({
-      ...payload,
-      request: Object.fromEntries(
-        Object.entries(payload.request).filter(([, v]) => v !== undefined)
-      ) as any,
-    }).filter(([, v]) => v !== undefined)
-  ) as any;
+    environment: z.enum(['production', 'preview']).default('production'),
+    isCanary: z.boolean().optional(),
+    canaryWeight: z.number().int().min(1).max(99).optional(),
+    stableContainerHostPort: z.number().int().min(1).max(65535).optional(),
+    request: z
+      .object({
+        projectId: z.string().cuid(),
+        gitUrl: z.string().url(),
+        gitAuthToken: z.string().min(1).optional(),
+        commitSha: z.string().optional(),
+        branch: z.string().optional(),
+        rootDirectory: z.string().optional(),
+        env: z.record(z.string()),
+        buildCommand: z.string().optional(),
+        startCommand: z.string().optional(),
+        port: z.number().int(),
+        environment: z.enum(['production', 'preview']).optional(),
+        serviceType: z.enum(['web_service', 'static_site', 'python']).optional(),
+        outputDirectory: z.string().optional(),
+      })
+      .transform((req) => {
+        // Remove undefined values from optional fields for exactOptionalPropertyTypes compliance
+        const result = { ...req } as any;
+        Object.keys(result).forEach((key) => {
+          if (result[key] === undefined) {
+            delete result[key];
+          }
+        });
+        return result;
+      }),
+  })
+  .transform((payload) => {
+    const result = Object.fromEntries(
+      Object.entries({
+        ...payload,
+        request: Object.fromEntries(
+          Object.entries(payload.request).filter(([, v]) => v !== undefined),
+        ) as any,
+      }).filter(([, v]) => v !== undefined),
+    ) as any;
 
-  return result;
-});
+    return result;
+  });
 
 export class DeployQueueConsumer {
   private readonly queueKey = 'apployd:deployments:queue';
@@ -82,7 +87,11 @@ export class DeployQueueConsumer {
         console.error('Invalid deployment payload', error);
         const parsedRaw = this.tryExtractRawPayload(raw);
         if (parsedRaw?.deploymentId && parsedRaw?.projectId) {
-          await this.failDeployment(parsedRaw.deploymentId, parsedRaw.projectId, 'Invalid deployment payload');
+          await this.failDeployment(
+            parsedRaw.deploymentId,
+            parsedRaw.projectId,
+            'Invalid deployment payload',
+          );
         }
         deploymentProcessedCounter.inc({ status: 'invalid' });
         continue;
@@ -103,7 +112,11 @@ export class DeployQueueConsumer {
         deploymentProcessedCounter.inc({ status: 'success' });
       } catch (error) {
         console.error('Deployment failed', payload.deploymentId, error);
-        await this.failDeployment(payload.deploymentId, payload.projectId, this.toErrorMessage(error));
+        await this.failDeployment(
+          payload.deploymentId,
+          payload.projectId,
+          this.toErrorMessage(error),
+        );
         deploymentProcessedCounter.inc({ status: 'failed' });
       } finally {
         stopTimer();
@@ -124,7 +137,11 @@ export class DeployQueueConsumer {
     }
   }
 
-  private async failDeployment(deploymentId: string, projectId: string, message: string): Promise<void> {
+  private async failDeployment(
+    deploymentId: string,
+    projectId: string,
+    message: string,
+  ): Promise<void> {
     const updateResult = await prisma.deployment
       .updateMany({
         where: {
@@ -185,18 +202,20 @@ export class DeployQueueConsumer {
       .catch(() => undefined);
 
     if (deployment) {
-      await this.emailNotifier.sendDeploymentStatusEmail({
-        organizationId: deployment.project.organizationId,
-        projectId: deployment.project.id,
-        projectName: deployment.project.name,
-        deploymentId: deployment.id,
-        environment: deployment.environment as 'production' | 'preview',
-        status: 'failed',
-        domain: deployment.domain,
-        errorMessage: message,
-      }).catch((error) => {
-        console.error('Failed to send deployment failure email', deploymentId, error);
-      });
+      await this.emailNotifier
+        .sendDeploymentStatusEmail({
+          organizationId: deployment.project.organizationId,
+          projectId: deployment.project.id,
+          projectName: deployment.project.name,
+          deploymentId: deployment.id,
+          environment: deployment.environment as 'production' | 'preview',
+          status: 'failed',
+          domain: deployment.domain,
+          errorMessage: message,
+        })
+        .catch((error) => {
+          console.error('Failed to send deployment failure email', deploymentId, error);
+        });
     }
   }
 

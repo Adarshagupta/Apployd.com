@@ -57,7 +57,7 @@ export const resolveWebSocketBaseUrl = (): string => {
         : `http://localhost:4000${root}`
       : root || (typeof window !== 'undefined' ? trimTrailingSlash(window.location.origin) : 'http://localhost:4000');
 
-  return normalizeWebSocketUrl(toWebSocketScheme(absoluteRoot));
+  return trimTrailingSlash(normalizeWebSocketUrl(toWebSocketScheme(absoluteRoot)));
 };
 
 const getToken = () => {

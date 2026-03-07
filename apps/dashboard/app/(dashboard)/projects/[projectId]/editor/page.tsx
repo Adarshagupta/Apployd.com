@@ -5,7 +5,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 
+import AiAgentPanel from '../../../../../components/ai-agent-panel';
 import { devContainerApi, fileApi } from '../../../../../lib/editor-api';
+import type { AgentFileChange } from '../../../../../lib/editor-api';
 import type { FileEntry } from '../../../../../lib/editor-api';
 import { useWorkspaceContext } from '../../../../../components/workspace-provider';
 import FileTree from '../../../../../components/file-tree';
@@ -46,11 +48,14 @@ export default function EditorPage() {
   const [tabs, setTabs] = useState<OpenTab[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [panel, setPanel] = useState<Panel>('split');
+  const [showAgent, setShowAgent] = useState(true);
   const [saving, setSaving] = useState(false);
   const [gitUrl, setGitUrl] = useState('');
   const [showSetup, setShowSetup] = useState(false);
   const [setupLoading, setSetupLoading] = useState(false);
-  const [notification, setNotification] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  const [notification, setNotification] = useState<{ msg: string; type: 'ok' | 'err' } | null>(
+    null,
+  );
   // Prevent duplicate auto-create attempts
   const autoCreateAttempted = useRef(false);
 
@@ -85,7 +90,10 @@ export default function EditorPage() {
         } else if (status.container?.status === 'running') {
           setContainerStatus('running');
           await loadFiles();
-        } else if (status.container?.status === 'stopped' || status.container?.status === 'sleeping') {
+        } else if (
+          status.container?.status === 'stopped' ||
+          status.container?.status === 'sleeping'
+        ) {
           setContainerStatus('stopped');
         } else {
           setContainerStatus('none');
@@ -110,9 +118,11 @@ export default function EditorPage() {
       setContainerStatus('starting');
       setSetupLoading(true);
       const repoUrl = project.repoUrl;
-      const branch = project.branch || undefined;
+      const createOptions = project.branch
+        ? { gitUrl: repoUrl, branch: project.branch }
+        : { gitUrl: repoUrl };
       devContainerApi
-        .create(projectId, { gitUrl: repoUrl, branch })
+        .create(projectId, createOptions)
         .then(async () => {
           setContainerStatus('running');
           await loadFiles();
@@ -136,8 +146,12 @@ export default function EditorPage() {
     setSetupLoading(true);
     try {
       const repoToUse = gitUrl || project?.repoUrl || undefined;
-      const branchToUse = project?.branch || undefined;
-      await devContainerApi.create(projectId, repoToUse ? { gitUrl: repoToUse, branch: branchToUse } : {});
+      const createOptions = repoToUse
+        ? project?.branch
+          ? { gitUrl: repoToUse, branch: project.branch }
+          : { gitUrl: repoToUse }
+        : {};
+      await devContainerApi.create(projectId, createOptions);
       setContainerStatus('running');
       setShowSetup(false);
       await loadFiles();
@@ -164,52 +178,59 @@ export default function EditorPage() {
   };
 
   // ── Open file ─────────────────────────────────────────────────────────────
-  const openFile = useCallback(async (entry: FileEntry) => {
-    if (!projectId || entry.type === 'directory') return;
+  const openFile = useCallback(
+    async (entry: FileEntry) => {
+      if (!projectId || entry.type === 'directory') return;
 
-    // Already open?
-    const existing = tabs.find((t) => t.path === entry.path);
-    if (existing) {
-      setActiveTab(entry.path);
-      return;
-    }
+      // Already open?
+      const existing = tabs.find((t) => t.path === entry.path);
+      if (existing) {
+        setActiveTab(entry.path);
+        return;
+      }
 
-    try {
-      const { content } = await fileApi.read(projectId, entry.path);
-      setTabs((prev) => [...prev, { path: entry.path, content, dirty: false }]);
-      setActiveTab(entry.path);
-    } catch (e) {
-      notify((e as Error).message, 'err');
-    }
-  }, [projectId, tabs]);
+      try {
+        const { content } = await fileApi.read(projectId, entry.path);
+        setTabs((prev) => [...prev, { path: entry.path, content, dirty: false }]);
+        setActiveTab(entry.path);
+      } catch (e) {
+        notify((e as Error).message, 'err');
+      }
+    },
+    [projectId, tabs],
+  );
 
   // ── Save file (debounced) ─────────────────────────────────────────────────
-  const saveFile = useCallback(async (path: string, content: string) => {
-    if (!projectId) return;
-    setSaving(true);
-    try {
-      await fileApi.update(projectId, path, content);
-      setTabs((prev) =>
-        prev.map((t) => (t.path === path ? { ...t, content, dirty: false } : t)),
-      );
-    } catch (e) {
-      notify((e as Error).message, 'err');
-    } finally {
-      setSaving(false);
-    }
-  }, [projectId]);
+  const saveFile = useCallback(
+    async (path: string, content: string) => {
+      if (!projectId) return;
+      setSaving(true);
+      try {
+        await fileApi.update(projectId, path, content);
+        setTabs((prev) => prev.map((t) => (t.path === path ? { ...t, content, dirty: false } : t)));
+      } catch (e) {
+        notify((e as Error).message, 'err');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [projectId],
+  );
 
-  const handleEditorChange = useCallback((value: string) => {
-    if (!activeTab) return;
-    setTabs((prev) =>
-      prev.map((t) => (t.path === activeTab ? { ...t, content: value, dirty: true } : t)),
-    );
-    // Auto-save after 2s idle
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      saveFile(activeTab, value);
-    }, 2000);
-  }, [activeTab, saveFile]);
+  const handleEditorChange = useCallback(
+    (value: string) => {
+      if (!activeTab) return;
+      setTabs((prev) =>
+        prev.map((t) => (t.path === activeTab ? { ...t, content: value, dirty: true } : t)),
+      );
+      // Auto-save after 2s idle
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => {
+        saveFile(activeTab, value);
+      }, 2000);
+    },
+    [activeTab, saveFile],
+  );
 
   const handleManuaLSave = () => {
     const tab = tabs.find((t) => t.path === activeTab);
@@ -250,11 +271,67 @@ export default function EditorPage() {
     try {
       await fileApi.create(projectId, path, '');
       await loadFiles();
-      const entry: FileEntry = { path, absPath: `/home/coder/project/${path}`, type: 'file', size: 0, modifiedAt: new Date().toISOString() };
+      const entry: FileEntry = {
+        path,
+        absPath: `/home/coder/project/${path}`,
+        type: 'file',
+        size: 0,
+        modifiedAt: new Date().toISOString(),
+      };
       openFile(entry);
     } catch (e) {
       notify((e as Error).message, 'err');
     }
+  };
+
+  const applyAgentChanges = async (changes: AgentFileChange[]) => {
+    if (!projectId || changes.length === 0) return;
+
+    const nextTabs = [...tabs];
+    let nextActiveTab = activeTab;
+    const knownFiles = new Set(
+      files.filter((entry) => entry.type === 'file').map((entry) => entry.path),
+    );
+
+    for (const change of changes) {
+      const normalizedPath = change.path.replace(/^\/+/, '');
+      if (!normalizedPath) continue;
+
+      if (change.action === 'delete') {
+        await fileApi.delete(projectId, normalizedPath);
+        knownFiles.delete(normalizedPath);
+
+        const deleteIndex = nextTabs.findIndex((tab) => tab.path === normalizedPath);
+        if (deleteIndex !== -1) {
+          nextTabs.splice(deleteIndex, 1);
+          if (nextActiveTab === normalizedPath) {
+            nextActiveTab =
+              nextTabs[Math.max(deleteIndex - 1, 0)]?.path ?? nextTabs[0]?.path ?? null;
+          }
+        }
+        continue;
+      }
+
+      if (knownFiles.has(normalizedPath)) {
+        await fileApi.update(projectId, normalizedPath, change.content);
+      } else {
+        await fileApi.create(projectId, normalizedPath, change.content);
+        knownFiles.add(normalizedPath);
+      }
+
+      const nextTab = { path: normalizedPath, content: change.content, dirty: false };
+      const tabIndex = nextTabs.findIndex((tab) => tab.path === normalizedPath);
+      if (tabIndex === -1) {
+        nextTabs.push(nextTab);
+      } else {
+        nextTabs[tabIndex] = nextTab;
+      }
+      nextActiveTab = normalizedPath;
+    }
+
+    setTabs(nextTabs);
+    setActiveTab(nextActiveTab);
+    await loadFiles().catch(() => undefined);
   };
 
   // ── Active tab content ────────────────────────────────────────────────────
@@ -263,7 +340,6 @@ export default function EditorPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full w-full overflow-hidden">
-
       {/* ── Topbar ─────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 px-3 py-2 bg-gray-900 border-b border-gray-800 shrink-0">
         <Link href={`/projects/${projectId}`} className="text-gray-400 hover:text-white text-sm">
@@ -273,29 +349,46 @@ export default function EditorPage() {
         <span className="text-sm text-gray-300 font-medium">Code Studio</span>
 
         {/* Container status badge */}
-        <div className={`ml-2 flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full
-          ${containerStatus === 'running' ? 'bg-green-900/50 text-green-400' :
-            containerStatus === 'starting' ? 'bg-yellow-900/50 text-yellow-400' :
-            containerStatus === 'stopped' ? 'bg-gray-800 text-gray-500' :
-            'bg-gray-800 text-gray-500'}`}
+        <div
+          className={`ml-2 flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full
+          ${
+            containerStatus === 'running'
+              ? 'bg-green-900/50 text-green-400'
+              : containerStatus === 'starting'
+                ? 'bg-yellow-900/50 text-yellow-400'
+                : containerStatus === 'stopped'
+                  ? 'bg-gray-800 text-gray-500'
+                  : 'bg-gray-800 text-gray-500'
+          }`}
         >
-          <span className={`w-1.5 h-1.5 rounded-full
-            ${containerStatus === 'running' ? 'bg-green-400' :
-              containerStatus === 'starting' ? 'bg-yellow-400 animate-pulse' :
-              'bg-gray-600'}`}
+          <span
+            className={`w-1.5 h-1.5 rounded-full
+            ${
+              containerStatus === 'running'
+                ? 'bg-green-400'
+                : containerStatus === 'starting'
+                  ? 'bg-yellow-400 animate-pulse'
+                  : 'bg-gray-600'
+            }`}
           />
-          {containerStatus === 'running' ? 'Environment running' :
-           containerStatus === 'starting' ? 'Preparing…' :
-           containerStatus === 'stopped' ? 'Environment stopped' :
-           containerStatus === 'loading' ? 'Loading…' :
-           'No environment'}
+          {containerStatus === 'running'
+            ? 'Environment running'
+            : containerStatus === 'starting'
+              ? 'Preparing…'
+              : containerStatus === 'stopped'
+                ? 'Environment stopped'
+                : containerStatus === 'loading'
+                  ? 'Loading…'
+                  : 'No environment'}
         </div>
 
         {containerStatus === 'stopped' && (
           <button
             onClick={handleStartContainer}
             className="text-xs px-2 py-0.5 bg-green-800 hover:bg-green-700 text-green-300 rounded"
-          >Start</button>
+          >
+            Start
+          </button>
         )}
 
         <div className="flex-1" />
@@ -308,23 +401,41 @@ export default function EditorPage() {
               onClick={() => setPanel(p)}
               className={`text-xs px-2 py-0.5 rounded capitalize transition-colors
                 ${panel === p ? 'bg-gray-600 text-white' : 'text-gray-400 hover:text-white'}`}
-            >{p}</button>
+            >
+              {p}
+            </button>
           ))}
         </div>
+
+        <button
+          onClick={() => setShowAgent((prev) => !prev)}
+          className={`text-xs px-3 py-1 rounded transition-colors ${
+            showAgent
+              ? 'bg-amber-500 text-gray-950 hover:bg-amber-400'
+              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+          }`}
+        >
+          {showAgent ? 'Hide agent' : 'Show agent'}
+        </button>
 
         {/* Save */}
         <button
           onClick={handleManuaLSave}
           disabled={!activeTabData?.dirty}
           className="text-xs px-3 py-1 bg-blue-700 hover:bg-blue-600 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded"
-        >{saving ? 'Saving…' : 'Save'}</button>
+        >
+          {saving ? 'Saving…' : 'Save'}
+        </button>
       </div>
 
       {/* ── Notification ───────────────────────────────────────────────── */}
       {notification && (
-        <div className={`text-xs px-3 py-1.5 text-center shrink-0
+        <div
+          className={`text-xs px-3 py-1.5 text-center shrink-0
           ${notification.type === 'ok' ? 'bg-green-900/60 text-green-300' : 'bg-red-900/60 text-red-300'}`}
-        >{notification.msg}</div>
+        >
+          {notification.msg}
+        </div>
       )}
 
       {/* ── Tabs ───────────────────────────────────────────────────────── */}
@@ -340,17 +451,21 @@ export default function EditorPage() {
               <span className="truncate max-w-[120px]">{tab.path.split('/').pop()}</span>
               {tab.dirty && <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0" />}
               <button
-                onClick={(e) => { e.stopPropagation(); closeTab(tab.path); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  closeTab(tab.path);
+                }}
                 className="opacity-0 group-hover:opacity-100 hover:text-white ml-0.5"
-              >×</button>
+              >
+                ×
+              </button>
             </div>
           ))}
         </div>
       )}
 
       {/* ── Main area ──────────────────────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden">
-
+      <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
         {/* File tree sidebar */}
         <div className="w-52 sm:w-60 shrink-0 hidden sm:flex flex-col">
           {containerStatus === 'running' && (
@@ -366,8 +481,7 @@ export default function EditorPage() {
         </div>
 
         {/* Editor + Terminal */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-
+        <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
           {/* Editor pane */}
           {(panel === 'editor' || panel === 'split') && (
             <div className={`overflow-hidden ${panel === 'split' ? 'flex-1' : 'flex-1'}`}>
@@ -388,23 +502,40 @@ export default function EditorPage() {
           )}
 
           {/* Divider for split */}
-          {panel === 'split' && (
-            <div className="h-px bg-gray-800 shrink-0" />
-          )}
+          {panel === 'split' && <div className="h-px bg-gray-800 shrink-0" />}
 
           {/* Terminal pane */}
-          {(panel === 'terminal' || panel === 'split') && token && containerStatus === 'running' && (
-            <div className={panel === 'split' ? 'h-[40%]' : 'flex-1'}>
-              <Terminal projectId={projectId ?? ''} token={token} className="h-full" />
-            </div>
-          )}
+          {(panel === 'terminal' || panel === 'split') &&
+            token &&
+            containerStatus === 'running' && (
+              <div className={panel === 'split' ? 'h-[40%]' : 'flex-1'}>
+                <Terminal projectId={projectId ?? ''} token={token} className="h-full" />
+              </div>
+            )}
 
           {(panel === 'terminal' || panel === 'split') && containerStatus !== 'running' && (
-            <div className={`flex items-center justify-center text-gray-600 text-sm ${panel === 'split' ? 'h-[40%]' : 'flex-1'}`}>
-              {containerStatus === 'starting' ? 'Preparing your environment…' : 'Start a dev environment to use the terminal'}
+            <div
+              className={`flex items-center justify-center text-gray-600 text-sm ${panel === 'split' ? 'h-[40%]' : 'flex-1'}`}
+            >
+              {containerStatus === 'starting'
+                ? 'Preparing your environment…'
+                : 'Start a dev environment to use the terminal'}
             </div>
           )}
         </div>
+
+        {showAgent && (
+          <div className="h-[45%] min-h-[320px] shrink-0 lg:h-auto lg:w-[28rem]">
+            <AiAgentPanel
+              projectId={projectId}
+              activePath={activeTab}
+              openFiles={tabs}
+              enabled={containerStatus === 'running'}
+              onApplyChanges={applyAgentChanges}
+              onNotify={notify}
+            />
+          </div>
+        )}
       </div>
 
       {/* ── Setup modal ────────────────────────────────────────────────── */}
@@ -413,8 +544,8 @@ export default function EditorPage() {
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-md shadow-2xl">
             <h2 className="text-lg font-semibold text-white mb-1">Start Code Studio</h2>
             <p className="text-sm text-gray-400 mb-5">
-              Launch a dev environment with git, Node.js, Python, and GitHub CLI pre-installed.
-              Your files are saved between sessions.
+              Launch a dev environment with git, Node.js, Python, and GitHub CLI pre-installed. Your
+              files are saved between sessions.
             </p>
 
             <label className="block text-xs text-gray-400 mb-1">Git repo URL (optional)</label>
@@ -425,20 +556,27 @@ export default function EditorPage() {
               onChange={(e) => setGitUrl(e.target.value)}
             />
             <p className="text-xs text-gray-500 mb-5">
-              If provided, your repository will be cloned automatically.
-              You can also clone manually from the terminal.
+              If provided, your repository will be cloned automatically. You can also clone manually
+              from the terminal.
             </p>
 
             <div className="flex gap-3">
               <button
-                onClick={() => { setShowSetup(false); router.back(); }}
+                onClick={() => {
+                  setShowSetup(false);
+                  router.back();
+                }}
                 className="flex-1 px-4 py-2 text-sm bg-gray-800 text-gray-300 rounded hover:bg-gray-700"
-              >Cancel</button>
+              >
+                Cancel
+              </button>
               <button
                 onClick={handleCreateContainer}
                 disabled={setupLoading}
                 className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50"
-              >{setupLoading ? 'Starting…' : 'Start Environment'}</button>
+              >
+                {setupLoading ? 'Starting…' : 'Start Environment'}
+              </button>
             </div>
           </div>
         </div>
