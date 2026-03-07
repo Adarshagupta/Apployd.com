@@ -34,6 +34,9 @@ import { instrumentHttpRequest } from './lib/observability.js';
 import authenticatePlugin from './plugins/authenticate.js';
 import { deploymentWebsocketRoutes } from './websocket/deployment-events.js';
 import { containerLogsWebsocketRoutes } from './websocket/container-logs.js';
+import { terminalWebsocketRoutes } from './websocket/terminal.js';
+import { fileRoutes } from './modules/files/routes.js';
+import { devContainerRoutes } from './modules/dev-containers/routes.js';
 
 export const buildApp = () => {
   const app = Fastify({
@@ -133,10 +136,13 @@ export const buildApp = () => {
     api.register(githubIntegrationRoutes);
     api.register(vercelIntegrationRoutes);
     api.register(contentRoutes);
+    api.register(fileRoutes);
+    api.register(devContainerRoutes);
   }, { prefix: '/api/v1' });
 
   app.register(deploymentWebsocketRoutes);
   app.register(containerLogsWebsocketRoutes);
+  app.register(terminalWebsocketRoutes);
 
   return app;
 };

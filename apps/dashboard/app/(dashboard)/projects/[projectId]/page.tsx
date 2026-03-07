@@ -1025,6 +1025,14 @@ export default function ProjectDetailPage() {
             <h2 className="title-gradient text-2xl font-semibold">{project.name}</h2>
             <p className="mono mt-1 text-xs text-slate-600">{project.slug}</p>
           </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/projects/${params.projectId}/editor`}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700 transition"
+            >
+              <span>⌨️</span> Open Editor
+            </Link>
+          </div>
           <div className="flex items-center gap-2 text-xs text-slate-500">
             {project.repoUrl && (
               <a

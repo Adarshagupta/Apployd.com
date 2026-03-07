@@ -50,6 +50,11 @@ enum ContainerStatus {
   crashed
 }
 
+enum ContainerType {
+  deployment
+  development
+}
+
 enum ServerStatus {
   healthy
   degraded
@@ -381,6 +386,8 @@ model Container {
   hostPort            Int
   status              ContainerStatus @default(pending)
   sleepStatus         SleepStatus     @default(awake)
+  containerType       ContainerType   @default(deployment)
+  volumeName          String?
   lastRequestAt       DateTime?
   startedAt           DateTime?
   stoppedAt           DateTime?
