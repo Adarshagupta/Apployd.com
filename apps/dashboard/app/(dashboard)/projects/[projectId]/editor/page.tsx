@@ -5,14 +5,14 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 
-import { apiClient } from '../../../../lib/api';
-import { devContainerApi, fileApi } from '../../../../lib/editor-api';
-import type { FileEntry } from '../../../../lib/editor-api';
-import FileTree from '../../../../components/file-tree';
+import { apiClient } from '../../../../../lib/api';
+import { devContainerApi, fileApi } from '../../../../../lib/editor-api';
+import type { FileEntry } from '../../../../../lib/editor-api';
+import FileTree from '../../../../../components/file-tree';
 
 // Lazy-loaded heavy components
-const CodeEditor = dynamic(() => import('../../../../components/code-editor'), { ssr: false });
-const Terminal = dynamic(() => import('../../../../components/dev-terminal'), { ssr: false });
+const CodeEditor = dynamic(() => import('../../../../../components/code-editor'), { ssr: false });
+const Terminal = dynamic(() => import('../../../../../components/dev-terminal'), { ssr: false });
 
 type Panel = 'editor' | 'terminal' | 'split';
 

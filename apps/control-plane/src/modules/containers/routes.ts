@@ -34,7 +34,7 @@ export const containerRoutes: FastifyPluginAsync = async (app) => {
     const containers = await prisma.container.findMany({
       where: {
         projectId: query.projectId,
-        status: { in: ['running', 'starting'] },
+        status: { in: ['running', 'pending'] },
       },
       select: {
         id: true,
