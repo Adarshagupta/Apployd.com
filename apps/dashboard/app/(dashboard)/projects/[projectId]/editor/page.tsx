@@ -105,7 +105,7 @@ export default function EditorPage() {
     if (!projectId) return;
     setSetupLoading(true);
     try {
-      await devContainerApi.create(projectId, { gitUrl: gitUrl || undefined });
+      await devContainerApi.create(projectId, gitUrl ? { gitUrl } : {});
       setContainerStatus('running');
       setShowSetup(false);
       await loadFiles();
