@@ -108,6 +108,66 @@ export const docPages: DocPage[] = [
     ],
   },
   {
+    slug: 'canary-releases',
+    label: 'Canary Releases',
+    title: 'Canary Releases and Traffic Control',
+    summary:
+      'Use canary deployments to shift 1 to 99 percent of production traffic, validate live behavior, and either promote or abort safely.',
+    updated: 'March 6, 2026',
+    sections: [
+      {
+        heading: 'Where canary controls appear',
+        paragraphs: [
+          'Canary release controls live on deployment detail pages rather than in a separate global settings area.',
+          'The dashboard labels this area as Canary Release. On a stable deployment you will see gradual release controls, and on the live canary you will see traffic management controls.',
+        ],
+        bullets: [
+          'Use the Canary button from the active ready production deployment in the project deployment list.',
+          'Use Manage canary on a ready live canary deployment to update traffic, promote, or abort.',
+          'If another canary is already active for the project, the dashboard links you to that canary instead of allowing a second one to start.',
+        ],
+      },
+      {
+        heading: 'Starting a canary',
+        paragraphs: [
+          'Canary releases are only supported for production deployments. The stable baseline must be the currently active production deployment, and it must already be ready and running.',
+          'When you start a canary, Apployd schedules the new deployment alongside the stable deployment on the same server so weighted routing can split traffic between both containers.',
+        ],
+        bullets: [
+          'Choose a traffic percentage between 1 and 99.',
+          'Select one canary source: the latest branch head, a ready preview deployment, an existing reusable deployment, or an explicit branch, commit SHA, or image tag.',
+          'Only one active canary is allowed per project at a time.',
+        ],
+        callout:
+          'If the active server does not have enough spare capacity to run the stable and canary containers together, the canary request is rejected until capacity is available.',
+      },
+      {
+        heading: 'Managing live traffic',
+        paragraphs: [
+          'Once the canary deployment is ready, you can adjust the traffic percentage, promote it to 100 percent, or abort it and route traffic fully back to the stable deployment.',
+          'Traffic changes are queued operational actions, so the dashboard can briefly show the previous percentage until the routing update is applied.',
+        ],
+        bullets: [
+          'Update traffic keeps the canary between 1 and 99 percent.',
+          'Promote requires the canary deployment to be ready before it can fully replace the stable deployment.',
+          'Abort removes the canary from live routing and restores the stable deployment as the only production target.',
+        ],
+      },
+      {
+        heading: 'Operational expectations',
+        paragraphs: [
+          'Canary releases are meant for controlled production validation, not for keeping two long-lived production versions active indefinitely.',
+          'Watch error rate, latency, and resource behavior before increasing traffic. Promote only after the canary looks operationally normal under real requests.',
+        ],
+        bullets: [
+          'Use preview deployments first for broader QA, then use canary traffic for real production sampling.',
+          'Increase traffic in deliberate steps instead of jumping immediately to a large percentage.',
+          'Abort quickly if the canary shows regressions, unstable runtime behavior, or unexpected cost pressure.',
+        ],
+      },
+    ],
+  },
+  {
     slug: 'security',
     label: 'Security and Abuse Protection',
     title: 'Security and Abuse Protection',
@@ -389,6 +449,7 @@ export const docsNavGroups: DocNavGroup[] = [
     links: [
       { href: '/docs/getting-started', label: 'Quick Start' },
       { href: '/docs/deployments', label: 'Deployment Workflow' },
+      { href: '/docs/canary-releases', label: 'Canary Releases' },
     ],
   },
   {

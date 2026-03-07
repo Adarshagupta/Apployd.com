@@ -13,6 +13,14 @@ type PageProps = {
   }>;
 };
 
+const toIsoDate = (value: string): string => {
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) {
+    return new Date().toISOString().slice(0, 10);
+  }
+  return parsed.toISOString().slice(0, 10);
+};
+
 export function generateStaticParams() {
   return docPages.map((page) => ({ slug: page.slug }));
 }
@@ -53,7 +61,7 @@ export default async function DocTopicPage({ params }: PageProps) {
     '@type': 'TechArticle',
     headline: `${page.title} | ${SITE_NAME} Documentation`,
     description: page.summary,
-    dateModified: '2026-02-27',
+    dateModified: toIsoDate(page.updated),
     author: {
       '@type': 'Organization',
       name: SITE_NAME,
