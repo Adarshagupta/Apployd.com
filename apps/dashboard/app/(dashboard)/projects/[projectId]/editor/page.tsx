@@ -31,7 +31,8 @@ function useAuth() {
 }
 
 export default function EditorPage() {
-  const { projectId } = useParams<{ projectId: string }>();
+  const params = useParams<{ projectId: string }>();
+  const projectId = params?.projectId ?? '';
   const router = useRouter();
   const token = useAuth();
 
