@@ -61,6 +61,7 @@ function buildTree(entries: FileEntry[]): TreeNode[] {
 
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
+      if (!part) continue;
       const parentPath = currentPath;
       currentPath = currentPath ? `${currentPath}/${part}` : part;
 
