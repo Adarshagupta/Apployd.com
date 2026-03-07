@@ -4,10 +4,12 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { DeploymentRuntimeGuide } from '../../../../components/deployment-runtime-guide';
 import { useDashboardMessageToast } from '../../../../components/dashboard-toast';
 import { ResourceSlider } from '../../../../components/resource-slider';
 import { SectionCard } from '../../../../components/section-card';
 import { apiClient } from '../../../../lib/api';
+import { getDeploymentRuntimeGuide } from '../../../../lib/deployment-runtime-guides';
 import { useWorkspaceContext } from '../../../../components/workspace-provider';
 
 export const dynamic = 'force-dynamic';
@@ -43,7 +45,7 @@ const GUIDE_STEPS = [
   {
     id: 'advanced',
     title: 'Advanced settings',
-    description: 'Open only when you need custom path, port, or commands.',
+    description: 'Open when you need runtime type, custom path, port, or commands.',
   },
   {
     id: 'secrets',
@@ -214,10 +216,12 @@ export default function CreateProjectPage() {
     slug: '',
     repoUrl: '',
     branch: 'main',
+    serviceType: 'web_service' as 'web_service' | 'static_site' | 'python',
     rootDirectory: '',
     deploymentRegion: 'fsn1',
     buildCommand: '',
     startCommand: '',
+    outputDirectory: '',
     targetPort: 3000,
     autoDeployEnabled: true,
     ram: 512,
@@ -251,6 +255,7 @@ export default function CreateProjectPage() {
   const [showGithubBrowser, setShowGithubBrowser] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [guideStepIndex, setGuideStepIndex] = useState(0);
+  const createProjectServiceGuide = getDeploymentRuntimeGuide(form.serviceType);
   useDashboardMessageToast(message);
   useDashboardMessageToast(notice, 'success');
 
@@ -274,10 +279,11 @@ export default function CreateProjectPage() {
       return vercelProjects;
     }
 
-    return vercelProjects.filter((project) =>
-      project.name.toLowerCase().includes(query)
-      || project.slug.toLowerCase().includes(query)
-      || project.repoFullName?.toLowerCase().includes(query),
+    return vercelProjects.filter(
+      (project) =>
+        project.name.toLowerCase().includes(query) ||
+        project.slug.toLowerCase().includes(query) ||
+        project.repoFullName?.toLowerCase().includes(query),
     );
   }, [vercelProjects, vercelProjectSearch]);
   const selectedVercelProject = useMemo(
@@ -291,7 +297,8 @@ export default function CreateProjectPage() {
   const slugError = useMemo(() => {
     if (!form.slug) return 'Slug is required.';
     if (form.slug.length < 2) return 'Slug must be at least 2 characters.';
-    if (!SLUG_PATTERN.test(form.slug)) return 'Slug can only include lowercase letters, numbers, and hyphens.';
+    if (!SLUG_PATTERN.test(form.slug))
+      return 'Slug can only include lowercase letters, numbers, and hyphens.';
     return '';
   }, [form.slug]);
   const isCreateDisabled = submitting || loading || !selectedOrganizationId || !!slugError;
@@ -339,25 +346,28 @@ export default function CreateProjectPage() {
     }
   }, []);
 
-  const loadGitHubRepositories = useCallback(async (searchTerm = '') => {
-    if (!githubStatus?.connected) {
-      setGithubRepos([]);
-      setSelectedGithubRepoId('');
-      return;
-    }
+  const loadGitHubRepositories = useCallback(
+    async (searchTerm = '') => {
+      if (!githubStatus?.connected) {
+        setGithubRepos([]);
+        setSelectedGithubRepoId('');
+        return;
+      }
 
-    setGithubLoading(true);
-    try {
-      const data = await apiClient.get(
-        `/integrations/github/repositories?page=1&perPage=60&search=${encodeURIComponent(searchTerm)}`,
-      );
-      setGithubRepos((data.repositories ?? []) as GitHubRepository[]);
-    } catch (error) {
-      setMessage((error as Error).message);
-    } finally {
-      setGithubLoading(false);
-    }
-  }, [githubStatus?.connected]);
+      setGithubLoading(true);
+      try {
+        const data = await apiClient.get(
+          `/integrations/github/repositories?page=1&perPage=60&search=${encodeURIComponent(searchTerm)}`,
+        );
+        setGithubRepos((data.repositories ?? []) as GitHubRepository[]);
+      } catch (error) {
+        setMessage((error as Error).message);
+      } finally {
+        setGithubLoading(false);
+      }
+    },
+    [githubStatus?.connected],
+  );
 
   const connectGitHub = async () => {
     setGithubConnecting(true);
@@ -509,7 +519,9 @@ export default function CreateProjectPage() {
         if (!vercelProjectIdOrName.trim()) {
           setVercelProjectIdOrName(firstProject.id);
         }
-        setNotice(`Loaded ${payload.projects.length} Vercel project${payload.projects.length === 1 ? '' : 's'}.`);
+        setNotice(
+          `Loaded ${payload.projects.length} Vercel project${payload.projects.length === 1 ? '' : 's'}.`,
+        );
       }
     } catch (error) {
       setMessage((error as Error).message);
@@ -543,7 +555,10 @@ export default function CreateProjectPage() {
       const importedName = imported.name.trim();
       const importedSlug = slugify(imported.slug || imported.name || form.slug || importedName);
       const importedTargetPort = Number(imported.targetPort);
-      const hasValidPort = Number.isFinite(importedTargetPort) && importedTargetPort >= 1 && importedTargetPort <= 65535;
+      const hasValidPort =
+        Number.isFinite(importedTargetPort) &&
+        importedTargetPort >= 1 &&
+        importedTargetPort <= 65535;
 
       setForm((prev) => ({
         ...prev,
@@ -551,9 +566,11 @@ export default function CreateProjectPage() {
         slug: importedSlug || prev.slug,
         repoUrl: imported.repoUrl ?? prev.repoUrl,
         branch: imported.branch || prev.branch,
+        serviceType: imported.serviceType ?? prev.serviceType,
         rootDirectory: imported.rootDirectory ?? prev.rootDirectory,
         buildCommand: imported.buildCommand ?? prev.buildCommand,
         startCommand: imported.startCommand ?? prev.startCommand,
+        outputDirectory: imported.outputDirectory ?? prev.outputDirectory,
         targetPort: hasValidPort ? importedTargetPort : prev.targetPort,
         autoDeployEnabled: autoDeployLocked ? false : imported.autoDeployEnabled,
       }));
@@ -652,6 +669,7 @@ export default function CreateProjectPage() {
         organizationId: selectedOrganizationId,
         name: form.name.trim(),
         slug: form.slug,
+        runtime: form.serviceType === 'python' ? 'python' : 'node',
         repoUrl: cleanedRepoUrl || undefined,
         repoOwner: githubRepo?.owner,
         repoName: githubRepo?.name,
@@ -660,7 +678,11 @@ export default function CreateProjectPage() {
         rootDirectory: cleanedRootDirectory,
         deploymentRegion: form.deploymentRegion,
         buildCommand: form.buildCommand.trim() || undefined,
-        startCommand: form.startCommand.trim() || undefined,
+        startCommand:
+          form.serviceType === 'static_site' ? undefined : form.startCommand.trim() || undefined,
+        serviceType: form.serviceType,
+        outputDirectory:
+          form.serviceType === 'static_site' ? form.outputDirectory.trim() || undefined : undefined,
         targetPort: Number(form.targetPort),
         autoDeployEnabled: form.autoDeployEnabled,
         resourceRamMb: selectedRam,
@@ -714,11 +736,7 @@ export default function CreateProjectPage() {
     }));
   };
 
-  const applyResourcePreset = (preset: {
-    ram: number;
-    cpu: number;
-    bandwidth: number;
-  }) => {
+  const applyResourcePreset = (preset: { ram: number; cpu: number; bandwidth: number }) => {
     setForm((prev) => ({
       ...prev,
       ram: clamp(preset.ram, MIN_RESOURCE_LIMITS.ram, resourceLimits.ram),
@@ -895,11 +913,7 @@ export default function CreateProjectPage() {
                           {vercelConnecting ? 'Connecting...' : 'Connect Vercel'}
                         </button>
                       ) : (
-                        <button
-                          type="button"
-                          className="btn-secondary"
-                          onClick={disconnectVercel}
-                        >
+                        <button type="button" className="btn-secondary" onClick={disconnectVercel}>
                           Disconnect
                         </button>
                       )}
@@ -935,7 +949,9 @@ export default function CreateProjectPage() {
                             key={project.id}
                             type="button"
                             className={`w-full rounded-lg border p-2 text-left ${
-                              selectedVercelProject?.id === project.id ? 'border-slate-900' : 'border-slate-200'
+                              selectedVercelProject?.id === project.id
+                                ? 'border-slate-900'
+                                : 'border-slate-200'
                             }`}
                             onClick={() => setVercelProjectIdOrName(project.id)}
                           >
@@ -1039,12 +1055,17 @@ export default function CreateProjectPage() {
                             type="button"
                             onClick={() => bindRepositorySelection(repository)}
                             className={`w-full rounded-lg border p-2 text-left ${
-                              selectedGithubRepoId === repository.id ? 'border-slate-900' : 'border-slate-200'
+                              selectedGithubRepoId === repository.id
+                                ? 'border-slate-900'
+                                : 'border-slate-200'
                             }`}
                           >
-                            <p className="text-sm font-semibold text-slate-900">{repository.fullName}</p>
+                            <p className="text-sm font-semibold text-slate-900">
+                              {repository.fullName}
+                            </p>
                             <p className="text-xs text-slate-600">
-                              {repository.defaultBranch} | {repository.private ? 'private' : 'public'}
+                              {repository.defaultBranch} |{' '}
+                              {repository.private ? 'private' : 'public'}
                             </p>
                           </button>
                         ))}
@@ -1075,7 +1096,9 @@ export default function CreateProjectPage() {
                     <span className="field-label">Branch</span>
                     <input
                       value={form.branch}
-                      onChange={(event) => setForm((prev) => ({ ...prev, branch: event.target.value }))}
+                      onChange={(event) =>
+                        setForm((prev) => ({ ...prev, branch: event.target.value }))
+                      }
                       className="field-input"
                       placeholder="main"
                       required
@@ -1100,46 +1123,121 @@ export default function CreateProjectPage() {
               </div>
 
               {showAdvancedSettings ? (
-                <div className="md:col-span-2 grid gap-3 rounded-xl border border-slate-200 p-3 md:grid-cols-2">
-                  <label>
-                    <span className="field-label">Repository folder</span>
-                    <input
-                      value={form.rootDirectory}
-                      onChange={(event) => setForm((prev) => ({ ...prev, rootDirectory: event.target.value }))}
-                      className="field-input"
-                      placeholder="apps/web"
-                    />
-                  </label>
-                  <label>
-                    <span className="field-label">Target port</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={65535}
-                      value={form.targetPort}
-                      onChange={(event) => setForm((prev) => ({ ...prev, targetPort: Number(event.target.value) }))}
-                      className="field-input"
-                      required
-                    />
-                  </label>
-                  <label>
-                    <span className="field-label">Build command</span>
-                    <input
-                      value={form.buildCommand}
-                      onChange={(event) => setForm((prev) => ({ ...prev, buildCommand: event.target.value }))}
-                      className="field-input"
-                      placeholder="npm run build"
-                    />
-                  </label>
-                  <label>
-                    <span className="field-label">Start command</span>
-                    <input
-                      value={form.startCommand}
-                      onChange={(event) => setForm((prev) => ({ ...prev, startCommand: event.target.value }))}
-                      className="field-input"
-                      placeholder="node dist/server.js"
-                    />
-                  </label>
+                <div className="md:col-span-2 space-y-4 rounded-xl border border-slate-200 p-3">
+                  <div className="space-y-2">
+                    <span className="field-label">Service type</span>
+                    <div className="flex rounded-lg border border-slate-200 overflow-hidden w-fit">
+                      <button
+                        type="button"
+                        className={`px-4 py-2 text-xs font-medium transition-colors ${
+                          form.serviceType === 'web_service'
+                            ? 'bg-slate-900 text-white'
+                            : 'bg-white text-slate-600 hover:bg-slate-50'
+                        }`}
+                        onClick={() => setForm((prev) => ({ ...prev, serviceType: 'web_service' }))}
+                      >
+                        <span className="block">Web Service</span>
+                        <span className="block text-[10px] opacity-70">
+                          Backend, API, full-stack (Node.js)
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`px-4 py-2 text-xs font-medium transition-colors ${
+                          form.serviceType === 'python'
+                            ? 'bg-slate-900 text-white'
+                            : 'bg-white text-slate-600 hover:bg-slate-50'
+                        }`}
+                        onClick={() => setForm((prev) => ({ ...prev, serviceType: 'python' }))}
+                      >
+                        <span className="block">Python</span>
+                        <span className="block text-[10px] opacity-70">Django, Flask, FastAPI</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`px-4 py-2 text-xs font-medium transition-colors ${
+                          form.serviceType === 'static_site'
+                            ? 'bg-slate-900 text-white'
+                            : 'bg-white text-slate-600 hover:bg-slate-50'
+                        }`}
+                        onClick={() => setForm((prev) => ({ ...prev, serviceType: 'static_site' }))}
+                      >
+                        <span className="block">Static Site</span>
+                        <span className="block text-[10px] opacity-70">
+                          React, Vue, Vite, Next export
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <DeploymentRuntimeGuide serviceType={form.serviceType} />
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label>
+                      <span className="field-label">Repository folder</span>
+                      <input
+                        value={form.rootDirectory}
+                        onChange={(event) =>
+                          setForm((prev) => ({ ...prev, rootDirectory: event.target.value }))
+                        }
+                        className="field-input"
+                        placeholder={createProjectServiceGuide.fields.rootDirectory}
+                      />
+                    </label>
+                    <label>
+                      <span className="field-label">Target port</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={65535}
+                        value={form.targetPort}
+                        onChange={(event) =>
+                          setForm((prev) => ({ ...prev, targetPort: Number(event.target.value) }))
+                        }
+                        className="field-input"
+                        required
+                      />
+                    </label>
+                    <label>
+                      <span className="field-label">Build command</span>
+                      <input
+                        value={form.buildCommand}
+                        onChange={(event) =>
+                          setForm((prev) => ({ ...prev, buildCommand: event.target.value }))
+                        }
+                        className="field-input"
+                        placeholder={createProjectServiceGuide.fields.buildCommand}
+                      />
+                    </label>
+                    {form.serviceType !== 'static_site' ? (
+                      <label>
+                        <span className="field-label">Start command</span>
+                        <input
+                          value={form.startCommand}
+                          onChange={(event) =>
+                            setForm((prev) => ({ ...prev, startCommand: event.target.value }))
+                          }
+                          className="field-input"
+                          placeholder={
+                            createProjectServiceGuide.fields.startCommand ??
+                            createProjectServiceGuide.fallbackStart
+                          }
+                        />
+                      </label>
+                    ) : (
+                      <label>
+                        <span className="field-label">Output directory</span>
+                        <input
+                          value={form.outputDirectory}
+                          onChange={(event) =>
+                            setForm((prev) => ({ ...prev, outputDirectory: event.target.value }))
+                          }
+                          className="field-input"
+                          placeholder={createProjectServiceGuide.fields.outputDirectory ?? 'dist'}
+                        />
+                      </label>
+                    )}
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -1149,7 +1247,9 @@ export default function CreateProjectPage() {
               className={`space-y-2 rounded-xl border border-slate-200 p-3 transition ${guideHighlightClass('secrets')}`}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-slate-900">Environment variables (optional)</p>
+                <p className="text-sm font-semibold text-slate-900">
+                  Environment variables (optional)
+                </p>
                 <button
                   type="button"
                   className="btn-secondary"
@@ -1162,13 +1262,18 @@ export default function CreateProjectPage() {
                 <>
                   <div className="space-y-2">
                     {envRows.map((row, index) => (
-                      <div key={index} className="grid gap-2 md:grid-cols-[220px_minmax(0,1fr)_auto]">
+                      <div
+                        key={index}
+                        className="grid gap-2 md:grid-cols-[220px_minmax(0,1fr)_auto]"
+                      >
                         <input
                           value={row.key}
                           onChange={(event) =>
                             setEnvRows((prev) =>
                               prev.map((item, itemIndex) =>
-                                itemIndex === index ? { ...item, key: event.target.value.toUpperCase() } : item,
+                                itemIndex === index
+                                  ? { ...item, key: event.target.value.toUpperCase() }
+                                  : item,
                               ),
                             )
                           }
@@ -1235,13 +1340,17 @@ export default function CreateProjectPage() {
                 <input
                   type="checkbox"
                   checked={form.autoDeployEnabled}
-                  onChange={(event) => setForm((prev) => ({ ...prev, autoDeployEnabled: event.target.checked }))}
+                  onChange={(event) =>
+                    setForm((prev) => ({ ...prev, autoDeployEnabled: event.target.checked }))
+                  }
                   disabled={autoDeployLocked}
                 />
                 <span className="text-sm text-slate-700">Auto deploy on push</span>
               </label>
               {autoDeployLocked ? (
-                <p className="text-xs text-slate-500">Auto deploy is not available for this workspace plan.</p>
+                <p className="text-xs text-slate-500">
+                  Auto deploy is not available for this workspace plan.
+                </p>
               ) : null}
             </div>
           </section>
@@ -1256,7 +1365,9 @@ export default function CreateProjectPage() {
                 <span className="field-label">Deployment region</span>
                 <select
                   value={form.deploymentRegion}
-                  onChange={(event) => setForm((prev) => ({ ...prev, deploymentRegion: event.target.value }))}
+                  onChange={(event) =>
+                    setForm((prev) => ({ ...prev, deploymentRegion: event.target.value }))
+                  }
                   className="field-input"
                 >
                   <option value="fsn1">Frankfurt, Germany (fsn1)</option>
@@ -1347,7 +1458,11 @@ export default function CreateProjectPage() {
                     onChange={(bandwidth) =>
                       setForm((prev) => ({
                         ...prev,
-                        bandwidth: clamp(bandwidth, MIN_RESOURCE_LIMITS.bandwidth, resourceLimits.bandwidth),
+                        bandwidth: clamp(
+                          bandwidth,
+                          MIN_RESOURCE_LIMITS.bandwidth,
+                          resourceLimits.bandwidth,
+                        ),
                       }))
                     }
                   />
@@ -1359,11 +1474,7 @@ export default function CreateProjectPage() {
               ref={actionsRef}
               className={`space-y-2 rounded-xl border-t border-slate-200 p-1 pt-3 transition ${guideHighlightClass('actions')}`}
             >
-              <button
-                type="submit"
-                className="btn-primary w-full"
-                disabled={isCreateDisabled}
-              >
+              <button type="submit" className="btn-primary w-full" disabled={isCreateDisabled}>
                 {submitting ? 'Creating project...' : 'Create project'}
               </button>
               <Link href="/projects" className="btn-secondary block w-full text-center">
@@ -1385,11 +1496,7 @@ export default function CreateProjectPage() {
             <p className="mt-1 text-sm font-semibold">{activeGuideStep.title}</p>
             <p className="mt-1 text-xs text-slate-300">{activeGuideStep.description}</p>
             <div className="mt-3 flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={closeGuide}
-              >
+              <button type="button" className="btn-secondary" onClick={closeGuide}>
                 Close
               </button>
               <button
@@ -1400,11 +1507,7 @@ export default function CreateProjectPage() {
               >
                 Back
               </button>
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={nextGuideStep}
-              >
+              <button type="button" className="btn-primary" onClick={nextGuideStep}>
                 {guideStepIndex === GUIDE_STEPS.length - 1 ? 'Done' : 'Next'}
               </button>
             </div>

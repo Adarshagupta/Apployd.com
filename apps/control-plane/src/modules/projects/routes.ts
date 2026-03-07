@@ -10,10 +10,16 @@ import { AccessService } from '../../services/access-service.js';
 import { AuditLogService } from '../../services/audit-log-service.js';
 import { GitHubService } from '../../services/github-service.js';
 import { prisma } from '../../lib/prisma.js';
-import { isSerializableRetryableError, withSerializableRetry } from '../../lib/transaction-retry.js';
+import {
+  isSerializableRetryableError,
+  withSerializableRetry,
+} from '../../lib/transaction-retry.js';
 import { ProjectUsageService } from '../../services/project-usage-service.js';
 import { ResourcePolicyService } from '../../services/resource-policy-service.js';
-import { ProjectDeleteOtpError, ProjectDeleteOtpService } from '../../services/project-delete-otp-service.js';
+import {
+  ProjectDeleteOtpError,
+  ProjectDeleteOtpService,
+} from '../../services/project-delete-otp-service.js';
 
 const createProjectSchema = z.object({
   organizationId: z.string().cuid(),
@@ -32,6 +38,8 @@ const createProjectSchema = z.object({
   installCommand: z.string().max(300).optional(),
   buildCommand: z.string().max(300).optional(),
   startCommand: z.string().max(300).optional(),
+  serviceType: z.enum(['web_service', 'static_site', 'python']).default('web_service'),
+  outputDirectory: z.string().max(300).optional(),
   rootDirectory: z.string().max(255).optional(),
   autoDeployEnabled: z.boolean().default(true),
   previewDeploymentsEnabled: z.boolean().default(true),
@@ -153,7 +161,7 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
 
     const usageOptions = query.usageDays
       ? {
-          from: new Date(Date.now() - (query.usageDays * 24 * 60 * 60 * 1000)),
+          from: new Date(Date.now() - query.usageDays * 24 * 60 * 60 * 1000),
           to: new Date(),
         }
       : {};
@@ -234,8 +242,12 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
     }
     const entitlements = getPlanEntitlements(subscription.plan.code);
     const autoDeployEnabled = entitlements.autoDeploy ? body.autoDeployEnabled : false;
-    const previewDeploymentsEnabled =
-      entitlements.previewDeployments ? body.previewDeploymentsEnabled : false;
+    const previewDeploymentsEnabled = entitlements.previewDeployments
+      ? body.previewDeploymentsEnabled
+      : false;
+    const projectServiceType =
+      body.serviceType ?? (body.runtime === 'python' ? 'python' : 'web_service');
+    const projectRuntime = projectServiceType === 'python' ? 'python' : 'node';
     const repoIdentity = resolveRepoIdentity({
       repoOwner: body.repoOwner,
       repoName: body.repoName,
@@ -244,7 +256,9 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
     });
     const repoOwner = body.repoOwner ?? repoIdentity?.owner;
     const repoName = body.repoName ?? repoIdentity?.name;
-    const repoFullName = body.repoFullName ?? (repoIdentity ? `${repoIdentity.owner}/${repoIdentity.name}` : undefined);
+    const repoFullName =
+      body.repoFullName ??
+      (repoIdentity ? `${repoIdentity.owner}/${repoIdentity.name}` : undefined);
     let webhook:
       | {
           configured: true;
@@ -315,7 +329,8 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
             name: body.name,
             slug: body.slug,
             createdById: user.userId,
-            runtime: body.runtime,
+            runtime: projectRuntime,
+            serviceType: projectServiceType,
             gitProvider: body.repoUrl ? 'github' : null,
             ...(body.repoUrl && { repoUrl: body.repoUrl }),
             ...(repoOwner && { repoOwner }),
@@ -325,6 +340,9 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
             ...(body.installCommand && { installCommand: body.installCommand }),
             ...(body.buildCommand && { buildCommand: body.buildCommand }),
             ...(body.startCommand && { startCommand: body.startCommand }),
+            ...(projectServiceType === 'static_site' && body.outputDirectory
+              ? { outputDirectory: body.outputDirectory }
+              : {}),
             ...(body.rootDirectory && { rootDirectory: body.rootDirectory }),
             autoDeployEnabled,
             previewDeploymentsEnabled,
@@ -337,11 +355,16 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
           },
         });
 
-        await policy.assertCanAllocate(body.organizationId, seedProject.id, {
-          ramMb: body.resourceRamMb,
-          cpuMillicores: body.resourceCpuMillicore,
-          bandwidthGb: body.resourceBandwidthGb,
-        }, tx);
+        await policy.assertCanAllocate(
+          body.organizationId,
+          seedProject.id,
+          {
+            ramMb: body.resourceRamMb,
+            cpuMillicores: body.resourceCpuMillicore,
+            bandwidthGb: body.resourceBandwidthGb,
+          },
+          tx,
+        );
 
         return tx.project.update({
           where: { id: seedProject.id },
@@ -376,188 +399,205 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
     return reply.code(201).send({ project, webhook });
   });
 
-  app.patch('/projects/:projectId/resources', { preHandler: [app.authenticate] }, async (request, reply) => {
-    const user = request.user as { userId: string; email: string };
-    const params = z.object({ projectId: z.string().cuid() }).parse(request.params);
-    const body = updateResourceSchema.parse(request.body);
+  app.patch(
+    '/projects/:projectId/resources',
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const user = request.user as { userId: string; email: string };
+      const params = z.object({ projectId: z.string().cuid() }).parse(request.params);
+      const body = updateResourceSchema.parse(request.body);
 
-    const project = await prisma.project.findUnique({
-      where: { id: params.projectId },
-      select: { id: true, organizationId: true },
-    });
-
-    if (!project) {
-      return reply.notFound('Project not found');
-    }
-
-    try {
-      await access.requireOrganizationRole(user.userId, project.organizationId, 'developer');
-    } catch (error) {
-      return reply.forbidden((error as Error).message);
-    }
-
-    let updated: Project;
-    try {
-      updated = await withSerializableRetry(async (tx) => {
-        await policy.assertCanAllocate(project.organizationId, project.id, {
-          ramMb: body.resourceRamMb,
-          cpuMillicores: body.resourceCpuMillicore,
-          bandwidthGb: body.resourceBandwidthGb,
-        }, tx);
-
-        return tx.project.update({
-          where: { id: project.id },
-          data: {
-            resourceRamMb: body.resourceRamMb,
-            resourceCpuMillicore: body.resourceCpuMillicore,
-            resourceBandwidthGb: body.resourceBandwidthGb,
-          },
-        });
+      const project = await prisma.project.findUnique({
+        where: { id: params.projectId },
+        select: { id: true, organizationId: true },
       });
-    } catch (error) {
-      if (isSerializableRetryableError(error)) {
-        return reply.code(503).send({
-          message: 'Project allocation is currently contended. Retry this request.',
-        });
+
+      if (!project) {
+        return reply.notFound('Project not found');
       }
-      return reply.badRequest((error as Error).message);
-    }
 
-    await audit.record({
-      organizationId: project.organizationId,
-      actorUserId: user.userId,
-      action: 'project.resources.updated',
-      entityType: 'project',
-      entityId: project.id,
-      metadata: body,
-    });
+      try {
+        await access.requireOrganizationRole(user.userId, project.organizationId, 'developer');
+      } catch (error) {
+        return reply.forbidden((error as Error).message);
+      }
 
-    return { project: updated };
-  });
+      let updated: Project;
+      try {
+        updated = await withSerializableRetry(async (tx) => {
+          await policy.assertCanAllocate(
+            project.organizationId,
+            project.id,
+            {
+              ramMb: body.resourceRamMb,
+              cpuMillicores: body.resourceCpuMillicore,
+              bandwidthGb: body.resourceBandwidthGb,
+            },
+            tx,
+          );
 
-  app.post('/projects/:projectId/delete/request-otp', { preHandler: [app.authenticate] }, async (request, reply) => {
-    const user = request.user as { userId: string; email: string };
-    const params = projectIdParamsSchema.parse(request.params);
+          return tx.project.update({
+            where: { id: project.id },
+            data: {
+              resourceRamMb: body.resourceRamMb,
+              resourceCpuMillicore: body.resourceCpuMillicore,
+              resourceBandwidthGb: body.resourceBandwidthGb,
+            },
+          });
+        });
+      } catch (error) {
+        if (isSerializableRetryableError(error)) {
+          return reply.code(503).send({
+            message: 'Project allocation is currently contended. Retry this request.',
+          });
+        }
+        return reply.badRequest((error as Error).message);
+      }
 
-    const project = await prisma.project.findUnique({
-      where: { id: params.projectId },
-      select: {
-        id: true,
-        name: true,
-        organizationId: true,
-      },
-    });
+      await audit.record({
+        organizationId: project.organizationId,
+        actorUserId: user.userId,
+        action: 'project.resources.updated',
+        entityType: 'project',
+        entityId: project.id,
+        metadata: body,
+      });
 
-    if (!project) {
-      return reply.notFound('Project not found');
-    }
+      return { project: updated };
+    },
+  );
 
-    try {
-      await access.requireOrganizationRole(user.userId, project.organizationId, 'admin');
-    } catch (error) {
-      return reply.forbidden((error as Error).message);
-    }
+  app.post(
+    '/projects/:projectId/delete/request-otp',
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const user = request.user as { userId: string; email: string };
+      const params = projectIdParamsSchema.parse(request.params);
 
-    const actor = await prisma.user.findUnique({
-      where: { id: user.userId },
-      select: {
-        email: true,
-        name: true,
-      },
-    });
-    if (!actor) {
-      return reply.unauthorized('User no longer exists.');
-    }
+      const project = await prisma.project.findUnique({
+        where: { id: params.projectId },
+        select: {
+          id: true,
+          name: true,
+          organizationId: true,
+        },
+      });
 
-    try {
-      const dispatched = await projectDeleteOtp.sendCode({
-        projectId: project.id,
-        projectName: project.name,
-        userId: user.userId,
-        email: actor.email,
-        name: actor.name,
+      if (!project) {
+        return reply.notFound('Project not found');
+      }
+
+      try {
+        await access.requireOrganizationRole(user.userId, project.organizationId, 'admin');
+      } catch (error) {
+        return reply.forbidden((error as Error).message);
+      }
+
+      const actor = await prisma.user.findUnique({
+        where: { id: user.userId },
+        select: {
+          email: true,
+          name: true,
+        },
+      });
+      if (!actor) {
+        return reply.unauthorized('User no longer exists.');
+      }
+
+      try {
+        const dispatched = await projectDeleteOtp.sendCode({
+          projectId: project.id,
+          projectName: project.name,
+          userId: user.userId,
+          email: actor.email,
+          name: actor.name,
+        });
+
+        await audit.record({
+          organizationId: project.organizationId,
+          actorUserId: user.userId,
+          action: 'project.delete_otp.requested',
+          entityType: 'project',
+          entityId: project.id,
+        });
+
+        return {
+          success: true,
+          expiresInMinutes: dispatched.expiresInMinutes,
+          ...(dispatched.devCode ? { devCode: dispatched.devCode } : {}),
+        };
+      } catch (error) {
+        if (error instanceof ProjectDeleteOtpError) {
+          return reply.code(error.statusCode).send({ message: error.message });
+        }
+        throw error;
+      }
+    },
+  );
+
+  app.post(
+    '/projects/:projectId/delete/confirm',
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const user = request.user as { userId: string; email: string };
+      const params = projectIdParamsSchema.parse(request.params);
+      const body = confirmProjectDeleteSchema.parse(request.body);
+
+      const project = await prisma.project.findUnique({
+        where: { id: params.projectId },
+        select: {
+          id: true,
+          name: true,
+          organizationId: true,
+        },
+      });
+
+      if (!project) {
+        return reply.notFound('Project not found');
+      }
+
+      try {
+        await access.requireOrganizationRole(user.userId, project.organizationId, 'admin');
+      } catch (error) {
+        return reply.forbidden((error as Error).message);
+      }
+
+      try {
+        const valid = await projectDeleteOtp.verifyCode({
+          projectId: project.id,
+          userId: user.userId,
+          code: body.code,
+        });
+
+        if (!valid) {
+          return reply.unauthorized('Invalid or expired OTP.');
+        }
+      } catch (error) {
+        if (error instanceof ProjectDeleteOtpError) {
+          return reply.code(error.statusCode).send({ message: error.message });
+        }
+        throw error;
+      }
+
+      await prisma.project.delete({
+        where: { id: project.id },
       });
 
       await audit.record({
         organizationId: project.organizationId,
         actorUserId: user.userId,
-        action: 'project.delete_otp.requested',
+        action: 'project.deleted',
         entityType: 'project',
         entityId: project.id,
+        metadata: {
+          name: project.name,
+        },
       });
 
       return {
         success: true,
-        expiresInMinutes: dispatched.expiresInMinutes,
-        ...(dispatched.devCode ? { devCode: dispatched.devCode } : {}),
+        deletedProjectId: project.id,
       };
-    } catch (error) {
-      if (error instanceof ProjectDeleteOtpError) {
-        return reply.code(error.statusCode).send({ message: error.message });
-      }
-      throw error;
-    }
-  });
-
-  app.post('/projects/:projectId/delete/confirm', { preHandler: [app.authenticate] }, async (request, reply) => {
-    const user = request.user as { userId: string; email: string };
-    const params = projectIdParamsSchema.parse(request.params);
-    const body = confirmProjectDeleteSchema.parse(request.body);
-
-    const project = await prisma.project.findUnique({
-      where: { id: params.projectId },
-      select: {
-        id: true,
-        name: true,
-        organizationId: true,
-      },
-    });
-
-    if (!project) {
-      return reply.notFound('Project not found');
-    }
-
-    try {
-      await access.requireOrganizationRole(user.userId, project.organizationId, 'admin');
-    } catch (error) {
-      return reply.forbidden((error as Error).message);
-    }
-
-    try {
-      const valid = await projectDeleteOtp.verifyCode({
-        projectId: project.id,
-        userId: user.userId,
-        code: body.code,
-      });
-
-      if (!valid) {
-        return reply.unauthorized('Invalid or expired OTP.');
-      }
-    } catch (error) {
-      if (error instanceof ProjectDeleteOtpError) {
-        return reply.code(error.statusCode).send({ message: error.message });
-      }
-      throw error;
-    }
-
-    await prisma.project.delete({
-      where: { id: project.id },
-    });
-
-    await audit.record({
-      organizationId: project.organizationId,
-      actorUserId: user.userId,
-      action: 'project.deleted',
-      entityType: 'project',
-      entityId: project.id,
-      metadata: {
-        name: project.name,
-      },
-    });
-
-    return {
-      success: true,
-      deletedProjectId: project.id,
-    };
-  });
+    },
+  );
 };

@@ -4,10 +4,12 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
+import { DeploymentRuntimeGuide } from '../../../../components/deployment-runtime-guide';
 import { DeployForm } from '../../../../components/deploy-form';
 import { ContainerLogViewer } from '../../../../components/container-log-viewer';
 import { ResourceSlider } from '../../../../components/resource-slider';
 import { apiClient } from '../../../../lib/api';
+import { getDeploymentRuntimeGuide } from '../../../../lib/deployment-runtime-guides';
 import { useContainerLogs } from '../../../../lib/use-container-logs';
 import { useWorkspaceContext } from '../../../../components/workspace-provider';
 
@@ -129,29 +131,36 @@ const TABS: { key: Tab; label: string }[] = [
 
 const IN_PROGRESS_DEPLOYMENT_STATUSES = new Set(['queued', 'building', 'deploying']);
 
-const DEPLOYMENT_STATUS_UI: Record<string, { label: string; dotClass: string; textClass: string }> = {
-  ready: { label: 'Ready', dotClass: 'bg-emerald-500', textClass: 'text-slate-900' },
-  failed: { label: 'Error', dotClass: 'bg-red-500', textClass: 'text-slate-900' },
-  canceled: { label: 'Canceled', dotClass: 'bg-slate-500', textClass: 'text-slate-800' },
-  queued: { label: 'Queued', dotClass: 'bg-amber-500', textClass: 'text-slate-800' },
-  building: { label: 'Building', dotClass: 'bg-blue-500', textClass: 'text-slate-800' },
-  deploying: { label: 'Deploying', dotClass: 'bg-blue-500', textClass: 'text-slate-800' },
-  rolled_back: { label: 'Rolled Back', dotClass: 'bg-slate-500', textClass: 'text-slate-800' },
-};
+const DEPLOYMENT_STATUS_UI: Record<string, { label: string; dotClass: string; textClass: string }> =
+  {
+    ready: { label: 'Ready', dotClass: 'bg-emerald-500', textClass: 'text-slate-900' },
+    failed: { label: 'Error', dotClass: 'bg-red-500', textClass: 'text-slate-900' },
+    canceled: { label: 'Canceled', dotClass: 'bg-slate-500', textClass: 'text-slate-800' },
+    queued: { label: 'Queued', dotClass: 'bg-amber-500', textClass: 'text-slate-800' },
+    building: { label: 'Building', dotClass: 'bg-blue-500', textClass: 'text-slate-800' },
+    deploying: { label: 'Deploying', dotClass: 'bg-blue-500', textClass: 'text-slate-800' },
+    rolled_back: { label: 'Rolled Back', dotClass: 'bg-slate-500', textClass: 'text-slate-800' },
+  };
 
-const isCanceledDeployment = (deployment: { status: string; errorMessage?: string | null }): boolean =>
+const isCanceledDeployment = (deployment: {
+  status: string;
+  errorMessage?: string | null;
+}): boolean =>
   deployment.status === 'failed' &&
   (deployment.errorMessage ?? '').toLowerCase().includes('canceled by user');
 
 const TERMINAL_DEPLOYMENT_STATUSES = new Set(['ready', 'failed', 'rolled_back']);
 
-function formatDeploymentDuration(startIso: string, endIso: string | null | undefined, status: string): string {
+function formatDeploymentDuration(
+  startIso: string,
+  endIso: string | null | undefined,
+  status: string,
+): string {
   const start = new Date(startIso).getTime();
   const parsedEnd = endIso ? new Date(endIso).getTime() : Number.NaN;
-  const end =
-    Number.isFinite(parsedEnd)
-      ? parsedEnd
-      : TERMINAL_DEPLOYMENT_STATUSES.has(status)
+  const end = Number.isFinite(parsedEnd)
+    ? parsedEnd
+    : TERMINAL_DEPLOYMENT_STATUSES.has(status)
       ? Number.NaN
       : Date.now();
   if (!Number.isFinite(start) || !Number.isFinite(end)) {
@@ -172,7 +181,11 @@ function formatDeploymentDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function resolveRepoLabel(repoFullName: string | null, gitUrl: string | null, fallback: string): string {
+function resolveRepoLabel(
+  repoFullName: string | null,
+  gitUrl: string | null,
+  fallback: string,
+): string {
   if (repoFullName) {
     const pieces = repoFullName.split('/');
     return pieces[pieces.length - 1] ?? repoFullName;
@@ -200,12 +213,7 @@ export default function ProjectDetailPage() {
   const params = useParams<{ projectId: string }>();
   const { projectId } = params ?? { projectId: '' };
   const router = useRouter();
-  const {
-    projects,
-    refresh,
-    loading: workspaceLoading,
-    subscription,
-  } = useWorkspaceContext();
+  const { projects, refresh, loading: workspaceLoading, subscription } = useWorkspaceContext();
 
   const project = useMemo(
     () => projects.find((p) => p.id === projectId) ?? null,
@@ -239,38 +247,41 @@ export default function ProjectDetailPage() {
   const [selectedContainerId, setSelectedContainerId] = useState<string | null>(null);
 
   // Use WebSocket hook for realtime logs
-  const { 
-    logs: realtimeLogs, 
-    isConnected: logsConnected, 
+  const {
+    logs: realtimeLogs,
+    isConnected: logsConnected,
     error: logsError,
     clearLogs: clearRealtimeLogs,
-    reconnect: reconnectLogs 
-  } = useContainerLogs({ 
+    reconnect: reconnectLogs,
+  } = useContainerLogs({
     containerId: selectedContainerId,
-    enabled: activeTab === 'realtime-logs' && !!selectedContainerId
+    enabled: activeTab === 'realtime-logs' && !!selectedContainerId,
   });
 
-  const loadDeployments = useCallback(async (options?: { silent?: boolean }) => {
-    if (!projectId) return;
-    const silent = options?.silent ?? false;
-    try {
-      if (!silent) {
-        setDeploymentsLoading(true);
+  const loadDeployments = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!projectId) return;
+      const silent = options?.silent ?? false;
+      try {
+        if (!silent) {
+          setDeploymentsLoading(true);
+        }
+        const data = (await apiClient.get(`/deployments?projectId=${projectId}`)) as {
+          deployments?: DeploymentSummary[];
+        };
+        setDeployments(data.deployments ?? []);
+      } catch {
+        if (!silent) {
+          setDeployments([]);
+        }
+      } finally {
+        if (!silent) {
+          setDeploymentsLoading(false);
+        }
       }
-      const data = (await apiClient.get(`/deployments?projectId=${projectId}`)) as {
-        deployments?: DeploymentSummary[];
-      };
-      setDeployments(data.deployments ?? []);
-    } catch {
-      if (!silent) {
-        setDeployments([]);
-      }
-    } finally {
-      if (!silent) {
-        setDeploymentsLoading(false);
-      }
-    }
-  }, [projectId]);
+    },
+    [projectId],
+  );
 
   const loadUsage = useCallback(async () => {
     if (!projectId) {
@@ -280,7 +291,9 @@ export default function ProjectDetailPage() {
 
     try {
       setUsageLoading(true);
-      const data = (await apiClient.get(`/usage/projects/${projectId}?days=30`)) as ProjectUsageDetails;
+      const data = (await apiClient.get(
+        `/usage/projects/${projectId}?days=30`,
+      )) as ProjectUsageDetails;
       setUsageDetails(data);
     } catch {
       setUsageDetails(null);
@@ -289,35 +302,40 @@ export default function ProjectDetailPage() {
     }
   }, [projectId]);
 
-  const loadContainers = useCallback(async (options?: { silent?: boolean }) => {
-    if (!projectId) {
-      setContainers([]);
-      return;
-    }
-
-    const silent = options?.silent ?? false;
-    try {
-      if (!silent) {
-        setContainersLoading(true);
-      }
-      const data = (await apiClient.get(`/containers?projectId=${projectId}`)) as { containers?: Container[] };
-      const fetchedContainers = data.containers ?? [];
-      setContainers(fetchedContainers);
-      
-      // Auto-select first container if none selected
-      if (!selectedContainerId && fetchedContainers.length > 0 && fetchedContainers[0]) {
-        setSelectedContainerId(fetchedContainers[0].id ?? null);
-      }
-    } catch {
-      if (!silent) {
+  const loadContainers = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!projectId) {
         setContainers([]);
+        return;
       }
-    } finally {
-      if (!silent) {
-        setContainersLoading(false);
+
+      const silent = options?.silent ?? false;
+      try {
+        if (!silent) {
+          setContainersLoading(true);
+        }
+        const data = (await apiClient.get(`/containers?projectId=${projectId}`)) as {
+          containers?: Container[];
+        };
+        const fetchedContainers = data.containers ?? [];
+        setContainers(fetchedContainers);
+
+        // Auto-select first container if none selected
+        if (!selectedContainerId && fetchedContainers.length > 0 && fetchedContainers[0]) {
+          setSelectedContainerId(fetchedContainers[0].id ?? null);
+        }
+      } catch {
+        if (!silent) {
+          setContainers([]);
+        }
+      } finally {
+        if (!silent) {
+          setContainersLoading(false);
+        }
       }
-    }
-  }, [projectId, selectedContainerId]);
+    },
+    [projectId, selectedContainerId],
+  );
 
   useEffect(() => {
     loadDeployments().catch(() => undefined);
@@ -392,10 +410,7 @@ export default function ProjectDetailPage() {
       setDeploymentAction(deploymentId);
       await apiClient.post(`/deployments/${deploymentId}/cancel`, {});
       setMessage('Deployment canceled.');
-      await Promise.all([
-        loadDeployments(),
-        refresh(),
-      ]);
+      await Promise.all([loadDeployments(), refresh()]);
     } catch (error) {
       setMessage(`Cancel failed: ${(error as Error).message}`);
     } finally {
@@ -439,6 +454,7 @@ export default function ProjectDetailPage() {
     cpu: 500,
     bandwidth: 50,
   });
+  const projectServiceGuide = getDeploymentRuntimeGuide(projectSettings.serviceType);
 
   const settingsResourceLimits = useMemo(
     () => ({
@@ -476,7 +492,8 @@ export default function ProjectDetailPage() {
       wakeMessage: project.wakeMessage ?? '',
       wakeRetrySeconds: Math.max(1, Math.min(60, project.wakeRetrySeconds ?? 5)),
       autoDeployEnabled: project.autoDeployEnabled,
-      serviceType: (project.serviceType as 'web_service' | 'static_site' | 'python') ?? 'web_service',
+      serviceType:
+        (project.serviceType as 'web_service' | 'static_site' | 'python') ?? 'web_service',
       outputDirectory: project.outputDirectory ?? '',
       ram: project.resourceRamMb,
       cpu: project.resourceCpuMillicore,
@@ -500,9 +517,7 @@ export default function ProjectDetailPage() {
     }
 
     setProjectSettings((previous) =>
-      previous.autoDeployEnabled
-        ? { ...previous, autoDeployEnabled: false }
-        : previous,
+      previous.autoDeployEnabled ? { ...previous, autoDeployEnabled: false } : previous,
     );
   }, [autoDeployLocked]);
 
@@ -517,13 +532,22 @@ export default function ProjectDetailPage() {
           branch: projectSettings.branch,
           rootDirectory: projectSettings.rootDirectory || null,
           buildCommand: projectSettings.buildCommand || null,
-          startCommand: projectSettings.startCommand || null,
+          startCommand:
+            projectSettings.serviceType === 'static_site'
+              ? null
+              : projectSettings.startCommand || null,
           targetPort: Number(projectSettings.targetPort),
           wakeMessage: projectSettings.wakeMessage.trim() || null,
-          wakeRetrySeconds: Math.max(1, Math.min(60, Number(projectSettings.wakeRetrySeconds) || 5)),
+          wakeRetrySeconds: Math.max(
+            1,
+            Math.min(60, Number(projectSettings.wakeRetrySeconds) || 5),
+          ),
           autoDeployEnabled: projectSettings.autoDeployEnabled,
           serviceType: projectSettings.serviceType,
-          outputDirectory: projectSettings.outputDirectory || null,
+          outputDirectory:
+            projectSettings.serviceType === 'static_site'
+              ? projectSettings.outputDirectory || null
+              : null,
         });
       } catch (error) {
         const msg = (error as Error).message.toLowerCase();
@@ -534,9 +558,18 @@ export default function ProjectDetailPage() {
         }
       }
       await apiClient.patch(`/projects/${projectId}/resources`, {
-        resourceRamMb: Math.min(Math.max(Number(projectSettings.ram), 128), settingsResourceLimits.ram),
-        resourceCpuMillicore: Math.min(Math.max(Number(projectSettings.cpu), 100), settingsResourceLimits.cpu),
-        resourceBandwidthGb: Math.min(Math.max(Number(projectSettings.bandwidth), 1), settingsResourceLimits.bandwidth),
+        resourceRamMb: Math.min(
+          Math.max(Number(projectSettings.ram), 128),
+          settingsResourceLimits.ram,
+        ),
+        resourceCpuMillicore: Math.min(
+          Math.max(Number(projectSettings.cpu), 100),
+          settingsResourceLimits.cpu,
+        ),
+        resourceBandwidthGb: Math.min(
+          Math.max(Number(projectSettings.bandwidth), 1),
+          settingsResourceLimits.bandwidth,
+        ),
       });
       await refresh();
       setMessage(
@@ -644,7 +677,9 @@ export default function ProjectDetailPage() {
         }
         return next;
       });
-      setEnvEditingKey((previous) => (secrets.some((secret) => secret.key === previous) ? previous : ''));
+      setEnvEditingKey((previous) =>
+        secrets.some((secret) => secret.key === previous) ? previous : '',
+      );
       setEnvMessage('');
     } catch (error) {
       setProjectSecrets([]);
@@ -913,7 +948,10 @@ export default function ProjectDetailPage() {
         domain: domainDraft.trim().toLowerCase(),
       })) as {
         domain: CustomDomainSummary;
-        instructions: { cname: { host: string; value: string }; txt: { host: string; value: string } };
+        instructions: {
+          cname: { host: string; value: string };
+          txt: { host: string; value: string };
+        };
       };
       setCustomDomains((prev) => [result.domain, ...prev]);
       setDomainInstructions(result.instructions);
@@ -935,9 +973,7 @@ export default function ProjectDetailPage() {
         `/projects/${projectId}/domains/${domainId}/verify`,
         {},
       )) as { domain: CustomDomainSummary; verification: { verified: boolean; detail: string } };
-      setCustomDomains((prev) =>
-        prev.map((d) => (d.id === domainId ? result.domain : d)),
-      );
+      setCustomDomains((prev) => prev.map((d) => (d.id === domainId ? result.domain : d)));
       setDomainMessage(
         result.verification.verified
           ? `âœ“ Domain verified! It may take a few minutes for SSL to propagate.`
@@ -1016,7 +1052,10 @@ export default function ProjectDetailPage() {
     <div className="space-y-0">
       {/* ---- Breadcrumb + project header ---- */}
       <div className="section-band !pb-0">
-        <Link href="/projects" className="text-xs text-slate-500 hover:text-slate-800 hover:underline">
+        <Link
+          href="/projects"
+          className="text-xs text-slate-500 hover:text-slate-800 hover:underline"
+        >
           â† All projects
         </Link>
 
@@ -1094,9 +1133,7 @@ export default function ProjectDetailPage() {
               type="button"
               onClick={() => setActiveTab(tab.key)}
               className={`relative whitespace-nowrap px-4 py-2.5 text-sm font-medium transition ${
-                activeTab === tab.key
-                  ? 'text-slate-900'
-                  : 'text-slate-500 hover:text-slate-700'
+                activeTab === tab.key ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               {tab.label}
@@ -1133,8 +1170,8 @@ export default function ProjectDetailPage() {
               <div>
                 <h3 className="text-base font-semibold text-slate-900">New Deployment</h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  Trigger a manual deployment with optional overrides.
-                  Deployments run server-side - you can close the browser and come back anytime.
+                  Trigger a manual deployment with optional overrides. Deployments run server-side -
+                  you can close the browser and come back anytime.
                 </p>
               </div>
               <div className="mt-4">
@@ -1170,7 +1207,10 @@ export default function ProjectDetailPage() {
             {deploymentsLoading ? (
               <div className="space-y-2">
                 {[0, 1, 2].map((placeholder) => (
-                  <article key={placeholder} className="rounded-xl border border-slate-200 px-4 py-4">
+                  <article
+                    key={placeholder}
+                    className="rounded-xl border border-slate-200 px-4 py-4"
+                  >
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-[1.2fr_0.9fr_1fr_1fr_0.9fr_auto] md:items-center">
                       <div className="space-y-2">
                         <SkeletonBlock className="h-5 w-28 rounded" />
@@ -1200,18 +1240,24 @@ export default function ProjectDetailPage() {
                 </div>
                 {deployments.map((dep, index) => {
                   const isActive = project.activeDeploymentId === dep.id;
-                  const repoLabel = resolveRepoLabel(project.repoFullName, dep.gitUrl ?? project.repoUrl, project.name);
-                  const statusUi = (
-                    isCanceledDeployment(dep)
-                      ? DEPLOYMENT_STATUS_UI.canceled
-                      : DEPLOYMENT_STATUS_UI[dep.status]
-                  ) ?? {
+                  const repoLabel = resolveRepoLabel(
+                    project.repoFullName,
+                    dep.gitUrl ?? project.repoUrl,
+                    project.name,
+                  );
+                  const statusUi = (isCanceledDeployment(dep)
+                    ? DEPLOYMENT_STATUS_UI.canceled
+                    : DEPLOYMENT_STATUS_UI[dep.status]) ?? {
                     label: dep.status.replace('_', ' '),
                     dotClass: 'bg-slate-400',
                     textClass: 'text-slate-800',
                   };
                   const isInProgress = IN_PROGRESS_DEPLOYMENT_STATUSES.has(dep.status);
-                  const durationLabel = formatDeploymentDuration(dep.createdAt, dep.finishedAt, dep.status);
+                  const durationLabel = formatDeploymentDuration(
+                    dep.createdAt,
+                    dep.finishedAt,
+                    dep.status,
+                  );
                   const branchLabel = dep.branch ?? project.branch ?? 'main';
                   const createdByLabel = dep.createdByName ?? 'workspace';
 
@@ -1232,11 +1278,15 @@ export default function ProjectDetailPage() {
                       } ${isActive ? 'bg-slate-100' : 'bg-white hover:bg-slate-50'}`}
                     >
                       <div className="min-w-0">
-                        <p className="mono truncate text-base font-semibold text-slate-900">{dep.id.slice(0, 9)}</p>
+                        <p className="mono truncate text-base font-semibold text-slate-900">
+                          {dep.id.slice(0, 9)}
+                        </p>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
-                              dep.environment === 'production' ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-800'
+                              dep.environment === 'production'
+                                ? 'bg-slate-900 text-white'
+                                : 'bg-slate-200 text-slate-800'
                             }`}
                           >
                             {dep.environment}
@@ -1260,7 +1310,9 @@ export default function ProjectDetailPage() {
                       </div>
 
                       <div className="min-w-0">
-                        <p className={`flex items-center gap-2 text-sm font-medium ${statusUi.textClass}`}>
+                        <p
+                          className={`flex items-center gap-2 text-sm font-medium ${statusUi.textClass}`}
+                        >
                           <span
                             className={`inline-flex h-2.5 w-2.5 rounded-full ${statusUi.dotClass} ${
                               isInProgress ? 'animate-pulse' : ''
@@ -1273,12 +1325,20 @@ export default function ProjectDetailPage() {
 
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-slate-900">{repoLabel}</p>
-                        <p className="mt-1 text-xs text-slate-500">{project.repoFullName ?? project.repoUrl ? 'Repository' : 'Manual deployment'}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {(project.repoFullName ?? project.repoUrl)
+                            ? 'Repository'
+                            : 'Manual deployment'}
+                        </p>
                       </div>
 
                       <div className="min-w-0 space-y-1">
                         <p className="flex items-center gap-2 text-sm text-slate-900">
-                          <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3.5 w-3.5 text-slate-500">
+                          <svg
+                            viewBox="0 0 16 16"
+                            aria-hidden="true"
+                            className="h-3.5 w-3.5 text-slate-500"
+                          >
                             <path
                               d="M5 2a2 2 0 1 0 0 4h1v4a2 2 0 1 0 2 0V8h3a2 2 0 1 0 0-2H7V4a2 2 0 0 0-2-2z"
                               fill="currentColor"
@@ -1287,20 +1347,38 @@ export default function ProjectDetailPage() {
                           <span className="mono truncate">{branchLabel}</span>
                         </p>
                         <p className="flex items-center gap-2 text-sm text-slate-700">
-                          <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3.5 w-3.5 text-slate-500">
-                            <circle cx="8" cy="8" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                          <svg
+                            viewBox="0 0 16 16"
+                            aria-hidden="true"
+                            className="h-3.5 w-3.5 text-slate-500"
+                          >
+                            <circle
+                              cx="8"
+                              cy="8"
+                              r="3.2"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                            />
                           </svg>
-                          <span className="mono">{dep.commitSha ? dep.commitSha.slice(0, 7) : 'manual'}</span>
+                          <span className="mono">
+                            {dep.commitSha ? dep.commitSha.slice(0, 7) : 'manual'}
+                          </span>
                         </p>
                       </div>
 
                       <div className="min-w-0">
-                        <p className="text-sm text-slate-700">{formatDeploymentDate(dep.createdAt)}</p>
+                        <p className="text-sm text-slate-700">
+                          {formatDeploymentDate(dep.createdAt)}
+                        </p>
                         <p className="mt-1 truncate text-xs text-slate-500">by {createdByLabel}</p>
                       </div>
 
                       {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-                      <div className="flex flex-wrap items-center gap-2 md:min-w-[170px] md:justify-end" onClick={(e) => e.stopPropagation()}>
+                      <div
+                        className="flex flex-wrap items-center gap-2 md:min-w-[170px] md:justify-end"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         {isInProgress && (
                           <button
                             type="button"
@@ -1317,7 +1395,9 @@ export default function ProjectDetailPage() {
 
                         {dep.domain && dep.status === 'ready' && (
                           <a
-                            href={dep.domain.startsWith('http') ? dep.domain : `https://${dep.domain}`}
+                            href={
+                              dep.domain.startsWith('http') ? dep.domain : `https://${dep.domain}`
+                            }
                             target="_blank"
                             rel="noreferrer"
                             className="rounded-md bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-700 transition hover:bg-slate-200"
@@ -1342,19 +1422,18 @@ export default function ProjectDetailPage() {
                             </button>
                           )}
 
-                        {dep.isCanary &&
-                          dep.status === 'ready' && (
-                            <button
-                              type="button"
-                              className="rounded-md bg-amber-100 px-2.5 py-1 text-[11px] font-medium text-amber-900 transition hover:bg-amber-200"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                router.push(`/projects/${projectId}/deployments/${dep.id}`);
-                              }}
-                            >
-                              Manage canary
-                            </button>
-                          )}
+                        {dep.isCanary && dep.status === 'ready' && (
+                          <button
+                            type="button"
+                            className="rounded-md bg-amber-100 px-2.5 py-1 text-[11px] font-medium text-amber-900 transition hover:bg-amber-200"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/projects/${projectId}/deployments/${dep.id}`);
+                            }}
+                          >
+                            Manage canary
+                          </button>
+                        )}
 
                         {dep.environment === 'production' &&
                           dep.status === 'ready' &&
@@ -1399,14 +1478,15 @@ export default function ProjectDetailPage() {
                   type="button"
                   className="mt-3 text-sm font-medium text-slate-900 hover:underline"
                   onClick={() => {
-                    document.getElementById('new-deployment-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    document
+                      .getElementById('new-deployment-form')
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                   }}
                 >
                   Create your first deployment
                 </button>
               </div>
             )}
-
           </div>
         )}
 
@@ -1415,7 +1495,9 @@ export default function ProjectDetailPage() {
           <div className="space-y-6">
             <div>
               <h3 className="text-base font-semibold text-slate-900">Git &amp; Build</h3>
-              <p className="mt-1 text-sm text-slate-500">Repository connection, build commands, and deploy triggers.</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Repository connection, build commands, and deploy triggers.
+              </p>
             </div>
 
             {/* Service Type */}
@@ -1432,7 +1514,9 @@ export default function ProjectDetailPage() {
                   onClick={() => setProjectSettings((p) => ({ ...p, serviceType: 'web_service' }))}
                 >
                   <span className="block">Web Service</span>
-                  <span className="block text-[10px] opacity-70">Backend, API, full-stack (Node.js)</span>
+                  <span className="block text-[10px] opacity-70">
+                    Backend, API, full-stack (Node.js)
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -1456,10 +1540,14 @@ export default function ProjectDetailPage() {
                   onClick={() => setProjectSettings((p) => ({ ...p, serviceType: 'static_site' }))}
                 >
                   <span className="block">Static Site</span>
-                  <span className="block text-[10px] opacity-70">React, Vue, Vite, Next export</span>
+                  <span className="block text-[10px] opacity-70">
+                    React, Vue, Vite, Next export
+                  </span>
                 </button>
               </div>
             </div>
+
+            <DeploymentRuntimeGuide serviceType={projectSettings.serviceType} />
 
             <div className="grid gap-4 md:grid-cols-2">
               <label className="md:col-span-2">
@@ -1483,9 +1571,11 @@ export default function ProjectDetailPage() {
                 <span className="field-label">Root directory (monorepo)</span>
                 <input
                   value={projectSettings.rootDirectory}
-                  onChange={(e) => setProjectSettings((p) => ({ ...p, rootDirectory: e.target.value }))}
+                  onChange={(e) =>
+                    setProjectSettings((p) => ({ ...p, rootDirectory: e.target.value }))
+                  }
                   className="field-input"
-                  placeholder="e.g. apps/web (leave blank if root)"
+                  placeholder={`${projectServiceGuide.fields.rootDirectory} (leave blank if root)`}
                 />
               </label>
               <label>
@@ -1495,7 +1585,9 @@ export default function ProjectDetailPage() {
                   min={1}
                   max={65535}
                   value={projectSettings.targetPort}
-                  onChange={(e) => setProjectSettings((p) => ({ ...p, targetPort: Number(e.target.value) }))}
+                  onChange={(e) =>
+                    setProjectSettings((p) => ({ ...p, targetPort: Number(e.target.value) }))
+                  }
                   className="field-input"
                 />
               </label>
@@ -1519,19 +1611,25 @@ export default function ProjectDetailPage() {
                 <span className="field-label">Build command</span>
                 <input
                   value={projectSettings.buildCommand}
-                  onChange={(e) => setProjectSettings((p) => ({ ...p, buildCommand: e.target.value }))}
+                  onChange={(e) =>
+                    setProjectSettings((p) => ({ ...p, buildCommand: e.target.value }))
+                  }
                   className="field-input"
-                  placeholder="npm run build"
+                  placeholder={projectServiceGuide.fields.buildCommand}
                 />
               </label>
-              {projectSettings.serviceType === 'web_service' && (
+              {projectSettings.serviceType !== 'static_site' && (
                 <label>
                   <span className="field-label">Start command</span>
                   <input
                     value={projectSettings.startCommand}
-                    onChange={(e) => setProjectSettings((p) => ({ ...p, startCommand: e.target.value }))}
+                    onChange={(e) =>
+                      setProjectSettings((p) => ({ ...p, startCommand: e.target.value }))
+                    }
                     className="field-input"
-                    placeholder="auto-detect from package.json"
+                    placeholder={
+                      projectServiceGuide.fields.startCommand ?? projectServiceGuide.fallbackStart
+                    }
                   />
                 </label>
               )}
@@ -1539,7 +1637,9 @@ export default function ProjectDetailPage() {
                 <span className="field-label">Wake message (optional)</span>
                 <input
                   value={projectSettings.wakeMessage}
-                  onChange={(e) => setProjectSettings((p) => ({ ...p, wakeMessage: e.target.value }))}
+                  onChange={(e) =>
+                    setProjectSettings((p) => ({ ...p, wakeMessage: e.target.value }))
+                  }
                   className="field-input"
                   maxLength={280}
                   placeholder="This app was sleeping due to inactivity. We are waking it up now."
@@ -1553,18 +1653,22 @@ export default function ProjectDetailPage() {
                   <span className="field-label">Output directory</span>
                   <input
                     value={projectSettings.outputDirectory}
-                    onChange={(e) => setProjectSettings((p) => ({ ...p, outputDirectory: e.target.value }))}
+                    onChange={(e) =>
+                      setProjectSettings((p) => ({ ...p, outputDirectory: e.target.value }))
+                    }
                     className="field-input"
-                    placeholder="dist"
+                    placeholder={projectServiceGuide.fields.outputDirectory ?? 'dist'}
                   />
-                  <span className="text-[10px] text-slate-400">e.g. dist, build, out, .next/out</span>
+                  <span className="text-[10px] text-slate-400">e.g. dist, build, out</span>
                 </label>
               )}
               <label className="inline-flex items-center gap-2 md:col-span-2">
                 <input
                   type="checkbox"
                   checked={projectSettings.autoDeployEnabled}
-                  onChange={(e) => setProjectSettings((p) => ({ ...p, autoDeployEnabled: e.target.checked }))}
+                  onChange={(e) =>
+                    setProjectSettings((p) => ({ ...p, autoDeployEnabled: e.target.checked }))
+                  }
                   disabled={autoDeployLocked}
                 />
                 <span className="text-sm text-slate-700">Auto-deploy on push</span>
@@ -1579,9 +1683,12 @@ export default function ProjectDetailPage() {
             <div className="space-y-4 border-t border-slate-200 pt-5">
               <div>
                 <h3 className="text-base font-semibold text-slate-900">Resources</h3>
-                <p className="mt-1 text-sm text-slate-500">RAM, CPU, and bandwidth allocation for this project.</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  RAM, CPU, and bandwidth allocation for this project.
+                </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Pool limits: {settingsResourceLimits.ram} MB RAM, {settingsResourceLimits.cpu} mCPU, {settingsResourceLimits.bandwidth} GB bandwidth.
+                  Pool limits: {settingsResourceLimits.ram} MB RAM, {settingsResourceLimits.cpu}{' '}
+                  mCPU, {settingsResourceLimits.bandwidth} GB bandwidth.
                 </p>
               </div>
               <ResourceSlider
@@ -1679,16 +1786,21 @@ export default function ProjectDetailPage() {
             <div>
               <h3 className="text-base font-semibold text-slate-900">Custom Domains</h3>
               <p className="mt-1 text-sm text-slate-500">
-                Connect your own domains to this project. Add a domain, configure DNS at your registrar, then verify.
+                Connect your own domains to this project. Add a domain, configure DNS at your
+                registrar, then verify.
               </p>
             </div>
 
             <article className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Default Apployd Domain</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                  Default Apployd Domain
+                </p>
                 {autoDomain ? (
                   <>
-                    <p className="mono mt-1 truncate text-sm font-medium text-slate-900">{autoDomain.domain}</p>
+                    <p className="mono mt-1 truncate text-sm font-medium text-slate-900">
+                      {autoDomain.domain}
+                    </p>
                     <p className="mt-0.5 text-xs text-slate-500">
                       Active {autoDomain.environment} deployment
                     </p>
@@ -1720,7 +1832,9 @@ export default function ProjectDetailPage() {
                   onChange={(e) => setDomainDraft(e.target.value)}
                   className="field-input"
                   placeholder="app.example.com"
-                  onKeyDown={(e) => { if (e.key === 'Enter') addDomain(); }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') addDomain();
+                  }}
                 />
               </label>
               <button
@@ -1736,40 +1850,58 @@ export default function ProjectDetailPage() {
             {/* DNS instructions (shown after adding a domain) */}
             {domainInstructions && (
               <div className="rounded-xl border border-slate-300 bg-slate-100 p-4 space-y-3">
-                <p className="text-sm font-medium text-slate-900">Configure DNS records at your domain registrar:</p>
+                <p className="text-sm font-medium text-slate-900">
+                  Configure DNS records at your domain registrar:
+                </p>
 
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-700">Option 1 â€” CNAME (recommended)</p>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-700">
+                    Option 1 â€” CNAME (recommended)
+                  </p>
                   <div className="grid gap-2 md:grid-cols-2 text-sm">
                     <div>
                       <span className="text-xs text-slate-600">Type</span>
-                      <p className="mono rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-900">CNAME</p>
+                      <p className="mono rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-900">
+                        CNAME
+                      </p>
                     </div>
                     <div>
                       <span className="text-xs text-slate-600">Host / Name</span>
-                      <p className="mono rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-900 select-all">{domainInstructions.cname.host}</p>
+                      <p className="mono rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-900 select-all">
+                        {domainInstructions.cname.host}
+                      </p>
                     </div>
                     <div className="md:col-span-2">
                       <span className="text-xs text-slate-600">Points to</span>
-                      <p className="mono rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-900 select-all">{domainInstructions.cname.value}</p>
+                      <p className="mono rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-900 select-all">
+                        {domainInstructions.cname.value}
+                      </p>
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-2 border-t border-slate-300 pt-3">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-700">Option 2 â€” TXT verification</p>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-700">
+                    Option 2 â€” TXT verification
+                  </p>
                   <div className="grid gap-2 md:grid-cols-2 text-sm">
                     <div>
                       <span className="text-xs text-slate-600">Type</span>
-                      <p className="mono rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-900">TXT</p>
+                      <p className="mono rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-900">
+                        TXT
+                      </p>
                     </div>
                     <div>
                       <span className="text-xs text-slate-600">Host / Name</span>
-                      <p className="mono rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-900 select-all">{domainInstructions.txt.host}</p>
+                      <p className="mono rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-900 select-all">
+                        {domainInstructions.txt.host}
+                      </p>
                     </div>
                     <div className="md:col-span-2">
                       <span className="text-xs text-slate-600">Value</span>
-                      <p className="mono rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-900 select-all">{domainInstructions.txt.value}</p>
+                      <p className="mono rounded border border-slate-300 bg-slate-50 px-2 py-1 text-slate-900 select-all">
+                        {domainInstructions.txt.value}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1788,7 +1920,10 @@ export default function ProjectDetailPage() {
             {domainsLoading ? (
               <div className="space-y-2">
                 {[0, 1, 2].map((placeholder) => (
-                  <article key={placeholder} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4">
+                  <article
+                    key={placeholder}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4"
+                  >
                     <div className="space-y-2 min-w-0">
                       <SkeletonBlock className="h-4 w-44 rounded" />
                       <SkeletonBlock className="h-3 w-64 rounded" />
@@ -1809,7 +1944,9 @@ export default function ProjectDetailPage() {
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="mono text-sm font-medium text-slate-900 truncate">{d.domain}</p>
+                        <p className="mono text-sm font-medium text-slate-900 truncate">
+                          {d.domain}
+                        </p>
                         <span
                           className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
                             d.status === 'active'
@@ -1901,9 +2038,12 @@ export default function ProjectDetailPage() {
             <div className="rounded-xl border border-slate-200 p-4 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h4 className="text-sm font-semibold text-slate-900">Managed PostgreSQL (Apployd PostgreSQL DB)</h4>
+                  <h4 className="text-sm font-semibold text-slate-900">
+                    Managed PostgreSQL (Apployd PostgreSQL DB)
+                  </h4>
                   <p className="mt-1 text-xs text-slate-500">
-                    Database provisioning is now standalone. Use the Databases page to create and copy connection strings.
+                    Database provisioning is now standalone. Use the Databases page to create and
+                    copy connection strings.
                   </p>
                 </div>
                 <button
@@ -1918,7 +2058,8 @@ export default function ProjectDetailPage() {
 
               {!neonProvisioningEnabled && (
                 <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  Database provisioning is not configured on this server. Set <span className="mono">NEON_API_KEY</span> in control-plane env.
+                  Database provisioning is not configured on this server. Set{' '}
+                  <span className="mono">NEON_API_KEY</span> in control-plane env.
                 </div>
               )}
 
@@ -1928,7 +2069,10 @@ export default function ProjectDetailPage() {
                   <input
                     value={managedDbDraft.projectName}
                     onChange={(event) =>
-                      setManagedDbDraft((previous) => ({ ...previous, projectName: event.target.value }))
+                      setManagedDbDraft((previous) => ({
+                        ...previous,
+                        projectName: event.target.value,
+                      }))
                     }
                     className="field-input"
                     placeholder={`${project?.name ?? 'Project'} database`}
@@ -1940,7 +2084,10 @@ export default function ProjectDetailPage() {
                   <input
                     value={managedDbDraft.regionId}
                     onChange={(event) =>
-                      setManagedDbDraft((previous) => ({ ...previous, regionId: event.target.value }))
+                      setManagedDbDraft((previous) => ({
+                        ...previous,
+                        regionId: event.target.value,
+                      }))
                     }
                     className="field-input"
                     placeholder="aws-us-east-1"
@@ -1952,7 +2099,10 @@ export default function ProjectDetailPage() {
                   <input
                     value={managedDbDraft.branchName}
                     onChange={(event) =>
-                      setManagedDbDraft((previous) => ({ ...previous, branchName: event.target.value }))
+                      setManagedDbDraft((previous) => ({
+                        ...previous,
+                        branchName: event.target.value,
+                      }))
                     }
                     className="field-input"
                     placeholder="main"
@@ -1964,7 +2114,10 @@ export default function ProjectDetailPage() {
                   <input
                     value={managedDbDraft.databaseName}
                     onChange={(event) =>
-                      setManagedDbDraft((previous) => ({ ...previous, databaseName: event.target.value }))
+                      setManagedDbDraft((previous) => ({
+                        ...previous,
+                        databaseName: event.target.value,
+                      }))
                     }
                     className="field-input"
                     placeholder="app_db"
@@ -1976,7 +2129,10 @@ export default function ProjectDetailPage() {
                   <input
                     value={managedDbDraft.roleName}
                     onChange={(event) =>
-                      setManagedDbDraft((previous) => ({ ...previous, roleName: event.target.value }))
+                      setManagedDbDraft((previous) => ({
+                        ...previous,
+                        roleName: event.target.value,
+                      }))
                     }
                     className="field-input"
                     placeholder="app_user"
@@ -1988,7 +2144,10 @@ export default function ProjectDetailPage() {
                   <input
                     value={managedDbDraft.secretKey}
                     onChange={(event) =>
-                      setManagedDbDraft((previous) => ({ ...previous, secretKey: event.target.value.toUpperCase() }))
+                      setManagedDbDraft((previous) => ({
+                        ...previous,
+                        secretKey: event.target.value.toUpperCase(),
+                      }))
                     }
                     className="field-input"
                     placeholder="DATABASE_URL"
@@ -2017,10 +2176,12 @@ export default function ProjectDetailPage() {
                     >
                       <p className="text-sm font-medium text-slate-900">{database.name}</p>
                       <p className="text-xs text-slate-600">
-                        {managedDatabaseProviderLabel(database.provider)} | {database.status} | {database.regionId} | {database.branchName}
+                        {managedDatabaseProviderLabel(database.provider)} | {database.status} |{' '}
+                        {database.regionId} | {database.branchName}
                       </p>
                       <p className="mono text-xs text-slate-700 mt-1">
-                        db={database.databaseName} user={database.roleName} secret={database.secretKey}
+                        db={database.databaseName} user={database.roleName} secret=
+                        {database.secretKey}
                       </p>
                     </article>
                   ))}
@@ -2036,7 +2197,10 @@ export default function ProjectDetailPage() {
                 <input
                   value={envDraft.key}
                   onChange={(event) =>
-                    setEnvDraft((previous) => ({ ...previous, key: event.target.value.toUpperCase() }))
+                    setEnvDraft((previous) => ({
+                      ...previous,
+                      key: event.target.value.toUpperCase(),
+                    }))
                   }
                   className="field-input"
                   placeholder="DATABASE_URL"
@@ -2086,7 +2250,9 @@ export default function ProjectDetailPage() {
                   value={envBulkText}
                   onChange={(event) => setEnvBulkText(event.target.value)}
                   className="field-input min-h-36 font-mono text-xs"
-                  placeholder={'DATABASE_URL=postgres://...\nJWT_SECRET=...\n# Comments are supported'}
+                  placeholder={
+                    'DATABASE_URL=postgres://...\nJWT_SECRET=...\n# Comments are supported'
+                  }
                 />
               </label>
               <button
@@ -2117,7 +2283,10 @@ export default function ProjectDetailPage() {
             ) : projectSecrets.length ? (
               <div className="space-y-2">
                 {projectSecrets.map((secret) => {
-                  const isRevealed = Object.prototype.hasOwnProperty.call(revealedSecrets, secret.key);
+                  const isRevealed = Object.prototype.hasOwnProperty.call(
+                    revealedSecrets,
+                    secret.key,
+                  );
                   return (
                     <article
                       key={secret.id}
@@ -2139,11 +2308,17 @@ export default function ProjectDetailPage() {
                           className="btn-secondary"
                           type="button"
                           onClick={() =>
-                            isRevealed ? hideProjectEnvVar(secret.key) : revealProjectEnvVar(secret.key)
+                            isRevealed
+                              ? hideProjectEnvVar(secret.key)
+                              : revealProjectEnvVar(secret.key)
                           }
                           disabled={envRevealingKey === secret.key}
                         >
-                          {envRevealingKey === secret.key ? 'Loading...' : isRevealed ? 'Hide' : 'Show'}
+                          {envRevealingKey === secret.key
+                            ? 'Loading...'
+                            : isRevealed
+                              ? 'Hide'
+                              : 'Show'}
                         </button>
                         <button
                           className="btn-secondary"
@@ -2225,7 +2400,8 @@ export default function ProjectDetailPage() {
                       {Number(usageDetails.snapshot.derived.cpuCoreHours).toFixed(3)} core-h
                     </p>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      {Number(usageDetails.snapshot.utilization.cpuPercentOfAllocation).toFixed(2)}% allocation
+                      {Number(usageDetails.snapshot.utilization.cpuPercentOfAllocation).toFixed(2)}%
+                      allocation
                     </p>
                   </div>
                   <div className="metric-card">
@@ -2234,7 +2410,8 @@ export default function ProjectDetailPage() {
                       {Number(usageDetails.snapshot.derived.ramGibHours).toFixed(3)} GiB-h
                     </p>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      {Number(usageDetails.snapshot.utilization.ramPercentOfAllocation).toFixed(2)}% allocation
+                      {Number(usageDetails.snapshot.utilization.ramPercentOfAllocation).toFixed(2)}%
+                      allocation
                     </p>
                   </div>
                   <div className="metric-card">
@@ -2243,7 +2420,10 @@ export default function ProjectDetailPage() {
                       {Number(usageDetails.snapshot.derived.bandwidthGib).toFixed(3)} GiB
                     </p>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      {Number(usageDetails.snapshot.utilization.bandwidthPercentOfAllocation).toFixed(2)}% allocation
+                      {Number(
+                        usageDetails.snapshot.utilization.bandwidthPercentOfAllocation,
+                      ).toFixed(2)}
+                      % allocation
                     </p>
                   </div>
                   <div className="metric-card">
@@ -2285,13 +2465,19 @@ export default function ProjectDetailPage() {
                               {Number(point.total).toLocaleString()}
                             </td>
                             <td className="px-3 py-2 text-slate-700">
-                              {Number(usageDetails.daily.ram_mb_seconds[index]?.total ?? '0').toLocaleString()}
+                              {Number(
+                                usageDetails.daily.ram_mb_seconds[index]?.total ?? '0',
+                              ).toLocaleString()}
                             </td>
                             <td className="px-3 py-2 text-slate-700">
-                              {Number(usageDetails.daily.bandwidth_bytes[index]?.total ?? '0').toLocaleString()}
+                              {Number(
+                                usageDetails.daily.bandwidth_bytes[index]?.total ?? '0',
+                              ).toLocaleString()}
                             </td>
                             <td className="px-3 py-2 text-slate-700">
-                              {Number(usageDetails.daily.request_count[index]?.total ?? '0').toLocaleString()}
+                              {Number(
+                                usageDetails.daily.request_count[index]?.total ?? '0',
+                              ).toLocaleString()}
                             </td>
                           </tr>
                         ))}
@@ -2301,7 +2487,9 @@ export default function ProjectDetailPage() {
                 </div>
               </>
             ) : (
-              <p className="text-sm text-slate-500">No usage data available yet for this project.</p>
+              <p className="text-sm text-slate-500">
+                No usage data available yet for this project.
+              </p>
             )}
           </div>
         )}
@@ -2370,7 +2558,9 @@ export default function ProjectDetailPage() {
               </div>
             ) : (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-8 text-center">
-                <p className="text-sm text-slate-600">No active containers found for this project.</p>
+                <p className="text-sm text-slate-600">
+                  No active containers found for this project.
+                </p>
                 <p className="mt-1 text-xs text-slate-500">
                   Start a deployment to stream realtime logs here.
                 </p>

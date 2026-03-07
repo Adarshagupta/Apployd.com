@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import { DeploymentRuntimeGuide } from './deployment-runtime-guide';
 import { apiClient, normalizeWebSocketUrl } from '../lib/api';
+import { getDeploymentRuntimeGuide } from '../lib/deployment-runtime-guides';
 import { parseDotenvText } from '../lib/dotenv-parser';
 
 const ENV_KEY_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
@@ -75,7 +77,9 @@ export function DeployForm({
     setBuildCommand('');
     setPort('');
     setShowOverrides(false);
-    setServiceType((defaults?.serviceType as 'web_service' | 'static_site' | 'python') || 'web_service');
+    setServiceType(
+      (defaults?.serviceType as 'web_service' | 'static_site' | 'python') || 'web_service',
+    );
     setOutputDirectory(defaults?.outputDirectory ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
@@ -143,7 +147,8 @@ export function DeployForm({
     if (!logContainer) {
       return;
     }
-    const distanceFromBottom = logContainer.scrollHeight - logContainer.scrollTop - logContainer.clientHeight;
+    const distanceFromBottom =
+      logContainer.scrollHeight - logContainer.scrollTop - logContainer.clientHeight;
     const shouldFollow = distanceFromBottom < 24;
     setFollowEvents((previous) => (previous === shouldFollow ? previous : shouldFollow));
   };
@@ -159,7 +164,8 @@ export function DeployForm({
 
   const connectDeploymentStream = (socketUrl: string) => {
     closeSocket();
-    const token = typeof window !== 'undefined' ? window.localStorage.getItem('apployd_token') ?? '' : '';
+    const token =
+      typeof window !== 'undefined' ? (window.localStorage.getItem('apployd_token') ?? '') : '';
     const url = new URL(normalizeWebSocketUrl(socketUrl));
     if (token) {
       url.searchParams.set('token', token);
@@ -203,14 +209,17 @@ export function DeployForm({
   };
 
   const effectiveGitUrl = gitUrl || defaults?.gitUrl || '';
+  const serviceGuide = getDeploymentRuntimeGuide(serviceType);
 
-  const hasDefaults = !!(defaults?.gitUrl);
+  const hasDefaults = !!defaults?.gitUrl;
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!effectiveGitUrl) {
-      setStatus('Failed: No repository URL configured. Set it in project settings or provide an override.');
+      setStatus(
+        'Failed: No repository URL configured. Set it in project settings or provide an override.',
+      );
       return;
     }
 
@@ -249,7 +258,9 @@ export function DeployForm({
         return;
       }
       if (!ENV_KEY_PATTERN.test(key)) {
-        setStatus('Failed: Environment keys must be uppercase snake case (for example: DATABASE_URL).');
+        setStatus(
+          'Failed: Environment keys must be uppercase snake case (for example: DATABASE_URL).',
+        );
         setDeploying(false);
         return;
       }
@@ -283,12 +294,12 @@ export function DeployForm({
           gitUrl: gitUrl || undefined,
           branch: branch || undefined,
           rootDirectory: rootDirectory || undefined,
-          startCommand: startCommand || undefined,
+          startCommand: serviceType === 'static_site' ? undefined : startCommand || undefined,
           buildCommand: buildCommand || undefined,
           port: typeof port === 'number' && Number.isFinite(port) ? port : undefined,
           env: envPayload,
           serviceType,
-          outputDirectory: serviceType === 'static_site' ? (outputDirectory || undefined) : undefined,
+          outputDirectory: serviceType === 'static_site' ? outputDirectory || undefined : undefined,
         },
         {
           headers: {
@@ -297,7 +308,9 @@ export function DeployForm({
         },
       );
 
-      setStatus(response.idempotentReplay ? `Reused deployment ${response.deploymentId}` : 'Queued');
+      setStatus(
+        response.idempotentReplay ? `Reused deployment ${response.deploymentId}` : 'Queued',
+      );
       if (response.url && !/\.localhost$/i.test(String(response.domain ?? ''))) {
         setLiveUrl(response.url);
       } else if (response.domain) {
@@ -328,12 +341,16 @@ export function DeployForm({
         <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
           <p className="mb-1 font-semibold text-slate-700">Using project settings:</p>
           <p>
-            {defaults?.gitUrl}{defaults?.branch ? ` @ ${defaults.branch}` : ''}{' '}
-            &middot; port {defaults?.port ?? 3000}
+            {defaults?.gitUrl}
+            {defaults?.branch ? ` @ ${defaults.branch}` : ''} &middot; port {defaults?.port ?? 3000}
             {defaults?.rootDirectory ? ` · root: ${defaults.rootDirectory}` : ''}
           </p>
           {defaults?.buildCommand ? <p>Build: {defaults.buildCommand}</p> : null}
-          {defaults?.startCommand ? <p>Start: {defaults.startCommand}</p> : <p className="text-xs text-slate-400">Start: auto-detect from package.json</p>}
+          {defaults?.startCommand ? (
+            <p>Start: {defaults.startCommand}</p>
+          ) : (
+            <p className="text-xs text-slate-400">Start: auto-detect from package.json</p>
+          )}
         </div>
       ) : (
         <p className="text-xs text-slate-700">
@@ -355,7 +372,9 @@ export function DeployForm({
             onClick={() => setServiceType('web_service')}
           >
             <span className="block text-xs">Web Service</span>
-            <span className="block text-[10px] opacity-70 mt-0.5">Backend, API, full-stack (Node.js)</span>
+            <span className="block text-[10px] opacity-70 mt-0.5">
+              Backend, API, full-stack (Node.js)
+            </span>
           </button>
           <button
             type="button"
@@ -379,10 +398,14 @@ export function DeployForm({
             onClick={() => setServiceType('static_site')}
           >
             <span className="block text-xs">Static Site</span>
-            <span className="block text-[10px] opacity-70 mt-0.5">React, Vue, Vite, Next export</span>
+            <span className="block text-[10px] opacity-70 mt-0.5">
+              React, Vue, Vite, Next export
+            </span>
           </button>
         </div>
       </div>
+
+      <DeploymentRuntimeGuide serviceType={serviceType} />
 
       {serviceType === 'static_site' && (
         <div className="rounded-lg border border-slate-300 bg-slate-100 p-3 space-y-2">
@@ -392,12 +415,13 @@ export function DeployForm({
               value={outputDirectory}
               onChange={(event) => setOutputDirectory(event.target.value)}
               className="field-input mt-1"
-              placeholder="dist"
+              placeholder={serviceGuide.fields.outputDirectory || 'dist'}
             />
           </label>
           <p className="text-[10px] text-slate-600">
-            The folder containing your built static files (e.g. <code>dist</code>, <code>build</code>, <code>out</code>, <code>.next/out</code>).
-            Your site will be served with nginx + SPA fallback.
+            The folder containing your built static files (e.g. <code>dist</code>,{' '}
+            <code>build</code>, <code>out</code>). Your site will be served with nginx + SPA
+            fallback.
           </p>
         </div>
       )}
@@ -451,7 +475,7 @@ export function DeployForm({
                 value={rootDirectory}
                 onChange={(event) => setRootDirectory(event.target.value)}
                 className="field-input"
-                placeholder={defaults?.rootDirectory ?? 'e.g. apps/web'}
+                placeholder={defaults?.rootDirectory ?? serviceGuide.fields.rootDirectory}
               />
             </label>
             <label>
@@ -460,18 +484,36 @@ export function DeployForm({
                 value={buildCommand}
                 onChange={(event) => setBuildCommand(event.target.value)}
                 className="field-input"
-                placeholder={defaults?.buildCommand ?? 'npm run build'}
+                placeholder={defaults?.buildCommand ?? serviceGuide.fields.buildCommand}
               />
             </label>
-            <label>
-              <span className="field-label">Start command</span>
-              <input
-                value={startCommand}
-                onChange={(event) => setStartCommand(event.target.value)}
-                className="field-input"
-                placeholder={defaults?.startCommand ?? 'auto-detect from package.json'}
-              />
-            </label>
+            {serviceType !== 'static_site' ? (
+              <label>
+                <span className="field-label">Start command</span>
+                <input
+                  value={startCommand}
+                  onChange={(event) => setStartCommand(event.target.value)}
+                  className="field-input"
+                  placeholder={
+                    defaults?.startCommand ??
+                    serviceGuide.fields.startCommand ??
+                    serviceGuide.fallbackStart
+                  }
+                />
+              </label>
+            ) : (
+              <label>
+                <span className="field-label">Output directory</span>
+                <input
+                  value={outputDirectory}
+                  onChange={(event) => setOutputDirectory(event.target.value)}
+                  className="field-input"
+                  placeholder={
+                    defaults?.outputDirectory ?? serviceGuide.fields.outputDirectory ?? 'dist'
+                  }
+                />
+              </label>
+            )}
             <label>
               <span className="field-label">Port</span>
               <input
@@ -481,14 +523,14 @@ export function DeployForm({
                 className="field-input"
                 min={1}
                 max={65535}
-                placeholder={String(defaults?.port ?? 3000)}
+                placeholder={String(defaults?.port ?? serviceGuide.fields.port)}
               />
             </label>
           </div>
         </div>
       ) : null}
 
-      {(!hasDefaults || showOverrides) ? (
+      {!hasDefaults || showOverrides ? (
         <div className="space-y-2 border-t border-slate-200 pt-3">
           <p className="text-sm font-semibold text-slate-900">Environment variables (optional)</p>
           <div className="space-y-2">
@@ -499,7 +541,9 @@ export function DeployForm({
                   onChange={(event) =>
                     setEnvRows((prev) =>
                       prev.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, key: event.target.value.toUpperCase() } : item,
+                        itemIndex === index
+                          ? { ...item, key: event.target.value.toUpperCase() }
+                          : item,
                       ),
                     )
                   }
@@ -584,7 +628,11 @@ export function DeployForm({
           </button>
         </div>
         <button type="submit" className="btn-primary" disabled={deploying}>
-          {deploying ? 'Deploying...' : environment === 'preview' ? 'Deploy Preview' : 'Deploy to Production'}
+          {deploying
+            ? 'Deploying...'
+            : environment === 'preview'
+              ? 'Deploy Preview'
+              : 'Deploy to Production'}
         </button>
         <p className="self-center text-sm text-slate-600">{status}</p>
       </div>
@@ -592,7 +640,12 @@ export function DeployForm({
       {liveUrl ? (
         <p className="text-sm text-slate-700">
           Live URL:{' '}
-          <a href={liveUrl} target="_blank" rel="noreferrer" className="font-medium text-slate-900 hover:underline">
+          <a
+            href={liveUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-slate-900 hover:underline"
+          >
             {liveUrl}
           </a>
         </p>
@@ -622,8 +675,12 @@ export function DeployForm({
               key={`evt-${index}-${item.timestamp}`}
               className={`text-xs ${item.type === 'log' ? 'font-mono text-slate-500' : 'text-slate-700'}`}
             >
-              <span className="mono text-slate-500">{new Date(item.timestamp).toLocaleTimeString()}</span>{' '}
-              {item.type !== 'log' && <span className="uppercase text-slate-600">[{item.type}]</span>}{' '}
+              <span className="mono text-slate-500">
+                {new Date(item.timestamp).toLocaleTimeString()}
+              </span>{' '}
+              {item.type !== 'log' && (
+                <span className="uppercase text-slate-600">[{item.type}]</span>
+              )}{' '}
               {item.message}
             </p>
           ))
