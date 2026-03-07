@@ -110,9 +110,9 @@ export default function EditorPage() {
       setContainerStatus('starting');
       setSetupLoading(true);
       const repoUrl = project.repoUrl;
-      const branch = project.branch || undefined;
+      const createOptions = project.branch ? { gitUrl: repoUrl, branch: project.branch } : { gitUrl: repoUrl };
       devContainerApi
-        .create(projectId, { gitUrl: repoUrl, branch })
+        .create(projectId, createOptions)
         .then(async () => {
           setContainerStatus('running');
           await loadFiles();
@@ -136,8 +136,12 @@ export default function EditorPage() {
     setSetupLoading(true);
     try {
       const repoToUse = gitUrl || project?.repoUrl || undefined;
-      const branchToUse = project?.branch || undefined;
-      await devContainerApi.create(projectId, repoToUse ? { gitUrl: repoToUse, branch: branchToUse } : {});
+      const createOptions = repoToUse
+        ? project?.branch
+          ? { gitUrl: repoToUse, branch: project.branch }
+          : { gitUrl: repoToUse }
+        : {};
+      await devContainerApi.create(projectId, createOptions);
       setContainerStatus('running');
       setShowSetup(false);
       await loadFiles();
