@@ -164,6 +164,7 @@ export class NginxAdapter {
       '    add_header Referrer-Policy "strict-origin-when-cross-origin" always;',
       '    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;',
       '    add_header Cross-Origin-Opener-Policy "same-origin" always;',
+      this.buildAcmeChallengeLocation('    '),
       '{{SEO_SERVER_DIRECTIVES}}',
       '{{SEO_LOCATION_BLOCKS}}',
       '    location / {',
@@ -246,10 +247,7 @@ export class NginxAdapter {
       '  server_tokens off;',
       seoRedirectDirectives,
       '',
-      '  location /.well-known/acme-challenge/ {',
-      '    root /var/www/html;',
-      '  }',
-      '',
+      this.buildAcmeChallengeLocation('  '),
       '  location /healthz {',
       '    access_log off;',
       "    return 200 'ok';",
@@ -486,6 +484,7 @@ export class NginxAdapter {
       '    add_header Referrer-Policy "strict-origin-when-cross-origin" always;',
       '    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;',
       '    add_header Cross-Origin-Opener-Policy "same-origin" always;',
+      this.buildAcmeChallengeLocation('    '),
       '{{SEO_SERVER_DIRECTIVES}}',
       '{{SEO_LOCATION_BLOCKS}}',
       '    location / {',
@@ -522,10 +521,7 @@ export class NginxAdapter {
       '  add_header Cross-Origin-Opener-Policy "same-origin" always;',
       '{{SEO_REDIRECT_SERVER_DIRECTIVES}}',
       '',
-      '  location /.well-known/acme-challenge/ {',
-      '    root /var/www/html;',
-      '  }',
-      '',
+      this.buildAcmeChallengeLocation('  '),
       '  location /healthz {',
       "    access_log off;",
       "    return 200 'ok';",
@@ -588,6 +584,18 @@ export class NginxAdapter {
       '{{SEO_FALLBACK_LOCATIONS}}',
       '{{WAKE_FALLBACK_LOCATION}}',
       '}',
+    ].join('\n');
+  }
+
+  private buildAcmeChallengeLocation(indent: string): string {
+    const line = (value: string): string => `${indent}${value}`;
+    return [
+      line('location ^~ /.well-known/acme-challenge/ {'),
+      line('  default_type text/plain;'),
+      line('  root /var/www/html;'),
+      line('  try_files $uri =404;'),
+      line('}'),
+      '',
     ].join('\n');
   }
 

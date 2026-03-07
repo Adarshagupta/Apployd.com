@@ -28,29 +28,14 @@ interface ManagedDatabaseSummary {
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due']);
 
-interface CurrentSubscriptionResponse {
-  subscription?: {
-    status?: string | null;
-    plan?: {
-      code?: string | null;
-      displayName?: string | null;
-    } | null;
-  } | null;
-}
-
 const providerLabel = (provider: string): string =>
   provider.trim().toLowerCase() === 'neon' ? 'Apployd PostgreSQL DB' : provider;
 
 export default function DatabasesPage() {
-  const { selectedOrganizationId } = useWorkspaceContext();
+  const { selectedOrganizationId, subscription, subscriptionLoading, refreshSubscription } = useWorkspaceContext();
   const [databases, setDatabases] = useState<ManagedDatabaseSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [provisioning, setProvisioning] = useState(false);
-  const [accessLoading, setAccessLoading] = useState(false);
-  const [hasPaidAccess, setHasPaidAccess] = useState(false);
-  const [planName, setPlanName] = useState('Free');
-  const [planCode, setPlanCode] = useState('free');
-  const [planStatus, setPlanStatus] = useState('inactive');
   const [message, setMessage] = useState('');
   const [lastConnectionUrl, setLastConnectionUrl] = useState('');
   const [copied, setCopied] = useState(false);
@@ -64,44 +49,20 @@ export default function DatabasesPage() {
   });
   useDashboardMessageToast(message);
 
-  const loadAccess = useCallback(async () => {
-    if (!selectedOrganizationId) {
-      setHasPaidAccess(false);
-      setPlanName('Free');
-      setPlanCode('free');
-      setPlanStatus('inactive');
-      return;
-    }
-
-    try {
-      setAccessLoading(true);
-      const data = (await apiClient.get(`/plans/current?organizationId=${selectedOrganizationId}`)) as CurrentSubscriptionResponse;
-      const codeRaw = data.subscription?.plan?.code;
-      const statusRaw = data.subscription?.status;
-      const displayNameRaw = data.subscription?.plan?.displayName;
-      const code = typeof codeRaw === 'string' && codeRaw.trim().length > 0 ? codeRaw.trim().toLowerCase() : 'free';
-      const status =
-        typeof statusRaw === 'string' && statusRaw.trim().length > 0 ? statusRaw.trim().toLowerCase() : 'inactive';
-      const displayName =
-        typeof displayNameRaw === 'string' && displayNameRaw.trim().length > 0
-          ? displayNameRaw.trim()
-          : code === 'free'
-            ? 'Free'
-            : 'Plan';
-
-      setPlanCode(code);
-      setPlanStatus(status);
-      setPlanName(displayName);
-      setHasPaidAccess(code !== 'free' && ACTIVE_SUBSCRIPTION_STATUSES.has(status));
-    } catch {
-      setPlanName('Free');
-      setPlanCode('free');
-      setPlanStatus('inactive');
-      setHasPaidAccess(false);
-    } finally {
-      setAccessLoading(false);
-    }
-  }, [selectedOrganizationId]);
+  const codeRaw = subscription?.plan?.code;
+  const statusRaw = subscription?.status;
+  const displayNameRaw = subscription?.plan?.displayName;
+  const planCode = typeof codeRaw === 'string' && codeRaw.trim().length > 0 ? codeRaw.trim().toLowerCase() : 'free';
+  const planStatus =
+    typeof statusRaw === 'string' && statusRaw.trim().length > 0 ? statusRaw.trim().toLowerCase() : 'inactive';
+  const planName =
+    typeof displayNameRaw === 'string' && displayNameRaw.trim().length > 0
+      ? displayNameRaw.trim()
+      : planCode === 'free'
+        ? 'Free'
+        : 'Plan';
+  const hasPaidAccess = planCode !== 'free' && ACTIVE_SUBSCRIPTION_STATUSES.has(planStatus);
+  const accessLoading = subscriptionLoading;
 
   const loadDatabases = useCallback(async () => {
     if (!selectedOrganizationId || !hasPaidAccess) {
@@ -133,15 +94,8 @@ export default function DatabasesPage() {
   }, [hasPaidAccess, selectedOrganizationId]);
 
   useEffect(() => {
-    loadAccess().catch(() => undefined);
-  }, [loadAccess]);
-
-  useEffect(() => {
-    if (!hasPaidAccess) {
-      return;
-    }
     loadDatabases().catch(() => undefined);
-  }, [hasPaidAccess, loadDatabases]);
+  }, [loadDatabases]);
 
   const createDatabase = async () => {
     if (!selectedOrganizationId) {
@@ -203,6 +157,11 @@ export default function DatabasesPage() {
     }
   };
 
+  const handleRefresh = async () => {
+    await refreshSubscription().catch(() => undefined);
+    await loadDatabases().catch(() => undefined);
+  };
+
   return (
     <div className="space-y-4">
       <SectionCard
@@ -213,7 +172,9 @@ export default function DatabasesPage() {
           <button
             type="button"
             className="btn-secondary"
-            onClick={() => loadAccess().catch(() => undefined)}
+            onClick={() => {
+              handleRefresh().catch(() => undefined);
+            }}
             disabled={loading || accessLoading || !selectedOrganizationId}
           >
             {loading || accessLoading ? 'Refreshing...' : 'Refresh'}

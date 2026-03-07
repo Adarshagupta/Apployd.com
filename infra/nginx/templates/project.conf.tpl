@@ -14,6 +14,12 @@ server {
   add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
   add_header Cross-Origin-Opener-Policy "same-origin" always;
 
+  location ^~ /.well-known/acme-challenge/ {
+    default_type text/plain;
+    root /var/www/html;
+    try_files $uri =404;
+  }
+
   location /healthz {
     access_log off;
     return 200 'ok';

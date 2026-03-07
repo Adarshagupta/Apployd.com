@@ -117,22 +117,6 @@ interface VercelConnectionStatus {
   legacyAccessTokenConfigured?: boolean;
 }
 
-interface CurrentSubscription {
-  status: string;
-  poolRamMb: number;
-  poolCpuMillicores: number;
-  poolBandwidthGb: number;
-  entitlements?: {
-    autoDeploy: boolean;
-    previewDeployments: boolean;
-    customDomains: boolean;
-  };
-  plan?: {
-    code: string;
-    displayName: string;
-  } | null;
-}
-
 interface VercelImportPayload {
   source: 'vercel';
   project: {
@@ -220,6 +204,9 @@ export default function CreateProjectPage() {
     selectedOrganizationId,
     loading,
     error: workspaceError,
+    subscription,
+    subscriptionLoading,
+    refresh,
   } = useWorkspaceContext();
 
   const [form, setForm] = useState({
@@ -262,8 +249,6 @@ export default function CreateProjectPage() {
   const [showResourceTuning, setShowResourceTuning] = useState(false);
   const [showVercelImport, setShowVercelImport] = useState(false);
   const [showGithubBrowser, setShowGithubBrowser] = useState(false);
-  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
-  const [subscription, setSubscription] = useState<CurrentSubscription | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [guideStepIndex, setGuideStepIndex] = useState(0);
   useDashboardMessageToast(message);
@@ -374,24 +359,6 @@ export default function CreateProjectPage() {
     }
   }, [githubStatus?.connected]);
 
-  const loadSubscription = useCallback(async () => {
-    if (!selectedOrganizationId) {
-      setSubscription(null);
-      return;
-    }
-
-    setSubscriptionLoading(true);
-    try {
-      const data = await apiClient.get(`/plans/current?organizationId=${selectedOrganizationId}`);
-      setSubscription((data.subscription ?? null) as CurrentSubscription | null);
-    } catch (error) {
-      setSubscription(null);
-      setMessage((error as Error).message);
-    } finally {
-      setSubscriptionLoading(false);
-    }
-  }, [selectedOrganizationId]);
-
   const connectGitHub = async () => {
     setGithubConnecting(true);
     setMessage('');
@@ -459,10 +426,6 @@ export default function CreateProjectPage() {
   useEffect(() => {
     loadVercelStatus().catch(() => undefined);
   }, [loadVercelStatus]);
-
-  useEffect(() => {
-    loadSubscription().catch(() => undefined);
-  }, [loadSubscription]);
 
   useEffect(() => {
     if (githubStatus?.connected) {
@@ -705,6 +668,10 @@ export default function CreateProjectPage() {
         resourceBandwidthGb: selectedBandwidth,
       });
 
+      const syncWorkspaceProjects = async () => {
+        await refresh().catch(() => undefined);
+      };
+
       const createdProjectId = (response.project as { id?: string } | undefined)?.id;
       if (createdProjectId) {
         if (envPayload.length || envBulkText.trim().length > 0) {
@@ -713,19 +680,23 @@ export default function CreateProjectPage() {
               ...(envPayload.length ? { secrets: envPayload } : {}),
               ...(envBulkText.trim().length ? { envText: envBulkText } : {}),
             });
+            await syncWorkspaceProjects();
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             router.push(`/projects?created=${createdProjectId}&secretSetup=ok` as any);
             return;
           } catch {
+            await syncWorkspaceProjects();
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             router.push(`/projects?created=${createdProjectId}&secretSetup=partial` as any);
             return;
           }
         }
 
+        await syncWorkspaceProjects();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         router.push(`/projects?created=${createdProjectId}` as any);
       } else {
+        await syncWorkspaceProjects();
         router.push('/projects');
       }
     } catch (error) {

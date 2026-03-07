@@ -101,11 +101,23 @@ describe('NginxAdapter wake fallback config', () => {
     const adapter = new NginxAdapter() as any;
     const tlsTemplate = adapter.buildTlsTemplate() as string;
 
+    expect(tlsTemplate).toContain('location ^~ /.well-known/acme-challenge/ {');
+    expect(tlsTemplate).toContain('root /var/www/html;');
+    expect(tlsTemplate).toContain('try_files $uri =404;');
     expect(tlsTemplate).toContain('set $apployd_forwarded_proto $scheme;');
     expect(tlsTemplate).toContain('if ($http_x_forwarded_proto ~* "^https$") {');
     expect(tlsTemplate).toContain('if ($apployd_forwarded_proto != "https") {');
     expect(tlsTemplate).toContain('return 301 https://$host$request_uri;');
     expect(tlsTemplate).toContain('proxy_set_header X-Forwarded-Proto $apployd_forwarded_proto;');
     expect(tlsTemplate).toContain('proxy_pass {{UPSTREAM_SCHEME}}://{{UPSTREAM_NAME}};');
+  });
+
+  it('keeps the default HTTP template ready for webroot ACME challenges', () => {
+    const adapter = new NginxAdapter() as any;
+    const template = adapter.loadTemplate() as string;
+
+    expect(template).toContain('location ^~ /.well-known/acme-challenge/ {');
+    expect(template).toContain('root /var/www/html;');
+    expect(template).toContain('try_files $uri =404;');
   });
 });

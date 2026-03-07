@@ -1,0 +1,54 @@
+Firewall incident summary
+Date: 2026-03-06
+Host: /root/Apployd.com deployment server
+Domain discussed: apployd.com
+
+Problem
+- Website returned 504 Gateway Time-out through nginx after the server IP change and Cloudflare DNS update.
+
+What was checked
+- Reviewed repo nginx/deployment config.
+- Confirmed nginx proxies platform traffic to:
+  - http://127.0.0.1:3000 for dashboard
+  - http://127.0.0.1:4000 for control-plane API
+- Confirmed Docker services were running and marked healthy.
+- Read live nginx config from /etc/nginx/conf.d/apployd-platform.conf.
+- Checked nginx error/access logs.
+- Tested direct local upstream access with curl.
+- Inspected Docker port publishing, bridge networking, iptables, and UFW rules.
+
+Key findings
+- This was not a Cloudflare DNS problem.
+- Requests were reaching nginx, but nginx timed out talking to local upstreams.
+- nginx error log showed repeated upstream timeouts to:
+  - 127.0.0.1:3000
+  - 127.0.0.1:4000
+- docker-proxy was listening on host loopback ports 3000 and 4000.
+- Containers were healthy, but host traffic to the published ports timed out.
+- UFW policy on the host was:
+  - deny incoming
+  - deny outgoing
+  - deny routed
+- Allowed outbound ports only included 53, 80, 443, and 5432.
+- Result: nginx on the host could not complete connections through Docker's published-port path to the container bridge network.
+
+Root cause
+- Host firewall rules blocked outbound traffic from the host to Docker bridge addresses on ports 3000 and 4000.
+- Because nginx proxies to 127.0.0.1:3000 and 127.0.0.1:4000, those blocked host-to-container hops produced the 504 errors.
+
+Commands used to fix
+- sudo ufw allow out to 172.16.0.0/12 port 3000 proto tcp
+- sudo ufw allow out to 172.16.0.0/12 port 4000 proto tcp
+- sudo ufw reload
+
+Verification after fix
+- curl -I http://127.0.0.1:3000 -> 200 OK
+- curl -I http://127.0.0.1:4000/health -> 200 OK
+- curl -I -H 'Host: apployd.com' http://127.0.0.1 -> 301 redirect to https://apployd.com/
+
+Outcome
+- The 504 issue was resolved by updating UFW outbound rules.
+- No repo files were changed during the incident fix itself.
+
+Suggested follow-up
+- Update provisioning/deployment scripts to add the required outbound UFW rule automatically on future servers that use deny-outgoing policies.

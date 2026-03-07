@@ -56,6 +56,7 @@ const schema = z.object({
   DASHBOARD_BASE_URL: z.string().url().default('http://localhost:3000'),
   BASE_DOMAIN: z.string().min(3),
   PREVIEW_BASE_DOMAIN: z.string().min(3).optional(),
+  ENGINE_PUBLIC_IPV4: z.string().ip({ version: 'v4' }).optional(),
   PREVIEW_DOMAIN_STYLE: z.enum(['project', 'project_ref']).default('project_ref'),
   CLOUDFLARE_API_TOKEN: z.string().optional(),
   CLOUDFLARE_ZONE_ID: z.string().optional(),

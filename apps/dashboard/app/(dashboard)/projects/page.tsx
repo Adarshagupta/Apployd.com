@@ -22,6 +22,7 @@ export default function ProjectsPage() {
     projects,
     loading,
     error: workspaceError,
+    refresh,
   } = useWorkspaceContext();
 
   const searchParams = useSearchParams();
@@ -48,6 +49,7 @@ export default function ProjectsPage() {
     const created = searchParams?.get('created');
     if (!created) return;
     const secretSetup = searchParams?.get('secretSetup');
+    refresh().catch(() => undefined);
     if (secretSetup === 'partial') {
       setMessage('Project created. Some environment variables could not be saved - add them on the project page.');
     } else if (secretSetup === 'ok') {
@@ -55,7 +57,7 @@ export default function ProjectsPage() {
     } else {
       setMessage('Project created successfully.');
     }
-  }, [searchParams]);
+  }, [refresh, searchParams]);
 
   useEffect(() => {
     if (!addMenuOpen) {
