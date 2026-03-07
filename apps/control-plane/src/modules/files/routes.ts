@@ -9,8 +9,7 @@ import { prisma } from '../../lib/prisma.js';
 
 const exec = promisify(execCb);
 
-const shellEscape = (value: string): string =>
-  `'${value.replace(/'/g, `'\"'\"'`)}'`;
+const shellEscape = (value: string): string => `'${value.replace(/'/g, `'\"'\"'`)}'`;
 
 async function getDevContainer(projectId: string) {
   return prisma.container.findFirst({
@@ -24,10 +23,9 @@ async function getDevContainer(projectId: string) {
 }
 
 async function execInContainer(dockerId: string, cmd: string): Promise<string> {
-  const { stdout } = await exec(
-    `docker exec ${shellEscape(dockerId)} sh -c ${shellEscape(cmd)}`,
-    { maxBuffer: 10 * 1024 * 1024 },
-  );
+  const { stdout } = await exec(`docker exec ${shellEscape(dockerId)} sh -c ${shellEscape(cmd)}`, {
+    maxBuffer: 10 * 1024 * 1024,
+  });
   return stdout;
 }
 
@@ -35,11 +33,7 @@ export const fileRoutes: FastifyPluginAsync = async (app) => {
   const access = new AccessService();
 
   // ── Middleware: resolve project + container + access ────────────────────────
-  const resolveContext = async (
-    userId: string,
-    projectId: string,
-    reply: FastifyReply,
-  ) => {
+  const resolveContext = async (userId: string, projectId: string, reply: FastifyReply) => {
     const project = await prisma.project.findUnique({
       where: { id: projectId },
       select: { organizationId: true },
@@ -78,19 +72,49 @@ export const fileRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const user = request.user as { userId: string };
       const { projectId } = z.object({ projectId: z.string().cuid() }).parse(request.params);
-      const { path: dirPath = '/home/coder/project' } = z.object({
-        path: z.string().optional(),
-      }).parse(request.query);
+      const { path: dirPath = '/home/coder/project' } = z
+        .object({
+          path: z.string().optional(),
+        })
+        .parse(request.query);
 
       const ctx = await resolveContext(user.userId, projectId, reply);
       if (!ctx) return;
 
       const { container } = ctx;
 
-      // find -maxdepth 3 for performance; sorted; skip .git internals
+      // List a reasonably deep workspace tree while pruning heavyweight build dirs.
       const raw = await execInContainer(
         container.dockerContainerId,
-        `find ${shellEscape(dirPath)} -maxdepth 3 \\( -path ${shellEscape(`${dirPath}/.git`)} -prune \\) -o -print 2>/dev/null | sort`,
+        [
+          `find ${shellEscape(dirPath)} -maxdepth 6`,
+          '\\(',
+          `-path ${shellEscape(`${dirPath}/.git`)}`,
+          '-o',
+          `-path ${shellEscape(`${dirPath}/*/.git`)}`,
+          '-o',
+          `-path ${shellEscape(`${dirPath}/node_modules`)}`,
+          '-o',
+          `-path ${shellEscape(`${dirPath}/*/node_modules`)}`,
+          '-o',
+          `-path ${shellEscape(`${dirPath}/.next`)}`,
+          '-o',
+          `-path ${shellEscape(`${dirPath}/*/.next`)}`,
+          '-o',
+          `-path ${shellEscape(`${dirPath}/dist`)}`,
+          '-o',
+          `-path ${shellEscape(`${dirPath}/*/dist`)}`,
+          '-o',
+          `-path ${shellEscape(`${dirPath}/build`)}`,
+          '-o',
+          `-path ${shellEscape(`${dirPath}/*/build`)}`,
+          '-o',
+          `-path ${shellEscape(`${dirPath}/coverage`)}`,
+          '-o',
+          `-path ${shellEscape(`${dirPath}/*/coverage`)}`,
+          '\\)',
+          '-prune -o -print 2>/dev/null | sort',
+        ].join(' '),
       );
 
       const lines = raw.split('\n').filter((l) => l.trim() && l !== dirPath);
@@ -153,10 +177,12 @@ export const fileRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const user = request.user as { userId: string };
       const { projectId } = z.object({ projectId: z.string().cuid() }).parse(request.params);
-      const body = z.object({
-        path: z.string().min(1),
-        content: z.string().default(''),
-      }).parse(request.body);
+      const body = z
+        .object({
+          path: z.string().min(1),
+          content: z.string().default(''),
+        })
+        .parse(request.body);
 
       const ctx = await resolveContext(user.userId, projectId, reply);
       if (!ctx) return;

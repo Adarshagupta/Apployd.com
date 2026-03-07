@@ -23,6 +23,8 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:4000:4000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:4000/health || exit 1"]
       interval: 15s

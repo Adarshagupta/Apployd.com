@@ -5,6 +5,9 @@ import { z } from 'zod';
 
 import { prisma } from '../lib/prisma.js';
 
+const shellEscape = (value: string): string =>
+  `'${value.replace(/'/g, `'\"'\"'`)}'`;
+
 const decodeProtocolToken = (value: string): string | null => {
   const prefix = 'apployd-token.';
   if (!value.startsWith(prefix)) return null;
@@ -117,20 +120,24 @@ export const terminalWebsocketRoutes: FastifyPluginAsync = async (app) => {
       const cols = sizeQuery.cols ?? 80;
       const rows = sizeQuery.rows ?? 24;
 
-      // Spawn docker exec with a PTY via script(1) / stty
-      // We use 'docker exec -it' which allocates a pty inside the container
+      const dockerExecCommand = [
+        'exec docker exec -it',
+        '-e TERM=xterm-256color',
+        `-e COLUMNS=${cols}`,
+        `-e LINES=${rows}`,
+        shellEscape(container.dockerContainerId),
+        '/bin/bash',
+        '--login',
+      ].join(' ');
+      const terminalCommand = `stty cols ${cols} rows ${rows}; ${dockerExecCommand}`;
+
+      // Allocate a host-side PTY with script(1), then run docker exec -it inside it.
       const proc = spawn(
-        'docker',
+        'script',
         [
-          'exec',
-          '-i',
-          '-t',
-          '-e', `TERM=xterm-256color`,
-          '-e', `COLUMNS=${cols}`,
-          '-e', `LINES=${rows}`,
-          container.dockerContainerId,
-          '/bin/bash',
-          '--login',
+          '-qefc',
+          terminalCommand,
+          '/dev/null',
         ],
         {
           stdio: ['pipe', 'pipe', 'pipe'],

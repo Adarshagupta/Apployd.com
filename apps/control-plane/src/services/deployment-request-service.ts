@@ -146,10 +146,9 @@ export class DeploymentRequestService {
     const resolvedPort = input.port ?? project.targetPort ?? 3000;
     const resolvedEnvironment = input.environment ?? 'production';
     const resolvedServiceType = input.serviceType ?? (project as any).serviceType ?? 'web_service';
-    const resolvedOutputDirectory = input.outputDirectory ?? (project as any).outputDirectory ?? undefined;
-    const requestedDomain = input.domain
-      ? normalizeRequestedDomain(input.domain)
-      : undefined;
+    const resolvedOutputDirectory =
+      input.outputDirectory ?? (project as any).outputDirectory ?? undefined;
+    const requestedDomain = input.domain ? normalizeRequestedDomain(input.domain) : undefined;
 
     if (requestedDomain && isProtectedPlatformDomain(requestedDomain)) {
       throw new DeploymentRequestError(
@@ -165,7 +164,10 @@ export class DeploymentRequestService {
       );
     }
     if (input.canary && resolvedEnvironment !== 'production') {
-      throw new DeploymentRequestError('Canary deployments are only supported for production.', 400);
+      throw new DeploymentRequestError(
+        'Canary deployments are only supported for production.',
+        400,
+      );
     }
     assertSafeGitUrl(resolvedGitUrl);
     if (resolvedBuildCommand) {
@@ -175,27 +177,41 @@ export class DeploymentRequestService {
       assertSafeDeploymentCommand('startCommand', resolvedStartCommand);
     }
 
+    const gitHubRepoIdentity = resolveGitHubRepoIdentity({
+      gitProvider: project.gitProvider,
+      repoOwner: project.repoOwner,
+      repoName: project.repoName,
+      repoFullName: project.repoFullName,
+      gitUrl: resolvedGitUrl,
+    });
+    const gitHubAccessToken = gitHubRepoIdentity
+      ? await this.resolveGitHubAccessToken({
+          ...(input.actorUserId && { actorUserId: input.actorUserId }),
+          projectOwnerUserId: project.createdById,
+        })
+      : undefined;
+
     const providedCommitSha = normalizeCommitSha(input.commitSha);
     const resolvedCommitSha =
       input.imageTag && !providedCommitSha
         ? undefined
-        : providedCommitSha
-          ?? await this.resolveLatestGitHubCommitSha({
+        : (providedCommitSha ??
+          (await this.resolveLatestGitHubCommitSha({
             gitProvider: project.gitProvider,
             repoOwner: project.repoOwner,
             repoName: project.repoName,
             repoFullName: project.repoFullName,
             gitUrl: resolvedGitUrl,
             branch: resolvedBranch,
-            ...(input.actorUserId && { actorUserId: input.actorUserId }),
-            projectOwnerUserId: project.createdById,
-          });
+            ...(gitHubAccessToken && { accessToken: gitHubAccessToken }),
+          })));
 
     // Preview deployments keep existing style behavior.
     // Production deployments now default to a unique single-label domain while
     // keeping the legacy project.workspace domain as an alias in the runtime edge layer.
-    const resolvedDomain = requestedDomain
-      ?? (resolvedEnvironment === 'preview'
+    const resolvedDomain =
+      requestedDomain ??
+      (resolvedEnvironment === 'preview'
         ? buildPreviewDomain({
             projectSlug: project.slug,
             organizationSlug: project.organization.slug,
@@ -325,10 +341,10 @@ export class DeploymentRequestService {
     let server: Server;
     let deployment: Deployment;
     const reserveCapacity =
-      input.placement?.forceReserveCapacity === true
-      || !reusableServer
-      || !activeContainer
-      || reusableServer.id !== activeContainer.serverId;
+      input.placement?.forceReserveCapacity === true ||
+      !reusableServer ||
+      !activeContainer ||
+      reusableServer.id !== activeContainer.serverId;
 
     try {
       if (!reserveCapacity && reusableServer) {
@@ -424,6 +440,7 @@ export class DeploymentRequestService {
     const payload: DeploymentRequest = {
       projectId: project.id,
       gitUrl: resolvedGitUrl,
+      ...(gitHubAccessToken && { gitAuthToken: gitHubAccessToken }),
       ...(resolvedBranch && { branch: resolvedBranch }),
       ...(resolvedCommitSha && { commitSha: resolvedCommitSha }),
       ...(resolvedRootDirectory && { rootDirectory: resolvedRootDirectory }),
@@ -518,7 +535,8 @@ export class DeploymentRequestService {
     await this.audit.record({
       organizationId: project.organizationId,
       ...(input.actorUserId && { actorUserId: input.actorUserId }),
-      action: input.trigger === 'github_push' ? 'deployment.created.github_push' : 'deployment.created',
+      action:
+        input.trigger === 'github_push' ? 'deployment.created.github_push' : 'deployment.created',
       entityType: 'deployment',
       entityId: deployment.id,
       metadata: {
@@ -546,7 +564,9 @@ export class DeploymentRequestService {
     };
   }
 
-  private buildDeploymentRecord(input: DeploymentRecordInput): Prisma.DeploymentUncheckedCreateInput {
+  private buildDeploymentRecord(
+    input: DeploymentRecordInput,
+  ): Prisma.DeploymentUncheckedCreateInput {
     return {
       projectId: input.projectId,
       serverId: input.serverId,
@@ -569,8 +589,7 @@ export class DeploymentRequestService {
     repoFullName: string | null;
     gitUrl: string;
     branch: string;
-    actorUserId?: string;
-    projectOwnerUserId: string;
+    accessToken?: string;
   }): Promise<string | undefined> {
     const repoIdentity = resolveGitHubRepoIdentity({
       gitProvider: input.gitProvider,
@@ -584,41 +603,15 @@ export class DeploymentRequestService {
       return undefined;
     }
 
-    const userIds = [input.actorUserId, input.projectOwnerUserId]
-      .map((value) => value?.trim() ?? '')
-      .filter((value, index, values) => Boolean(value) && values.indexOf(value) === index);
-
-    let accessToken: string | undefined;
-    for (const userId of userIds) {
-      const connection = await prisma.gitHubConnection.findUnique({
-        where: { userId },
-        select: {
-          encryptedAccessToken: true,
-          iv: true,
-          authTag: true,
-        },
-      });
-      if (!connection) {
-        continue;
-      }
-
-      accessToken = decryptSecret({
-        encryptedValue: connection.encryptedAccessToken,
-        iv: connection.iv,
-        authTag: connection.authTag,
-      });
-      break;
-    }
-
     try {
       return await this.github.getBranchHeadCommitSha({
         owner: repoIdentity.owner,
         repo: repoIdentity.name,
         branch: input.branch,
-        ...(accessToken && { accessToken }),
+        ...(input.accessToken && { accessToken: input.accessToken }),
       });
     } catch {
-      if (!accessToken) {
+      if (!input.accessToken) {
         return undefined;
       }
     }
@@ -632,6 +625,37 @@ export class DeploymentRequestService {
     } catch {
       return undefined;
     }
+  }
+
+  private async resolveGitHubAccessToken(input: {
+    actorUserId?: string;
+    projectOwnerUserId: string;
+  }): Promise<string | undefined> {
+    const userIds = [input.actorUserId, input.projectOwnerUserId]
+      .map((value) => value?.trim() ?? '')
+      .filter((value, index, values) => Boolean(value) && values.indexOf(value) === index);
+
+    for (const userId of userIds) {
+      const connection = await prisma.gitHubConnection.findUnique({
+        where: { userId },
+        select: {
+          encryptedAccessToken: true,
+          iv: true,
+          authTag: true,
+        },
+      });
+      if (!connection) {
+        continue;
+      }
+
+      return decryptSecret({
+        encryptedValue: connection.encryptedAccessToken,
+        iv: connection.iv,
+        authTag: connection.authTag,
+      });
+    }
+
+    return undefined;
   }
 
   private async createDeploymentWithAtomicCapacityReservation(
@@ -657,7 +681,11 @@ export class DeploymentRequestService {
 
       try {
         const deployment = await prisma.$transaction(async (tx) => {
-          const reserved = await this.tryReserveServerCapacity(tx, serverCandidate.id, input.capacityRequest);
+          const reserved = await this.tryReserveServerCapacity(
+            tx,
+            serverCandidate.id,
+            input.capacityRequest,
+          );
           if (!reserved) {
             throw new CapacityReservationContentionError();
           }
@@ -673,8 +701,9 @@ export class DeploymentRequestService {
 
         return { deployment, server: serverCandidate };
       } catch (error) {
-        const retryable = error instanceof CapacityReservationContentionError
-          || isSerializableRetryableError(error);
+        const retryable =
+          error instanceof CapacityReservationContentionError ||
+          isSerializableRetryableError(error);
         if (!retryable || attempt >= MAX_CAPACITY_RESERVATION_ATTEMPTS) {
           throw error;
         }
@@ -734,7 +763,8 @@ export class DeploymentRequestService {
 
 const normalizeRequestedDomain = (value: string): string => {
   const normalized = value.trim().toLowerCase().replace(/\.$/, '');
-  const isValidHostname = /^(?=.{1,253}$)(?!-)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(normalized);
+  const isValidHostname =
+    /^(?=.{1,253}$)(?!-)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(normalized);
   if (!isValidHostname) {
     throw new DeploymentRequestError(
       'Domain must be a valid hostname (e.g. app.example.com).',
@@ -881,22 +911,22 @@ const isPrivateIpv4 = (host: string): boolean => {
 
   const [a = 0, b = 0] = parts;
   return (
-    a === 10
-    || a === 127
-    || a === 0
-    || (a === 169 && b === 254)
-    || (a === 172 && b >= 16 && b <= 31)
-    || (a === 192 && b === 168)
+    a === 10 ||
+    a === 127 ||
+    a === 0 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
   );
 };
 
 const isPrivateIpv6 = (host: string): boolean => {
   const normalized = host.toLowerCase();
   return (
-    normalized === '::1'
-    || normalized.startsWith('fe80:')
-    || normalized.startsWith('fc')
-    || normalized.startsWith('fd')
+    normalized === '::1' ||
+    normalized.startsWith('fe80:') ||
+    normalized.startsWith('fc') ||
+    normalized.startsWith('fd')
   );
 };
 
@@ -907,11 +937,11 @@ const isPrivateHost = (hostInput: string): boolean => {
   }
 
   if (
-    host === 'localhost'
-    || host.endsWith('.localhost')
-    || host.endsWith('.local')
-    || host === 'host.docker.internal'
-    || host.endsWith('.internal')
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.local') ||
+    host === 'host.docker.internal' ||
+    host.endsWith('.internal')
   ) {
     return true;
   }

@@ -10,6 +10,7 @@ import { authRoutes } from './modules/auth/routes.js';
 import { billingRoutes } from './modules/billing/routes.js';
 import { contentRoutes } from './modules/content/routes.js';
 import { containerRoutes } from './modules/containers/routes.js';
+import { codexAgentRoutes } from './modules/codex-agent/routes.js';
 import { databaseRoutes } from './modules/databases/routes.js';
 import { deploymentRoutes } from './modules/deployments/routes.js';
 import { domainRoutes } from './modules/domains/routes.js';
@@ -68,19 +69,23 @@ export const buildApp = () => {
   app.register(websocket);
   app.register(authenticatePlugin);
 
-  app.addContentTypeParser(/^application\/json(?:;.*)?$/, { parseAs: 'buffer' }, (request, body, done) => {
-    request.rawBody = body as Buffer;
-    if (!body.length) {
-      done(null, {});
-      return;
-    }
+  app.addContentTypeParser(
+    /^application\/json(?:;.*)?$/,
+    { parseAs: 'buffer' },
+    (request, body, done) => {
+      request.rawBody = body as Buffer;
+      if (!body.length) {
+        done(null, {});
+        return;
+      }
 
-    try {
-      done(null, JSON.parse(body.toString('utf8')));
-    } catch (error) {
-      done(error as Error, undefined);
-    }
-  });
+      try {
+        done(null, JSON.parse(body.toString('utf8')));
+      } catch (error) {
+        done(error as Error, undefined);
+      }
+    },
+  );
 
   app.addHook('onRequest', (request, _reply, done) => {
     (request as typeof request & { startTimeNs?: bigint }).startTimeNs = process.hrtime.bigint();
@@ -114,31 +119,35 @@ export const buildApp = () => {
   app.register(observabilityRoutes);
   app.register(edgeRoutes);
 
-  app.register(async (api) => {
-    api.register(authRoutes);
-    api.register(organizationRoutes);
-    api.register(onboardingRoutes);
-    api.register(teamRoutes);
-    api.register(planRoutes);
-    api.register(projectRoutes);
-    api.register(databaseRoutes);
-    api.register(securityRoutes);
-    api.register(secretRoutes);
-    api.register(deploymentRoutes);
-    api.register(containerRoutes);
-    api.register(domainRoutes);
-    api.register(usageRoutes);
-    api.register(logRoutes);
-    api.register(auditRoutes);
-    api.register(metricRoutes);
-    api.register(serverRoutes);
-    api.register(billingRoutes);
-    api.register(githubIntegrationRoutes);
-    api.register(vercelIntegrationRoutes);
-    api.register(contentRoutes);
-    api.register(fileRoutes);
-    api.register(devContainerRoutes);
-  }, { prefix: '/api/v1' });
+  app.register(
+    async (api) => {
+      api.register(authRoutes);
+      api.register(organizationRoutes);
+      api.register(onboardingRoutes);
+      api.register(teamRoutes);
+      api.register(planRoutes);
+      api.register(projectRoutes);
+      api.register(databaseRoutes);
+      api.register(securityRoutes);
+      api.register(secretRoutes);
+      api.register(deploymentRoutes);
+      api.register(containerRoutes);
+      api.register(domainRoutes);
+      api.register(usageRoutes);
+      api.register(logRoutes);
+      api.register(auditRoutes);
+      api.register(metricRoutes);
+      api.register(serverRoutes);
+      api.register(billingRoutes);
+      api.register(githubIntegrationRoutes);
+      api.register(vercelIntegrationRoutes);
+      api.register(contentRoutes);
+      api.register(fileRoutes);
+      api.register(devContainerRoutes);
+      api.register(codexAgentRoutes);
+    },
+    { prefix: '/api/v1' },
+  );
 
   app.register(deploymentWebsocketRoutes);
   app.register(containerLogsWebsocketRoutes);

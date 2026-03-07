@@ -55,11 +55,11 @@ export default function Terminal({ projectId, token, className }: TerminalProps)
 
     // Connect WebSocket
     const base = resolveWebSocketBaseUrl();
-    const cols = term.cols;
-    const rows = term.rows;
-    const ws = new WebSocket(
-      `${base}/ws/projects/${projectId}/terminal?token=${encodeURIComponent(token)}&cols=${cols}&rows=${rows}`,
-    );
+    const wsUrl = new URL(`/ws/projects/${projectId}/terminal`, `${base}/`);
+    wsUrl.searchParams.set('token', token);
+    wsUrl.searchParams.set('cols', String(term.cols));
+    wsUrl.searchParams.set('rows', String(term.rows));
+    const ws = new WebSocket(wsUrl.toString());
     ws.binaryType = 'arraybuffer';
     wsRef.current = ws;
 
