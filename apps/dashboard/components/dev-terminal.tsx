@@ -96,7 +96,7 @@ export default function Terminal({ projectId, token, className }: TerminalProps)
     };
 
     // Terminal input → WebSocket
-    term.onData((data) => {
+    term.onData((data: string) => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(data);
       }
