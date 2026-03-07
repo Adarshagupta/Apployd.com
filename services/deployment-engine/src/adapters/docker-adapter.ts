@@ -11,6 +11,11 @@ import { EgressGuard } from '../security/egress-guard.js';
 const shellEscape = (value: string) =>
   process.platform === 'win32' ? `"${value.replace(/"/g, '\\"')}"` : `'${value.replace(/'/g, `'\"'\"'`)}'`;
 
+const DOCKER_NETWORK_TIMEOUT_MS = 10_000;
+const DOCKER_RUN_TIMEOUT_MS = 30_000;
+const DOCKER_INSPECT_TIMEOUT_MS = 3_000;
+const DOCKER_EXEC_PROBE_TIMEOUT_MS = 3_000;
+
 /**
  * Sanitize sensitive data from logs and errors (Vercel/Render grade security)
  * Prevents credential leaks in build logs, error messages, and monitoring
@@ -663,9 +668,9 @@ export class DockerAdapter {
     const cpuQuota = Math.floor((input.cpuMillicores / 1000) * 100000);
 
     try {
-      await runCommand('docker network inspect apployd-net');
+      await runCommand('docker network inspect apployd-net', { timeoutMs: DOCKER_NETWORK_TIMEOUT_MS });
     } catch {
-      await runCommand('docker network create apployd-net');
+      await runCommand('docker network create apployd-net', { timeoutMs: DOCKER_NETWORK_TIMEOUT_MS });
     }
 
     const envArgs = Object.entries(input.env)
@@ -727,7 +732,7 @@ export class DockerAdapter {
       input.imageTag,
     ].join(' ');
 
-    const dockerContainerId = await runCommand(cmd);
+    const dockerContainerId = await runCommand(cmd, { timeoutMs: DOCKER_RUN_TIMEOUT_MS });
     try {
       await this.enforceContainerEgressPolicy(dockerContainerId);
     } catch (error) {
@@ -965,6 +970,7 @@ export class DockerAdapter {
     try {
       await runCommand(
         `docker exec ${shellEscape(containerId)} sh -lc ${shellEscape(probeScript)}`,
+        { timeoutMs: DOCKER_EXEC_PROBE_TIMEOUT_MS },
       );
       return true;
     } catch {
@@ -1002,6 +1008,7 @@ export class DockerAdapter {
     try {
       return await runCommand(
         `docker logs --tail ${safeTailLines} ${shellEscape(containerNameOrId)}`,
+        { timeoutMs: 10_000 },
       );
     } catch {
       return '(unable to retrieve container logs)';
@@ -1019,6 +1026,7 @@ export class DockerAdapter {
     try {
       const raw = await runCommand(
         `docker exec ${shellEscape(containerId)} sh -lc ${shellEscape('cat /proc/net/tcp /proc/net/tcp6 2>/dev/null || true')}`,
+        { timeoutMs: DOCKER_EXEC_PROBE_TIMEOUT_MS },
       );
       const targetHex = containerPort.toString(16).toUpperCase().padStart(4, '0');
       const lines = raw.split(/\r?\n/);
@@ -1050,6 +1058,7 @@ export class DockerAdapter {
       const format = '{{json .State}}@@{{.RestartCount}}';
       const output = await runCommand(
         `docker inspect --format=${shellEscape(format)} ${shellEscape(containerNameOrId)}`,
+        { timeoutMs: DOCKER_INSPECT_TIMEOUT_MS },
       );
       const separator = output.lastIndexOf('@@');
       if (separator < 0) {
@@ -1157,4 +1166,3 @@ export class DockerAdapter {
     );
   }
 }
-

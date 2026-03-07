@@ -2,7 +2,12 @@
 
 import { createContext, useContext, type ReactNode } from 'react';
 
-import { useWorkspace, type WorkspaceOrganization, type WorkspaceProject } from '../lib/workspace';
+import {
+  useWorkspace,
+  type WorkspaceOrganization,
+  type WorkspaceProject,
+  type WorkspaceSubscription,
+} from '../lib/workspace';
 
 interface WorkspaceContextValue {
   organizations: WorkspaceOrganization[];
@@ -10,9 +15,13 @@ interface WorkspaceContextValue {
   selectedOrganizationId: string;
   setSelectedOrganizationId: (id: string) => void;
   projects: WorkspaceProject[];
+  subscription: WorkspaceSubscription | null;
+  subscriptionLoading: boolean;
   loading: boolean;
   error: string;
+  subscriptionError: string;
   refresh: () => Promise<void>;
+  refreshSubscription: () => Promise<WorkspaceSubscription | null>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);

@@ -9,6 +9,7 @@ import { env } from '../core/env.js';
 import { prisma } from '../core/prisma.js';
 import { redis } from '../core/redis.js';
 import { withRetry } from '../core/retry.js';
+import { resolveDnsTargetIpv4 } from '../core/server-ip.js';
 import { DeploymentEmailNotifier } from '../notifications/deployment-email-notifier.js';
 import type { QueueDeploymentPayload } from '../core/types.js';
 
@@ -247,19 +248,25 @@ export class DeploymentPipeline {
 
       // ── DNS + Reverse proxy + SSL ──────────────────────────────
       if (!env.ENGINE_LOCAL_MODE) {
+        const dnsTargetIpv4 = await resolveDnsTargetIpv4({
+          serverId: deployment.server.id,
+          recordedIpv4: deployment.server.ipv4,
+          onLog,
+        });
+
         if (this.cloudflare) {
           onLog('Configuring DNS records...');
           await withRetry(
-            () => this.cloudflare!.upsertARecord(domain, deployment.server!.ipv4),
+            () => this.cloudflare!.upsertARecord(domain, dnsTargetIpv4),
             { retries: 2, delayMs: 1000 },
           );
           for (const autoAlias of autoAliases) {
             await withRetry(
-              () => this.cloudflare!.upsertARecord(autoAlias, deployment.server!.ipv4),
+              () => this.cloudflare!.upsertARecord(autoAlias, dnsTargetIpv4),
               { retries: 2, delayMs: 1000 },
             );
           }
-          onLog('DNS configured');
+          onLog(`DNS configured (A -> ${dnsTargetIpv4})`);
         }
 
         onLog('Verifying host upstream...');

@@ -35,16 +35,6 @@ interface UsageSummaryResponse {
   };
 }
 
-interface CurrentSubscription {
-  status: string;
-  currentPeriodStart?: string;
-  currentPeriodEnd?: string;
-  plan: {
-    code: string;
-    displayName: string;
-  };
-}
-
 interface UtilizationMetric {
   id: 'cpu' | 'ram' | 'bandwidth';
   label: string;
@@ -244,11 +234,11 @@ export default function OverviewPage() {
     organizations,
     selectedOrganizationId,
     projects,
+    subscription,
     loading,
   } = useWorkspaceContext();
 
   const [summary, setSummary] = useState<UsageSummaryResponse | null>(null);
-  const [subscription, setSubscription] = useState<CurrentSubscription | null>(null);
   const [recentDeployments, setRecentDeployments] = useState<RecentDeployment[]>([]);
   const [message, setMessage] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -263,7 +253,6 @@ export default function OverviewPage() {
   const loadOverview = useCallback(async () => {
     if (!selectedOrganizationId) {
       setSummary(null);
-      setSubscription(null);
       setRecentDeployments([]);
       setMessage('');
       setRefreshing(false);
@@ -272,14 +261,12 @@ export default function OverviewPage() {
 
     setRefreshing(true);
     try {
-      const [summaryRes, planRes, deploymentRes] = await Promise.all([
+      const [summaryRes, deploymentRes] = await Promise.all([
         apiClient.get(`/usage/summary?organizationId=${selectedOrganizationId}`),
-        apiClient.get(`/plans/current?organizationId=${selectedOrganizationId}`),
         apiClient.get(`/deployments/recent?organizationId=${selectedOrganizationId}&limit=10`),
       ]);
 
       setSummary(summaryRes as UsageSummaryResponse);
-      setSubscription((planRes as { subscription?: CurrentSubscription }).subscription ?? null);
       setRecentDeployments(((deploymentRes as { deployments?: RecentDeployment[] }).deployments ?? []).slice(0, 10));
       setMessage('');
       setLastSyncedAt(new Date().toISOString());

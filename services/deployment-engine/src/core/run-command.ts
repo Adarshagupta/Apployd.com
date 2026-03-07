@@ -1,14 +1,44 @@
-import { exec } from 'child_process';
+import { exec, type ExecException } from 'child_process';
 
-export const runCommand = async (command: string): Promise<string> => {
+export interface RunCommandOptions {
+  timeoutMs?: number;
+  killSignal?: NodeJS.Signals | number;
+}
+
+const MAX_BUFFER_BYTES = 1024 * 1024 * 50;
+
+const toCommandError = (
+  error: ExecException,
+  stderr: string,
+  options: RunCommandOptions,
+): Error => {
+  if (options.timeoutMs && error.killed) {
+    return new Error(`Command timed out after ${options.timeoutMs}ms`);
+  }
+
+  return new Error(stderr || error.message);
+};
+
+export const runCommand = async (
+  command: string,
+  options: RunCommandOptions = {},
+): Promise<string> => {
   return new Promise((resolve, reject) => {
-    exec(command, { maxBuffer: 1024 * 1024 * 50 }, (error, stdout, stderr) => {
+    exec(
+      command,
+      {
+        maxBuffer: MAX_BUFFER_BYTES,
+        timeout: options.timeoutMs,
+        killSignal: options.killSignal ?? 'SIGKILL',
+      },
+      (error, stdout, stderr) => {
       if (error) {
-        reject(new Error(stderr || error.message));
+        reject(toCommandError(error, stderr, options));
         return;
       }
       resolve(stdout.trim());
-    });
+      },
+    );
   });
 };
 
@@ -22,9 +52,14 @@ export type LogCallback = (line: string) => void;
 export const runCommandStreaming = async (
   command: string,
   onLog?: LogCallback,
+  options: RunCommandOptions = {},
 ): Promise<string> => {
   return new Promise((resolve, reject) => {
-    const child = exec(command, { maxBuffer: 1024 * 1024 * 50 });
+    const child = exec(command, {
+      maxBuffer: MAX_BUFFER_BYTES,
+      timeout: options.timeoutMs,
+      killSignal: options.killSignal ?? 'SIGKILL',
+    });
 
     const stdoutChunks: Buffer[] = [];
     let stderrText = '';
@@ -59,11 +94,15 @@ export const runCommandStreaming = async (
       }
     });
 
-    child.on('close', (code) => {
+    child.on('close', (code, signal) => {
       if (stdoutRemainder.trim()) emitLine(stdoutRemainder);
       if (stderrRemainder.trim()) emitLine(stderrRemainder);
 
       if (code !== 0) {
+        if (options.timeoutMs && signal === (options.killSignal ?? 'SIGKILL')) {
+          reject(new Error(`Command timed out after ${options.timeoutMs}ms`));
+          return;
+        }
         reject(new Error(stderrText.trim() || `Command exited with code ${code}`));
         return;
       }

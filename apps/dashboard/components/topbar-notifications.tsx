@@ -40,16 +40,6 @@ interface RecentDeploymentsResponse {
   deployments?: RecentDeployment[];
 }
 
-interface CurrentSubscriptionResponse {
-  subscription?: {
-    status?: string;
-    currentPeriodEnd?: string;
-    plan?: {
-      displayName?: string | null;
-    } | null;
-  } | null;
-}
-
 interface UsageSummaryResponse {
   usage?: Record<string, string | number | null | undefined>;
 }
@@ -218,7 +208,7 @@ function getFallbackNotifications(reason: string): NotificationItem[] {
 
 export function TopbarNotifications() {
   const pathname = usePathname();
-  const { selectedOrganizationId } = useWorkspaceContext();
+  const { selectedOrganizationId, subscription } = useWorkspaceContext();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -239,10 +229,9 @@ export function TopbarNotifications() {
     setError('');
 
     try {
-      const [invitesResult, deploymentsResult, subscriptionResult, usageResult, securityResult] = await Promise.allSettled([
+      const [invitesResult, deploymentsResult, usageResult, securityResult] = await Promise.allSettled([
         apiClient.get('/teams/invites/pending') as Promise<PendingInvitesResponse>,
         apiClient.get(`/deployments/recent?organizationId=${selectedOrganizationId}&limit=5`) as Promise<RecentDeploymentsResponse>,
-        apiClient.get(`/plans/current?organizationId=${selectedOrganizationId}`) as Promise<CurrentSubscriptionResponse>,
         apiClient.get(`/usage/summary?organizationId=${selectedOrganizationId}`) as Promise<UsageSummaryResponse>,
         apiClient.get(`/security/incidents?organizationId=${selectedOrganizationId}&status=active&limit=5`) as Promise<SecurityIncidentsResponse>,
       ]);
@@ -255,10 +244,6 @@ export function TopbarNotifications() {
         deploymentsResult.status === 'fulfilled'
           ? (deploymentsResult.value.deployments ?? [])
           : [];
-      const subscription =
-        subscriptionResult.status === 'fulfilled'
-          ? subscriptionResult.value.subscription
-          : null;
       const usage =
         usageResult.status === 'fulfilled'
           ? usageResult.value.usage
@@ -407,7 +392,6 @@ export function TopbarNotifications() {
       const hasRequestFailure =
         invitesResult.status === 'rejected'
         || deploymentsResult.status === 'rejected'
-        || subscriptionResult.status === 'rejected'
         || usageResult.status === 'rejected'
         || securityResult.status === 'rejected';
       if (hasRequestFailure) {
@@ -420,7 +404,7 @@ export function TopbarNotifications() {
     } finally {
       setLoading(false);
     }
-  }, [selectedOrganizationId]);
+  }, [selectedOrganizationId, subscription]);
 
   useEffect(() => {
     loadNotifications().catch(() => {

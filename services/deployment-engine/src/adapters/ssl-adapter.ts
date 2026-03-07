@@ -23,17 +23,20 @@ export class SslAdapter {
     );
     const certificateDomain = allDomains[0]!;
     const domainFlags = allDomains.map((d) => `-d ${shellEscape(d)}`).join(' ');
+    const webrootPath = '/var/www/html';
 
     const command = [
-      'certbot certonly --nginx',
+      'certbot certonly --webroot',
       '--non-interactive',
       '--agree-tos',
       '--expand',
       `--cert-name ${shellEscape(certificateDomain)}`,
       `--email ${shellEscape(env.CERTBOT_EMAIL)}`,
+      `--webroot-path ${shellEscape(webrootPath)}`,
       domainFlags,
     ].join(' ');
 
+    await runHostCommand(`mkdir -p ${shellEscape(`${webrootPath}/.well-known/acme-challenge`)}`);
     await runHostCommand(command);
   }
 }

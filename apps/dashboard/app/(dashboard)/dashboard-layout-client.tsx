@@ -388,47 +388,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   );
 }
 
-interface CurrentSubscriptionResponse {
-  subscription?: {
-    plan?: {
-      displayName?: string | null;
-    } | null;
-  } | null;
-}
-
 function TopbarSubscriptionChip() {
-  const { selectedOrganizationId } = useWorkspaceContext();
-  const [planName, setPlanName] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!selectedOrganizationId) {
-      setPlanName(null);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    apiClient
-      .get(`/plans/current?organizationId=${selectedOrganizationId}`)
-      .then((data) => {
-        if (cancelled) {
-          return;
-        }
-        const current = (data as CurrentSubscriptionResponse).subscription?.plan?.displayName;
-        setPlanName(typeof current === 'string' && current.trim().length > 0 ? current : null);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setPlanName(null);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedOrganizationId]);
+  const { subscription } = useWorkspaceContext();
+  const planNameRaw = subscription?.plan?.displayName;
+  const planName =
+    typeof planNameRaw === 'string' && planNameRaw.trim().length > 0
+      ? planNameRaw.trim()
+      : null;
 
   const hasPlan = Boolean(planName);
 

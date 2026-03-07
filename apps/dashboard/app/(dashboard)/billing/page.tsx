@@ -158,17 +158,11 @@ function SkeletonBlock({ className }: { className: string }) {
 }
 
 export default function BillingPage() {
-  const { selectedOrganizationId } = useWorkspaceContext();
+  const { selectedOrganizationId, subscription, refreshSubscription } = useWorkspaceContext();
   const searchParams = useSearchParams();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentPlan, setCurrentPlan] = useState<{
-    code: string;
-    status: string;
-    periodEnd: string;
-    displayName: string;
-  } | null>(null);
   const [message, setMessage] = useState('');
   const [redirectingToCheckout, setRedirectingToCheckout] = useState(false);
   const [redirectingPlanCode, setRedirectingPlanCode] = useState<string | null>(null);
@@ -181,6 +175,33 @@ export default function BillingPage() {
     }
     return map;
   }, [plans]);
+
+  const currentPlan = useMemo(() => {
+    const codeRaw = subscription?.plan?.code;
+    const displayNameRaw = subscription?.plan?.displayName;
+    const statusRaw = subscription?.status;
+    const periodEndRaw = subscription?.currentPeriodEnd;
+
+    if (
+      typeof codeRaw !== 'string'
+      || codeRaw.trim().length === 0
+      || typeof displayNameRaw !== 'string'
+      || displayNameRaw.trim().length === 0
+      || typeof statusRaw !== 'string'
+      || statusRaw.trim().length === 0
+      || typeof periodEndRaw !== 'string'
+      || periodEndRaw.trim().length === 0
+    ) {
+      return null;
+    }
+
+    return {
+      code: codeRaw.trim(),
+      displayName: displayNameRaw.trim(),
+      status: statusRaw.trim(),
+      periodEnd: periodEndRaw,
+    };
+  }, [subscription]);
 
   const currentPlanCode = currentPlan?.code.toLowerCase() ?? null;
   const checkoutStatus = searchParams?.get('status');
@@ -210,24 +231,12 @@ export default function BillingPage() {
           await apiClient.post('/billing/sync-subscription', {
             organizationId: selectedOrganizationId,
           });
+          await refreshSubscription();
         }
-
-        const currentData = await apiClient.get(`/plans/current?organizationId=${selectedOrganizationId}`);
-        setCurrentPlan(
-          currentData.subscription
-            ? {
-                code: currentData.subscription.plan.code,
-                displayName: currentData.subscription.plan.displayName,
-                status: currentData.subscription.status,
-                periodEnd: currentData.subscription.currentPeriodEnd,
-              }
-            : null,
-        );
 
         const invoiceData = await apiClient.get(`/billing/invoices?organizationId=${selectedOrganizationId}`);
         setInvoices(invoiceData.invoices ?? []);
       } else {
-        setCurrentPlan(null);
         setInvoices([]);
       }
       if (checkoutStatus === 'cancelled') {
@@ -245,7 +254,7 @@ export default function BillingPage() {
   useEffect(() => {
     load().catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedOrganizationId, checkoutStatus]);
+  }, [selectedOrganizationId, checkoutStatus, refreshSubscription]);
 
   const startUpgrade = async (planCode: string) => {
     if (!selectedOrganizationId) {

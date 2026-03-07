@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 import { DeployForm } from '../../../../components/deploy-form';
@@ -74,18 +74,6 @@ interface AutoDomainSummary {
 interface ProjectUsageMetricPoint {
   day: string;
   total: string;
-}
-
-interface CurrentSubscription {
-  status: string;
-  poolRamMb: number;
-  poolCpuMillicores: number;
-  poolBandwidthGb: number;
-  entitlements?: {
-    autoDeploy: boolean;
-    previewDeployments: boolean;
-    customDomains: boolean;
-  };
 }
 
 interface ProjectUsageDetails {
@@ -216,13 +204,14 @@ export default function ProjectDetailPage() {
     projects,
     refresh,
     loading: workspaceLoading,
-    selectedOrganizationId,
+    subscription,
   } = useWorkspaceContext();
 
   const project = useMemo(
     () => projects.find((p) => p.id === projectId) ?? null,
     [projects, projectId],
   );
+  const missingProjectRefreshRef = useRef<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<Tab>('deployments');
   const [message, setMessage] = useState('');
@@ -434,7 +423,6 @@ export default function ProjectDetailPage() {
   const [deleteOtpRequesting, setDeleteOtpRequesting] = useState(false);
   const [deletingProject, setDeletingProject] = useState(false);
   const [deleteProjectMessage, setDeleteProjectMessage] = useState('');
-  const [subscription, setSubscription] = useState<CurrentSubscription | null>(null);
   const [projectSettings, setProjectSettings] = useState({
     repoUrl: '',
     branch: 'main',
@@ -463,6 +451,20 @@ export default function ProjectDetailPage() {
   const autoDeployLocked = subscription?.entitlements?.autoDeploy === false;
 
   useEffect(() => {
+    if (project) {
+      missingProjectRefreshRef.current = null;
+      return;
+    }
+
+    if (workspaceLoading || !projectId || missingProjectRefreshRef.current === projectId) {
+      return;
+    }
+
+    missingProjectRefreshRef.current = projectId;
+    refresh().catch(() => undefined);
+  }, [project, projectId, refresh, workspaceLoading]);
+
+  useEffect(() => {
     if (!project) return;
     setProjectSettings({
       repoUrl: project.repoUrl ?? '',
@@ -482,26 +484,6 @@ export default function ProjectDetailPage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id]);
-
-  useEffect(() => {
-    const loadSubscription = async () => {
-      if (!selectedOrganizationId) {
-        setSubscription(null);
-        return;
-      }
-
-      try {
-        const data = (await apiClient.get(
-          `/plans/current?organizationId=${selectedOrganizationId}`,
-        )) as { subscription?: CurrentSubscription | null };
-        setSubscription(data.subscription ?? null);
-      } catch {
-        setSubscription(null);
-      }
-    };
-
-    loadSubscription().catch(() => undefined);
-  }, [selectedOrganizationId]);
 
   useEffect(() => {
     setProjectSettings((previous) => ({

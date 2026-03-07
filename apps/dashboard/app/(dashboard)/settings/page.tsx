@@ -18,13 +18,8 @@ function SkeletonBlock({ className }: { className: string }) {
 }
 
 export default function SettingsPage() {
-  const { selectedOrganizationId } = useWorkspaceContext();
+  const { selectedOrganizationId, subscription } = useWorkspaceContext();
   const [me, setMe] = useState<{ id: string; email: string; name: string | null; createdAt?: string } | null>(null);
-  const [subscription, setSubscription] = useState<{
-    status: string;
-    currentPeriodEnd: string;
-    plan: { code: string; displayName: string } | null;
-  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<DashboardTheme>('dark');
   const [githubConnected, setGithubConnected] = useState(false);
@@ -41,13 +36,6 @@ export default function SettingsPage() {
 
       setMe(meData.user ?? null);
       setGithubConnected(Boolean(githubStatus.connected));
-
-      if (selectedOrganizationId) {
-        const current = await apiClient.get(`/plans/current?organizationId=${selectedOrganizationId}`);
-        setSubscription(current.subscription ?? null);
-      } else {
-        setSubscription(null);
-      }
 
       setMessage('');
     } catch (error) {
