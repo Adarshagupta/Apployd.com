@@ -5,9 +5,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 
-import { apiClient } from '../../../../../lib/api';
 import { devContainerApi, fileApi } from '../../../../../lib/editor-api';
 import type { FileEntry } from '../../../../../lib/editor-api';
+import { useWorkspaceContext } from '../../../../../components/workspace-provider';
 import FileTree from '../../../../../components/file-tree';
 
 // Lazy-loaded heavy components
@@ -35,9 +35,10 @@ export default function EditorPage() {
   const projectId = params?.projectId ?? '';
   const router = useRouter();
   const token = useAuth();
+  const { projects } = useWorkspaceContext();
+  const project = projects.find((p) => p.id === projectId) ?? null;
 
   // ── State ────────────────────────────────────────────────────────────────
-  const [projectName, setProjectName] = useState('');
   const [containerStatus, setContainerStatus] = useState<
     'loading' | 'none' | 'starting' | 'running' | 'stopped' | 'error'
   >('loading');
@@ -50,6 +51,8 @@ export default function EditorPage() {
   const [showSetup, setShowSetup] = useState(false);
   const [setupLoading, setSetupLoading] = useState(false);
   const [notification, setNotification] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
+  // Prevent duplicate auto-create attempts
+  const autoCreateAttempted = useRef(false);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -75,16 +78,10 @@ export default function EditorPage() {
 
     void (async () => {
       try {
-        // Load project name
-        const project = await apiClient.get(`/projects/${projectId}`);
-        setProjectName((project as { name: string }).name ?? '');
-      } catch { /* ignore */ }
-
-      try {
         const status = await devContainerApi.get(projectId);
         if (!status.exists) {
           setContainerStatus('none');
-          setShowSetup(true);
+          // Auto-create will trigger via the effect below once project data is available
         } else if (status.container?.status === 'running') {
           setContainerStatus('running');
           await loadFiles();
@@ -92,7 +89,6 @@ export default function EditorPage() {
           setContainerStatus('stopped');
         } else {
           setContainerStatus('none');
-          setShowSetup(true);
         }
       } catch {
         setContainerStatus('error');
@@ -100,16 +96,52 @@ export default function EditorPage() {
     })();
   }, [projectId, loadFiles]);
 
-  // ── Create / start container ──────────────────────────────────────────────
+  // ── Auto-create: once project loaded and container is missing ────────────
+  useEffect(() => {
+    if (!projectId || autoCreateAttempted.current) return;
+    if (containerStatus !== 'none') return;
+    // Wait until workspace has loaded project data
+    if (projects.length === 0) return;
+
+    autoCreateAttempted.current = true;
+
+    if (project?.repoUrl) {
+      // Silently create and clone — no modal needed
+      setContainerStatus('starting');
+      setSetupLoading(true);
+      const repoUrl = project.repoUrl;
+      const branch = project.branch || undefined;
+      devContainerApi
+        .create(projectId, { gitUrl: repoUrl, branch })
+        .then(async () => {
+          setContainerStatus('running');
+          await loadFiles();
+          notify('Dev environment ready!');
+        })
+        .catch((e: unknown) => {
+          setContainerStatus('none');
+          setShowSetup(true);
+          notify((e as Error).message, 'err');
+        })
+        .finally(() => setSetupLoading(false));
+    } else {
+      // No repo linked — show manual setup
+      setShowSetup(true);
+    }
+  }, [projectId, project, projects.length, containerStatus, loadFiles]);
+
+  // ── Create container (manual, from setup modal) ───────────────────────────
   const handleCreateContainer = async () => {
     if (!projectId) return;
     setSetupLoading(true);
     try {
-      await devContainerApi.create(projectId, gitUrl ? { gitUrl } : {});
+      const repoToUse = gitUrl || project?.repoUrl || undefined;
+      const branchToUse = project?.branch || undefined;
+      await devContainerApi.create(projectId, repoToUse ? { gitUrl: repoToUse, branch: branchToUse } : {});
       setContainerStatus('running');
       setShowSetup(false);
       await loadFiles();
-      notify('Dev container started!');
+      notify('Dev environment ready!');
     } catch (e) {
       notify((e as Error).message, 'err');
     } finally {
@@ -124,7 +156,7 @@ export default function EditorPage() {
       await devContainerApi.start(projectId);
       setContainerStatus('running');
       await loadFiles();
-      notify('Container started!');
+      notify('Environment started!');
     } catch (e) {
       setContainerStatus('stopped');
       notify((e as Error).message, 'err');
@@ -235,7 +267,7 @@ export default function EditorPage() {
       {/* ── Topbar ─────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 px-3 py-2 bg-gray-900 border-b border-gray-800 shrink-0">
         <Link href={`/projects/${projectId}`} className="text-gray-400 hover:text-white text-sm">
-          ← {projectName || 'Project'}
+          ← {project?.name ?? 'Project'}
         </Link>
         <span className="text-gray-700">/</span>
         <span className="text-sm text-gray-300 font-medium">Code Studio</span>
@@ -252,11 +284,11 @@ export default function EditorPage() {
               containerStatus === 'starting' ? 'bg-yellow-400 animate-pulse' :
               'bg-gray-600'}`}
           />
-          {containerStatus === 'running' ? 'Container running' :
-           containerStatus === 'starting' ? 'Starting…' :
-           containerStatus === 'stopped' ? 'Container stopped' :
+          {containerStatus === 'running' ? 'Environment running' :
+           containerStatus === 'starting' ? 'Preparing…' :
+           containerStatus === 'stopped' ? 'Environment stopped' :
            containerStatus === 'loading' ? 'Loading…' :
-           'No container'}
+           'No environment'}
         </div>
 
         {containerStatus === 'stopped' && (
@@ -369,7 +401,7 @@ export default function EditorPage() {
 
           {(panel === 'terminal' || panel === 'split') && containerStatus !== 'running' && (
             <div className={`flex items-center justify-center text-gray-600 text-sm ${panel === 'split' ? 'h-[40%]' : 'flex-1'}`}>
-              Start a dev container to use the terminal
+              {containerStatus === 'starting' ? 'Preparing your environment…' : 'Start a dev environment to use the terminal'}
             </div>
           )}
         </div>
@@ -381,19 +413,19 @@ export default function EditorPage() {
           <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-md shadow-2xl">
             <h2 className="text-lg font-semibold text-white mb-1">Start Code Studio</h2>
             <p className="text-sm text-gray-400 mb-5">
-              Launch a dev container with git, Node.js, Python, and GitHub CLI pre-installed.
-              Your code persists on a Docker volume.
+              Launch a dev environment with git, Node.js, Python, and GitHub CLI pre-installed.
+              Your files are saved between sessions.
             </p>
 
             <label className="block text-xs text-gray-400 mb-1">Git repo URL (optional)</label>
             <input
               className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-600 mb-4 focus:outline-none focus:border-blue-500"
               placeholder="https://github.com/you/repo.git"
-              value={gitUrl}
+              value={gitUrl || project?.repoUrl || ''}
               onChange={(e) => setGitUrl(e.target.value)}
             />
             <p className="text-xs text-gray-500 mb-5">
-              If provided, the repo will be cloned into <code className="text-blue-400">/home/coder/project</code>.
+              If provided, your repository will be cloned automatically.
               You can also clone manually from the terminal.
             </p>
 
@@ -406,7 +438,7 @@ export default function EditorPage() {
                 onClick={handleCreateContainer}
                 disabled={setupLoading}
                 className="flex-1 px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50"
-              >{setupLoading ? 'Starting…' : 'Start Container'}</button>
+              >{setupLoading ? 'Starting…' : 'Start Environment'}</button>
             </div>
           </div>
         </div>

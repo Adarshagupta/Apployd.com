@@ -173,6 +173,34 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
     };
   });
 
+  app.get('/projects/:projectId', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
+    const { projectId } = z.object({ projectId: z.string().cuid() }).parse(request.params);
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        runtime: true,
+        repoUrl: true,
+        repoFullName: true,
+        branch: true,
+        organizationId: true,
+      },
+    });
+    if (!project) return reply.notFound('Project not found');
+
+    try {
+      await access.requireOrganizationRole(user.userId, project.organizationId, 'viewer');
+    } catch (error) {
+      return reply.forbidden((error as Error).message);
+    }
+
+    return project;
+  });
+
   app.post('/projects', { preHandler: [app.authenticate] }, async (request, reply) => {
     const user = request.user as { userId: string; email: string };
     const body = createProjectSchema.parse(request.body);

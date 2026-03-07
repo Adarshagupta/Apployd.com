@@ -71,7 +71,7 @@ export const devContainerRoutes: FastifyPluginAsync = async (app) => {
 
       const project = await prisma.project.findUnique({
         where: { id: projectId },
-        select: { organizationId: true, name: true },
+        select: { organizationId: true, name: true, repoUrl: true, branch: true },
       });
       if (!project) return reply.notFound('Project not found');
 
@@ -135,12 +135,14 @@ export const devContainerRoutes: FastifyPluginAsync = async (app) => {
 
       const trimmedId = dockerId.trim();
 
-      // Clone repo if provided
-      if (body.gitUrl) {
-        const branchFlag = body.branch ? `--branch ${shellEscape(body.branch)}` : '';
+      // Clone repo: prefer body-provided URL, fall back to project's linked repo
+      const gitUrlToUse = body.gitUrl ?? project.repoUrl ?? undefined;
+      const branchToUse = body.branch ?? project.branch ?? undefined;
+      if (gitUrlToUse) {
+        const branchFlag = branchToUse ? `--branch ${shellEscape(branchToUse)}` : '';
         await exec(
           `docker exec ${shellEscape(trimmedId)} sh -c ${shellEscape(
-            `git clone --depth=1 ${branchFlag} ${body.gitUrl} /home/coder/project 2>&1 || true`,
+            `git clone --depth=1 ${branchFlag} ${gitUrlToUse} /home/coder/project 2>&1 || true`,
           )}`,
         ).catch(() => undefined);
       }
