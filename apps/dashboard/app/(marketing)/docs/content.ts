@@ -44,7 +44,7 @@ export const docPages: DocPage[] = [
     title: 'Getting Started with Apployd',
     summary:
       'Use this guide to move from a new workspace to your first reliable production deployment using Apployd workflows.',
-    updated: 'February 27, 2026',
+    updated: 'March 8, 2026',
     sections: [
       {
         heading: 'What Apployd is designed for',
@@ -68,6 +68,20 @@ export const docPages: DocPage[] = [
         ],
       },
       {
+        heading: 'Choose the correct project type before first deploy',
+        paragraphs: [
+          'Apployd supports three main deployment modes. Choose the one that matches how your application runs in production, then fill the runtime fields for that mode instead of leaving them generic.',
+          'Set Root directory for monorepos, confirm the app binds to 0.0.0.0:$PORT, and add required environment variables before the first production deployment.',
+        ],
+        bullets: [
+          'Web Service: use for Node.js APIs, SSR apps, and full-stack services. Typical values are root apps/api, build npm run build, start npm run start:prod, port 3000.',
+          'Python: use for Django, Flask, and FastAPI. Typical values are root backend, optional build python manage.py collectstatic --noinput, start uvicorn main:app --host 0.0.0.0 --port $PORT, port 3000.',
+          'Static Site: use for React, Vue, Vite, Astro, and exported Next.js apps. Typical values are root apps/web, build npm run build, output directory dist, and no start command.',
+        ],
+        callout:
+          'Use Static Site only when the project builds to files. If the app needs SSR, API routes, or a persistent Node server, choose Web Service instead.',
+      },
+      {
         heading: 'How to start safely',
         paragraphs: [
           'Begin with one critical service, validate your deployment process and rollback path, then roll the pattern out across additional services.',
@@ -83,13 +97,25 @@ export const docPages: DocPage[] = [
     title: 'Deployment Workflow',
     summary:
       'Understand how releases move from source to runtime, and how Apployd keeps deployments traceable, controllable, and recoverable.',
-    updated: 'February 27, 2026',
+    updated: 'March 8, 2026',
     sections: [
       {
         heading: 'Source intake and build execution',
         paragraphs: [
           'Every deployment starts from a selected repository state. This creates a direct link between application behavior and source changes.',
           'Build steps run from the commands you configure. Failures are surfaced early and prevent unstable releases from progressing.',
+        ],
+      },
+      {
+        heading: 'Runtime-specific project configuration',
+        paragraphs: [
+          'Deployment behavior depends on the selected service type. Teams should configure commands and publish settings explicitly instead of treating every repository like the same runtime.',
+          'Apployd can auto-detect several production defaults, but the most reliable workflow is to declare the correct project type, root directory, and runtime-specific fields up front.',
+        ],
+        bullets: [
+          'Node Web Service: start command detection prefers start:prod, start, serve, package.json main, then compiled entries such as dist/server.js. Dev commands are not valid production startup commands.',
+          'Python: dependency install supports requirements.txt, Pipfile, pyproject.toml, and setup.py. Entrypoint detection covers Django, Flask, FastAPI, wsgi.py, asgi.py, then main.py or app.py.',
+          'Static Site: Apployd builds the frontend output and serves the configured publish directory with nginx and SPA fallback to index.html.',
         ],
       },
       {
@@ -312,7 +338,8 @@ export const docPages: DocPage[] = [
     responsibilityMatrix: [
       {
         area: 'Deployments',
-        platform: 'Pipeline orchestration, release status lifecycle, rollback and cancellation mechanics.',
+        platform:
+          'Pipeline orchestration, release status lifecycle, rollback and cancellation mechanics.',
         customer: 'Code quality, release approvals, and service-level validation strategy.',
       },
       {
@@ -327,7 +354,8 @@ export const docPages: DocPage[] = [
       },
       {
         area: 'Databases',
-        platform: 'Apployd PostgreSQL DB provisioning flow and secure connectivity lifecycle support.',
+        platform:
+          'Apployd PostgreSQL DB provisioning flow and secure connectivity lifecycle support.',
         customer: 'Schema design, migration quality, and data recovery policy.',
       },
       {
@@ -426,7 +454,8 @@ export const docPages: DocPage[] = [
       },
       {
         question: 'Can databases be created without creating a project first?',
-        answer: 'Yes. Apployd PostgreSQL DB supports standalone provisioning from the Databases area.',
+        answer:
+          'Yes. Apployd PostgreSQL DB supports standalone provisioning from the Databases area.',
       },
       {
         question: 'What are the most important production signals to monitor?',

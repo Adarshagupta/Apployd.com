@@ -50,6 +50,7 @@ ENCRYPTION_KEY=<paste-output-here>
 ```
 
 **Optional Services** (leave empty if not using):
+
 - Stripe keys (for billing)
 - Cloudflare API (for DNS automation)
 - GitHub OAuth (for GitHub login)
@@ -65,6 +66,7 @@ sudo bash setup.sh
 ```
 
 The script will:
+
 - ✅ Install Docker, Docker Compose, Nginx, Certbot
 - ✅ Build all Docker images
 - ✅ Setup PostgreSQL database & run migrations
@@ -78,25 +80,94 @@ The script will:
 ### 4. Access Your Platform
 
 Once complete, visit:
+
 - **Dashboard**: https://your-domain.com
 - **API**: https://your-domain.com/api
 - **Health Check**: https://your-domain.com/health
+
+## Configuring Projects Before Deployment
+
+After the platform is online, configure each customer project in the dashboard before triggering the first deployment. The minimum fields are:
+
+- **Service type**: `Web Service`, `Python`, or `Static Site`
+- **Repository URL + branch**: the Git source Apployd should build
+- **Root directory**: required for monorepos such as `apps/web` or `backend`
+- **Build / start settings**: runtime-specific commands described below
+- **Port + environment variables**: the container must boot with the correct `PORT` and secrets
+
+### Node.js Web Services
+
+Choose **Web Service** for APIs, SSR apps, and full-stack Node services that need a long-running server process.
+
+- Typical root directory: `apps/api`
+- Typical build command: `npm run build`
+- Typical start command: `npm run start:prod`
+- Typical port: `3000`
+
+Apployd can auto-detect production startup when you do not provide a start command. It prefers `start:prod`, then `start`, `serve`, the `main` field in `package.json`, and finally compiled entrypoints such as `dist/server.js`.
+
+Important runtime rules:
+
+- Your app must listen on `0.0.0.0:$PORT`
+- Do not use dev commands such as `npm run dev`, `nodemon`, `tsx watch`, or `next dev`
+- If the project lives in a monorepo, set **Root directory** to the app folder instead of the repo root
+
+### Python Services
+
+Choose **Python** for Django, Flask, FastAPI, and other WSGI or ASGI applications.
+
+- Typical root directory: `backend`
+- Optional build command: `python manage.py collectstatic --noinput`
+- Typical start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+- Typical port: `3000`
+
+Dependency detection supports:
+
+- `requirements.txt`
+- `Pipfile`
+- `pyproject.toml`
+- `setup.py`
+
+If no explicit start command is provided, Apployd auto-detects Django `manage.py`, Flask `app.py`, FastAPI `main.py`, `wsgi.py`, `asgi.py`, then falls back to `main.py` or `app.py`.
+
+Important runtime rules:
+
+- Bind the web server to `0.0.0.0:$PORT`
+- Use the build command only for setup tasks such as asset collection or code generation
+- Put secrets like `DATABASE_URL`, `DJANGO_SECRET_KEY`, and API keys into dashboard environment variables instead of the repo
+
+### Frontend / Static Sites
+
+Choose **Static Site** for React, Vue, Vite, Astro, and exported Next.js projects that produce files instead of a long-running server.
+
+- Typical root directory: `apps/web`
+- Typical build command: `npm run build`
+- Typical output directory: `dist` (or `build` / `out`)
+- Typical port: `3000`
+
+Static sites do not need a start command. Apployd builds the assets and serves the output directory with nginx using SPA fallback to `index.html`.
+
+Use **Web Service** instead of **Static Site** when:
+
+- the app requires server-side rendering at runtime
+- the app exposes backend API routes from the same process
+- the app needs a persistent Node server after build
 
 ## Services & Architecture
 
 The platform runs 9 Docker containers:
 
-| Service | Port | Description |
-|---------|------|-------------|
-| Dashboard | 3000 | Next.js frontend |
-| Control Plane | 4000 | Node.js API server |
-| Deployment Engine | 9102 | Container orchestration |
-| Redis | internal only | Cache & queue |
-| Prometheus | 9090 | Metrics collection |
-| Alertmanager | 9093 | Alert routing & deduplication |
-| Grafana | 3001 | Monitoring dashboards |
-| Node Exporter | 9100 | System metrics |
-| cAdvisor | internal only | Container-level metrics |
+| Service           | Port          | Description                   |
+| ----------------- | ------------- | ----------------------------- |
+| Dashboard         | 3000          | Next.js frontend              |
+| Control Plane     | 4000          | Node.js API server            |
+| Deployment Engine | 9102          | Container orchestration       |
+| Redis             | internal only | Cache & queue                 |
+| Prometheus        | 9090          | Metrics collection            |
+| Alertmanager      | 9093          | Alert routing & deduplication |
+| Grafana           | 3001          | Monitoring dashboards         |
+| Node Exporter     | 9100          | System metrics                |
+| cAdvisor          | internal only | Container-level metrics       |
 
 ## Useful Commands
 
@@ -146,6 +217,7 @@ docker-compose run --rm control-plane npx prisma migrate reset
 ## Troubleshooting
 
 ### Services won't start
+
 ```bash
 # Check logs
 docker-compose logs
@@ -158,6 +230,7 @@ docker system prune -f
 ```
 
 ### SSL certificate failed
+
 ```bash
 # Verify DNS points to server
 dig +short your-domain.com
@@ -170,6 +243,7 @@ sudo certbot certonly --standalone -d your-domain.com
 ```
 
 ### Nginx 502 errors
+
 ```bash
 # Check if containers are running
 docker-compose ps
@@ -183,6 +257,7 @@ sudo nginx -t
 ```
 
 ### Database connection issues
+
 ```bash
 # Test database connection
 docker-compose run --rm control-plane node -e "
@@ -206,6 +281,7 @@ If you don't have a PostgreSQL database:
 ## Monitoring
 
 Access monitoring dashboards:
+
 - **Grafana**: http://your-server-ip:3001
   - Default login: admin / admin
   - Dashboards: `Apployd Overview`, `Apployd Platform Ops`
@@ -261,6 +337,7 @@ sudo bash setup.sh
 ## Security Recommendations
 
 ### Production Checklist
+
 - [ ] Change default Grafana password
 - [ ] Restrict Prometheus/Grafana to VPN or IP whitelist
 - [ ] Enable firewall (ufw) and only allow 80, 443, 22
@@ -272,6 +349,7 @@ sudo bash setup.sh
 - [ ] Review Falco alerts (`sudo journalctl -u falco -f`)
 
 ### Firewall Setup
+
 ```bash
 # Enable UFW firewall
 sudo ufw allow 22/tcp   # SSH
@@ -283,6 +361,7 @@ sudo ufw enable
 ## Backup & Restore
 
 ### Backup Database
+
 ```bash
 # Backup to SQL file
 docker-compose exec control-plane npx prisma db pull
@@ -292,6 +371,7 @@ pg_dump $DATABASE_URL > backup.sql
 ```
 
 ### Restore Database
+
 ```bash
 # Restore from SQL file
 psql $DATABASE_URL < backup.sql
@@ -300,6 +380,7 @@ psql $DATABASE_URL < backup.sql
 ## Support
 
 If you encounter issues:
+
 1. Check the logs: `docker-compose logs -f`
 2. Verify DNS configuration
 3. Ensure ports 80/443 are accessible

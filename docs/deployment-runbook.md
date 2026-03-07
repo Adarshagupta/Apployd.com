@@ -30,6 +30,33 @@
 - Falco running: `sudo systemctl status falco --no-pager`
 - Falco alerts stream: `sudo journalctl -u falco -f`
 
+## Project configuration checklist
+
+Before a team launches its first application deployment from the dashboard, verify the project configuration matches the runtime:
+
+- Select the correct service type: `web_service`, `python`, or `static_site`
+- Set `rootDirectory` for monorepos such as `apps/web`, `apps/api`, or `backend`
+- Add required environment variables before the first production deploy
+- Confirm the application binds to `0.0.0.0:$PORT`
+
+### Node web services
+
+- Common values: root `apps/api`, build `npm run build`, start `npm run start:prod`, port `3000`
+- Auto-detection prefers `start:prod`, `start`, `serve`, `package.json` main, then compiled entries like `dist/server.js`
+- Reject dev-mode commands such as `npm run dev`, `nodemon`, `tsx watch`, and `next dev`
+
+### Python services
+
+- Common values: root `backend`, build `python manage.py collectstatic --noinput`, start `uvicorn main:app --host 0.0.0.0 --port $PORT`, port `3000`
+- Dependency install supports `requirements.txt`, `Pipfile`, `pyproject.toml`, and `setup.py`
+- Auto-detection covers Django, Flask, FastAPI, `wsgi.py`, `asgi.py`, then `main.py` or `app.py`
+
+### Frontend / static sites
+
+- Common values: root `apps/web`, build `npm run build`, output `dist`, port `3000`
+- Do not provide a start command; nginx serves the built output with SPA fallback
+- Use `web_service` instead when the app needs SSR, API routes, or a persistent Node server
+
 ## Common incidents
 
 - Build failure: inspect deployment logs and image build command.
