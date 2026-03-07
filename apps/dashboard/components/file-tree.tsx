@@ -15,8 +15,8 @@ interface FileTreeProps {
   selectedPath?: string | undefined;
   onSelect: (entry: FileEntry) => void;
   onRefresh: () => void;
-  onNewFile?: (dirPath: string) => void;
-  onDelete?: (entry: FileEntry) => void;
+  onNewFile?: ((dirPath: string) => void) | undefined;
+  onDelete?: ((entry: FileEntry) => void) | undefined;
 }
 
 function getFileIcon(name: string, isDir: boolean): string {
@@ -101,8 +101,8 @@ function TreeNodeItem({
   depth: number;
   selectedPath?: string | undefined;
   onSelect: (entry: FileEntry) => void;
-  onNewFile?: (dirPath: string) => void;
-  onDelete?: (entry: FileEntry) => void;
+  onNewFile?: ((dirPath: string) => void) | undefined;
+  onDelete?: ((entry: FileEntry) => void) | undefined;
 }) {
   const [open, setOpen] = useState(depth === 0);
   const [, setShowCtx] = useState(false);
