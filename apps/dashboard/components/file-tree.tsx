@@ -12,7 +12,7 @@ export interface FileEntry {
 
 interface FileTreeProps {
   entries: FileEntry[];
-  selectedPath?: string;
+  selectedPath?: string | undefined;
   onSelect: (entry: FileEntry) => void;
   onRefresh: () => void;
   onNewFile?: (dirPath: string) => void;
@@ -98,13 +98,13 @@ function TreeNodeItem({
 }: {
   node: TreeNode;
   depth: number;
-  selectedPath?: string;
+  selectedPath?: string | undefined;
   onSelect: (entry: FileEntry) => void;
   onNewFile?: (dirPath: string) => void;
   onDelete?: (entry: FileEntry) => void;
 }) {
   const [open, setOpen] = useState(depth === 0);
-  const [showCtx, setShowCtx] = useState(false);
+  const [, setShowCtx] = useState(false);
 
   const isSelected = selectedPath === node.path;
   const isDir = node.type === 'directory';
