@@ -92,6 +92,76 @@ export const docPages: DocPage[] = [
     ],
   },
   {
+    slug: 'vscode-extension',
+    label: 'VS Code Extension',
+    title: 'Use Apployd from the VS Code Extension',
+    summary:
+      'Connect VS Code to Apployd so you can review organizations, projects, deployments, and logs without leaving the editor.',
+    updated: 'March 8, 2026',
+    sections: [
+      {
+        heading: 'What the extension is for',
+        paragraphs: [
+          'The Apployd VS Code extension gives operators a native sidebar for account context, project visibility, deployment actions, and log access from inside the editor.',
+          'It is designed for day-to-day operational work such as checking deployment status, starting a new release, canceling a risky rollout, or opening the dashboard for deeper inspection.',
+        ],
+        bullets: [
+          'Overview view for account and organization context.',
+          'Projects view for project details and inline actions.',
+          'Deployments view for recent releases and status inspection.',
+          'Command Palette actions for sign in, refresh, deploy, cancel, logs, and dashboard links.',
+        ],
+      },
+      {
+        heading: 'Initial setup',
+        paragraphs: [
+          'After installing the extension in VS Code, open the Apployd activity bar entry to load the Overview, Projects, and Deployments views.',
+          'The default configuration targets the hosted Apployd control plane, but teams running a local or self-hosted environment should override the API and dashboard base URLs in VS Code settings.',
+        ],
+        bullets: [
+          'apployd.apiBaseUrl defaults to https://apployd.com/api/v1.',
+          'apployd.dashboardBaseUrl defaults to https://apployd.com.',
+          'For local development use http://localhost:4000/api/v1 and http://localhost:3000.',
+        ],
+      },
+      {
+        heading: 'Sign in and organization selection',
+        paragraphs: [
+          'Use Apployd: Sign In from the sidebar or Command Palette, enter your email and password, and complete email verification if the login flow requires a one-time code.',
+          'Once authenticated, select the working organization so project and deployment views load the correct workspace context.',
+        ],
+        bullets: [
+          'Authentication tokens are stored in VS Code SecretStorage rather than plain settings.',
+          'Use Apployd: Select Organization whenever you need to switch workspace context.',
+          'Use Apployd: Sign Out to clear the stored session from the extension.',
+        ],
+      },
+      {
+        heading: 'Daily workflow inside VS Code',
+        paragraphs: [
+          'The Overview view gives a quick operational snapshot, including the signed-in account, selected organization, project count, and recent deployment count.',
+          'The Projects and Deployments views provide the primary release workflow: choose a project, deploy to production or preview, inspect recent history, copy deployment identifiers, cancel in-progress deployments, and fetch project logs into the output panel.',
+        ],
+        bullets: [
+          'Use Projects to inspect branch, runtime, and target port for each project.',
+          'Use Deploy Now to queue a production or preview deployment with optional branch and commit overrides.',
+          'Use Show Logs to open the latest project logs in the Apployd output channel.',
+          'Use Deployments to review recent release status and cancel in-progress runs when necessary.',
+          'Use Open Project Dashboard or Open Dashboard when you need the full web interface.',
+        ],
+      },
+      {
+        heading: 'Current scope',
+        paragraphs: [
+          'The extension currently focuses on operational visibility and common deployment actions rather than full project administration.',
+          'Teams should still use the dashboard for broader setup flows such as project creation, secret management, and other advanced platform features not yet exposed in the extension.',
+        ],
+        callout:
+          'This extension is currently an MVP. Treat it as an operator workflow surface, not a complete replacement for the dashboard.',
+      },
+    ],
+  },
+  {
     slug: 'deployments',
     label: 'Deployment Workflow',
     title: 'Deployment Workflow',
@@ -477,6 +547,7 @@ export const docsNavGroups: DocNavGroup[] = [
     heading: 'Getting Started',
     links: [
       { href: '/docs/getting-started', label: 'Quick Start' },
+      { href: '/docs/vscode-extension', label: 'VS Code Extension' },
       { href: '/docs/deployments', label: 'Deployment Workflow' },
       { href: '/docs/canary-releases', label: 'Canary Releases' },
     ],

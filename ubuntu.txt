@@ -12,7 +12,7 @@ bash infra/scripts/deploy-ubuntu.sh \
 docker logs docker-control-plane-1 --tail 20
 docker logs docker-deployment-engine-1 --tail 20
 
-
+code --extensionDevelopmentPath=C:\Users\adasg\Videos\Apployd\apps\vscode-extension    
 ssh root@89.167.59.89 "cd /root/Apployd.com && git pull origin main && bash infra/scripts/deploy-stack.sh"
 
 ssh root@95.216.179.64 "cd /root/Apployd.com && git pull origin main && bash infra/scripts/deploy-stack.sh"

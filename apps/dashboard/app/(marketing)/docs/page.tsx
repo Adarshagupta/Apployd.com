@@ -8,10 +8,11 @@ import { defaultDocSlug } from './content';
 export const metadata: Metadata = buildPageMetadata({
   title: 'Documentation',
   description:
-    'Production documentation for Apployd: deployment workflow, security and abuse protection, credential handling, databases, analytics, team operations, and billing.',
+    'Production documentation for Apployd: quick start guidance, VS Code extension usage, deployment workflow, security, databases, analytics, team operations, and billing.',
   path: '/docs',
   keywords: [
     'Apployd documentation',
+    'VS Code extension guide',
     'deployment workflow docs',
     'application security docs',
     'credentials management docs',
