@@ -103,6 +103,19 @@ export default async function DocTopicPage({ params }: PageProps) {
                 ))}
               </ul>
             ) : null}
+            {section.codeBlocks?.map((block, index) => (
+              <figure
+                key={`${section.heading}-code-${index}`}
+                className={docsStyles.codeBlock}
+              >
+                {block.caption ? (
+                  <figcaption className={docsStyles.codeCaption}>{block.caption}</figcaption>
+                ) : null}
+                <pre className={docsStyles.codePre}>
+                  <code>{block.code}</code>
+                </pre>
+              </figure>
+            ))}
             {section.callout ? <div className={docsStyles.callout}>{section.callout}</div> : null}
           </section>
         ))}

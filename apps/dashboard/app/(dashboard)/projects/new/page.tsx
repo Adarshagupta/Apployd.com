@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { DeploymentRuntimeGuide } from '../../../../components/deployment-runtime-guide';
 import { useDashboardMessageToast } from '../../../../components/dashboard-toast';
 import { ResourceSlider } from '../../../../components/resource-slider';
 import { SectionCard } from '../../../../components/section-card';
@@ -1169,8 +1168,6 @@ export default function CreateProjectPage() {
                       </button>
                     </div>
                   </div>
-
-                  <DeploymentRuntimeGuide serviceType={form.serviceType} />
 
                   <div className="grid gap-3 md:grid-cols-2">
                     <label>

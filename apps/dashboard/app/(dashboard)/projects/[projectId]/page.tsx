@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
-import { DeploymentRuntimeGuide } from '../../../../components/deployment-runtime-guide';
 import { DeployForm } from '../../../../components/deploy-form';
 import { ContainerLogViewer } from '../../../../components/container-log-viewer';
 import { ResourceSlider } from '../../../../components/resource-slider';
@@ -1546,8 +1545,6 @@ export default function ProjectDetailPage() {
                 </button>
               </div>
             </div>
-
-            <DeploymentRuntimeGuide serviceType={projectSettings.serviceType} />
 
             <div className="grid gap-4 md:grid-cols-2">
               <label className="md:col-span-2">
