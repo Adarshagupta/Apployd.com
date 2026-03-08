@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { DeploymentRuntimeGuide } from './deployment-runtime-guide';
 import { apiClient, normalizeWebSocketUrl } from '../lib/api';
 import { getDeploymentRuntimeGuide } from '../lib/deployment-runtime-guides';
 import { parseDotenvText } from '../lib/dotenv-parser';
@@ -294,7 +293,7 @@ export function DeployForm({
         ...(gitUrl ? { gitUrl } : {}),
         ...(branch ? { branch } : {}),
         ...(rootDirectory ? { rootDirectory } : {}),
-        ...(startCommand ? { startCommand } : {}),
+        ...(serviceType !== 'static_site' && startCommand ? { startCommand } : {}),
         ...(buildCommand ? { buildCommand } : {}),
         ...(typeof port === 'number' && Number.isFinite(port) ? { port } : {}),
         ...(serviceType === 'static_site' && outputDirectory ? { outputDirectory } : {}),
@@ -302,24 +301,7 @@ export function DeployForm({
 
       const response = await apiClient.post(
         '/deployments',
-<<<<<<< HEAD
-        {
-          projectId,
-          environment,
-          domain: domain || undefined,
-          gitUrl: gitUrl || undefined,
-          branch: branch || undefined,
-          rootDirectory: rootDirectory || undefined,
-          startCommand: serviceType === 'static_site' ? undefined : startCommand || undefined,
-          buildCommand: buildCommand || undefined,
-          port: typeof port === 'number' && Number.isFinite(port) ? port : undefined,
-          env: envPayload,
-          serviceType,
-          outputDirectory: serviceType === 'static_site' ? outputDirectory || undefined : undefined,
-        },
-=======
         deploymentPayload,
->>>>>>> 13e613b3fcfa34d8c8694c6a4aa681685e899601
         {
           headers: {
             'Idempotency-Key': idempotencyKey,
@@ -423,8 +405,6 @@ export function DeployForm({
           </button>
         </div>
       </div>
-
-      <DeploymentRuntimeGuide serviceType={serviceType} />
 
       {serviceType === 'static_site' && (
         <div className="rounded-lg border border-slate-300 bg-slate-100 p-3 space-y-2">

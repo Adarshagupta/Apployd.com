@@ -203,6 +203,29 @@
   font-size: 0.87rem;
 }
 
+.codeBlock {
+  margin: 0.86rem 0 0;
+}
+
+.codeCaption {
+  margin: 0 0 0.4rem;
+  font-size: 0.78rem;
+  color: rgba(183, 199, 231, 0.76);
+}
+
+.codePre {
+  margin: 0;
+  padding: 0.86rem 0.92rem;
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(161, 178, 216, 0.18);
+  background: rgba(6, 8, 14, 0.9);
+  color: rgba(226, 236, 255, 0.95);
+  font-size: 0.82rem;
+  line-height: 1.58;
+  font-family: var(--font-mono), monospace;
+}
+
 .callout {
   margin-top: 0.82rem;
   border-radius: 12px;
@@ -303,6 +326,7 @@
 :global(html[data-landing-theme='light']) .topicSummary,
 :global(html[data-landing-theme='light']) .topicMeta,
 :global(html[data-landing-theme='light']) .articleSection p,
+:global(html[data-landing-theme='light']) .codeCaption,
 :global(html[data-landing-theme='light']) .checkList li,
 :global(html[data-landing-theme='light']) .faqBody,
 :global(html[data-landing-theme='light']) .matrixTable td,
@@ -319,13 +343,19 @@
 
 :global(html[data-landing-theme='light']) .articleSection,
 :global(html[data-landing-theme='light']) .matrixTable td,
-:global(html[data-landing-theme='light']) .tableWrap {
+:global(html[data-landing-theme='light']) .tableWrap,
+:global(html[data-landing-theme='light']) .codePre {
   border-color: rgba(109, 137, 188, 0.22);
 }
 
 :global(html[data-landing-theme='light']) .matrixTable th {
   color: rgba(31, 50, 81, 0.86);
   background: rgba(246, 250, 255, 0.96);
+}
+
+:global(html[data-landing-theme='light']) .codePre {
+  background: rgba(246, 250, 255, 0.96);
+  color: rgba(24, 41, 70, 0.92);
 }
 
 :global(html[data-landing-theme='light']) .callout {

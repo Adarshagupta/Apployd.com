@@ -2,7 +2,14 @@ export interface DocSection {
   heading: string;
   paragraphs: string[];
   bullets?: string[];
+  codeBlocks?: DocCodeBlock[];
   callout?: string;
+}
+
+export interface DocCodeBlock {
+  language: 'bash' | 'json' | 'text';
+  code: string;
+  caption?: string;
 }
 
 export interface ResponsibilityRow {
@@ -190,6 +197,131 @@ export const docPages: DocPage[] = [
           'Increase traffic in deliberate steps instead of jumping immediately to a large percentage.',
           'Abort quickly if the canary shows regressions, unstable runtime behavior, or unexpected cost pressure.',
         ],
+      },
+    ],
+  },
+  {
+    slug: 'mcp',
+    label: 'MCP Server',
+    title: 'Use Apployd with MCP Clients',
+    summary:
+      'Connect Apployd to MCP-compatible clients so users can list projects, inspect deployments, and trigger releases from agent workflows.',
+    updated: 'March 7, 2026',
+    sections: [
+      {
+        heading: 'What the MCP package does',
+        paragraphs: [
+          'The Apployd MCP package exposes deployment operations as MCP tools over stdio. An MCP client starts the package locally, then calls Apployd APIs through the authenticated session on behalf of the user.',
+          'This makes it possible to list projects, create deployments, inspect recent releases, and cancel active deployments without building a separate integration for each client.',
+        ],
+        bullets: [
+          'Package name: @apployd/mcp-server',
+          'Launch mode: stdio MCP server started by the MCP client',
+          'Auth flow: browser login similar to npm login or gh auth login',
+          'Core tools: get_current_user, list_projects, list_recent_deployments, list_project_deployments, get_deployment, create_deployment, cancel_deployment',
+        ],
+      },
+      {
+        heading: 'Install and sign in',
+        paragraphs: [
+          'Users do not need to clone the Apployd repo. The recommended path is to run the published npm package directly with npx, then complete the browser login flow once on that machine.',
+          'After login, the package caches credentials locally and most MCP clients can start the server without passing APPLOYD_API_TOKEN explicitly.',
+        ],
+        codeBlocks: [
+          {
+            language: 'bash',
+            caption: 'Run the login flow and verify the cached session',
+            code: `npx -y @apployd/mcp-server login
+npx -y @apployd/mcp-server whoami`,
+          },
+          {
+            language: 'bash',
+            caption: 'Remove the cached session',
+            code: 'npx -y @apployd/mcp-server logout',
+          },
+        ],
+        callout:
+          'If a user prefers not to store cached credentials locally, they can still provide APPLOYD_API_TOKEN directly in the MCP client environment.',
+      },
+      {
+        heading: 'Add it to an MCP client',
+        paragraphs: [
+          'Most MCP clients can start the package with npx. In the simplest setup, only the Apployd API base URL is required because the cached login session supplies the token automatically.',
+          'Set APPLOYD_DEFAULT_ORGANIZATION_ID when the authenticated user belongs to more than one organization and the client should not prompt the agent to disambiguate.',
+        ],
+        codeBlocks: [
+          {
+            language: 'json',
+            caption: 'Example MCP client configuration',
+            code: `{
+  "mcpServers": {
+    "apployd": {
+      "command": "npx",
+      "args": ["-y", "@apployd/mcp-server"],
+      "env": {
+        "APPLOYD_API_BASE_URL": "https://apployd.com/api/v1",
+        "APPLOYD_DEFAULT_ORGANIZATION_ID": "optional organization cuid"
+      }
+    }
+  }
+}`,
+          },
+        ],
+      },
+      {
+        heading: 'Common usage patterns',
+        paragraphs: [
+          'Once the MCP client is configured, the user can ask the client to operate on Apployd resources in natural language. The MCP package translates those requests into the underlying API calls.',
+          'Good prompts are explicit about the project, environment, and source reference so the resulting deployment matches the intended release.',
+        ],
+        bullets: [
+          'List my Apployd projects.',
+          'Show the latest deployments for my organization.',
+          'Deploy project abc123 to production from branch main.',
+          'Cancel deployment dep_123 if it is still in progress.',
+        ],
+      },
+      {
+        heading: 'Direct environment-variable auth',
+        paragraphs: [
+          'For controlled environments such as CI, shared workstations, or clients that should not rely on local cached credentials, set the token explicitly in the MCP client configuration.',
+        ],
+        codeBlocks: [
+          {
+            language: 'json',
+            caption: 'Explicit token-based configuration',
+            code: `{
+  "mcpServers": {
+    "apployd": {
+      "command": "npx",
+      "args": ["-y", "@apployd/mcp-server"],
+      "env": {
+        "APPLOYD_API_TOKEN": "your apployd token",
+        "APPLOYD_API_BASE_URL": "https://apployd.com/api/v1",
+        "APPLOYD_DEFAULT_ORGANIZATION_ID": "optional organization cuid"
+      }
+    }
+  }
+}`,
+          },
+        ],
+      },
+    ],
+    faq: [
+      {
+        question: 'Does the MCP package deploy code by itself?',
+        answer:
+          'No. It is a local MCP wrapper around Apployd APIs. Deployments still run through the normal Apployd control plane and permission checks.',
+      },
+      {
+        question: 'Do users need a long-lived token to get started?',
+        answer:
+          'No. The recommended flow is browser login with npx, which caches the authenticated session locally for later MCP use.',
+      },
+      {
+        question: 'What should users do if they belong to more than one organization?',
+        answer:
+          'Set APPLOYD_DEFAULT_ORGANIZATION_ID in the MCP client configuration so deployment and listing requests resolve against the intended organization consistently.',
       },
     ],
   },
@@ -479,6 +611,7 @@ export const docsNavGroups: DocNavGroup[] = [
       { href: '/docs/getting-started', label: 'Quick Start' },
       { href: '/docs/deployments', label: 'Deployment Workflow' },
       { href: '/docs/canary-releases', label: 'Canary Releases' },
+      { href: '/docs/mcp', label: 'MCP Server' },
     ],
   },
   {

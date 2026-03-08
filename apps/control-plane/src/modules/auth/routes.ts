@@ -46,6 +46,19 @@ const resendVerificationSchema = z.object({
   loginChallengeId: loginChallengeIdSchema.optional(),
 });
 
+const cliLoginChallengeIdSchema = z
+  .string()
+  .regex(/^[a-f0-9]{48}$/i, 'CLI login challenge is invalid')
+  .transform((value) => value.toLowerCase());
+
+const cliLoginPollSchema = z.object({
+  challengeId: cliLoginChallengeIdSchema,
+});
+
+const cliLoginApproveSchema = z.object({
+  challengeId: cliLoginChallengeIdSchema,
+});
+
 const githubLoginQuerySchema = z.object({
   next: z.string().optional(),
 });
@@ -87,8 +100,12 @@ const GOOGLE_OAUTH_STATE_PREFIX = 'apployd:oauth:google:';
 const GOOGLE_LOGIN_RESULT_PREFIX = 'apployd:oauth:google:login:';
 const LOGIN_CHALLENGE_PREFIX = 'apployd:auth:login-challenge:';
 const LOGIN_ATTEMPT_PREFIX = 'apployd:auth:login-attempts:';
+const CLI_LOGIN_CHALLENGE_PREFIX = 'apployd:auth:cli:challenge:';
+const CLI_LOGIN_RESULT_PREFIX = 'apployd:auth:cli:result:';
 const LOGIN_ATTEMPT_WINDOW_SECONDS = 15 * 60;
 const LOGIN_ATTEMPT_LIMIT = 10;
+const CLI_LOGIN_TTL_SECONDS = 10 * 60;
+const CLI_LOGIN_POLL_INTERVAL_SECONDS = 2;
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
   const github = new GitHubService();
@@ -444,6 +461,95 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       }
       throw error;
     }
+  });
+
+  app.post('/auth/cli/start', async () => {
+    const challengeId = await createCliLoginChallenge();
+    const verificationUrl = new URL('/cli-auth', env.DASHBOARD_BASE_URL);
+    verificationUrl.searchParams.set('challenge', challengeId);
+
+    return {
+      challengeId,
+      verificationUrl: verificationUrl.toString(),
+      expiresInSeconds: CLI_LOGIN_TTL_SECONDS,
+      pollIntervalSeconds: CLI_LOGIN_POLL_INTERVAL_SECONDS,
+    };
+  });
+
+  app.get('/auth/cli/poll', async (request) => {
+    const query = cliLoginPollSchema.parse(request.query);
+    const result = await consumeCliLoginResult(query.challengeId);
+
+    if (result) {
+      return {
+        status: 'complete',
+        token: result.token,
+        user: result.user,
+      } as const;
+    }
+
+    const ttlSeconds = await redis.ttl(cliLoginChallengeKey(query.challengeId));
+    if (ttlSeconds <= 0) {
+      return {
+        status: 'expired',
+      } as const;
+    }
+
+    return {
+      status: 'pending',
+      expiresInSeconds: ttlSeconds,
+      pollIntervalSeconds: CLI_LOGIN_POLL_INTERVAL_SECONDS,
+    } as const;
+  });
+
+  app.post('/auth/cli/approve', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
+    const body = cliLoginApproveSchema.parse(request.body);
+    const challengeKey = cliLoginChallengeKey(body.challengeId);
+    const challengeTtlSeconds = await redis.ttl(challengeKey);
+
+    if (challengeTtlSeconds <= 0) {
+      return reply.gone('CLI login challenge is invalid or expired.');
+    }
+
+    const userRecord = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+      },
+    });
+
+    if (!userRecord) {
+      return reply.unauthorized('Authenticated user was not found.');
+    }
+
+    const token = app.jwt.sign({ userId: userRecord.id, email: userRecord.email });
+    const resultTtlSeconds = Math.max(30, Math.min(challengeTtlSeconds, CLI_LOGIN_TTL_SECONDS));
+    await redis.set(
+      cliLoginResultKey(body.challengeId),
+      JSON.stringify({
+        token,
+        user: {
+          id: userRecord.id,
+          email: userRecord.email,
+          name: userRecord.name,
+        },
+      }),
+      'EX',
+      resultTtlSeconds,
+    );
+
+    return {
+      success: true,
+      expiresInSeconds: resultTtlSeconds,
+      user: {
+        id: userRecord.id,
+        email: userRecord.email,
+        name: userRecord.name,
+      },
+    };
   });
 
   app.get('/auth/github/login-url', async (request, reply) => {
@@ -918,6 +1024,12 @@ const loginChallengeKey = (challengeId: string): string =>
 const loginAttemptKey = (normalizedEmail: string): string =>
   `${LOGIN_ATTEMPT_PREFIX}${normalizedEmail}`;
 
+const cliLoginChallengeKey = (challengeId: string): string =>
+  `${CLI_LOGIN_CHALLENGE_PREFIX}${challengeId}`;
+
+const cliLoginResultKey = (challengeId: string): string =>
+  `${CLI_LOGIN_RESULT_PREFIX}${challengeId}`;
+
 const loginChallengeTtlSeconds = (): number =>
   env.EMAIL_VERIFICATION_TTL_MINUTES * 60;
 
@@ -947,6 +1059,47 @@ const resolveLoginChallenge = async (
     return loginChallengeSchema.parse(JSON.parse(stored));
   } catch {
     await redis.del(loginChallengeKey(challengeId));
+    return null;
+  }
+};
+
+const createCliLoginChallenge = async (): Promise<string> => {
+  const challengeId = randomBytes(24).toString('hex');
+  await redis.set(
+    cliLoginChallengeKey(challengeId),
+    JSON.stringify({
+      createdAt: new Date().toISOString(),
+    }),
+    'EX',
+    CLI_LOGIN_TTL_SECONDS,
+  );
+  return challengeId;
+};
+
+const cliLoginResultSchema = z.object({
+  token: z.string().min(1),
+  user: z.object({
+    id: z.string().cuid(),
+    email: z.string().email(),
+    name: z.string().nullable(),
+  }),
+});
+
+const consumeCliLoginResult = async (
+  challengeId: string,
+): Promise<{ token: string; user: { id: string; email: string; name: string | null } } | null> => {
+  const resultKey = cliLoginResultKey(challengeId);
+  const stored = await redis.get(resultKey);
+  if (!stored) {
+    return null;
+  }
+
+  await redis.del(resultKey);
+  await redis.del(cliLoginChallengeKey(challengeId));
+
+  try {
+    return cliLoginResultSchema.parse(JSON.parse(stored));
+  } catch {
     return null;
   }
 };
