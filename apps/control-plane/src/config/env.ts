@@ -88,6 +88,7 @@ const envSchema = z.object({
   DODO_PAYMENTS_API_KEY: z.string().optional(),
   DODO_PAYMENTS_WEBHOOK_SECRET: z.string().optional(),
   DODO_PAYMENTS_ENVIRONMENT: z.enum(['test', 'live']).default('test'),
+  DODO_PAYMENTS_DEFAULT_COUNTRY: z.string().trim().min(2).max(2).default('US'),
   DODO_PAYMENTS_PRODUCT_ID_DEV: optionalString,
   DODO_PAYMENTS_PRODUCT_ID_PRO: optionalString,
   DODO_PAYMENTS_PRODUCT_ID_MAX: optionalString,

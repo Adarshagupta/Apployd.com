@@ -160,6 +160,7 @@ export const billingProvider = 'dodo_payments';
 export const billingProviderLabel = 'Dodo Payments';
 export const billingProviderConfigured = Boolean(env.DODO_PAYMENTS_API_KEY);
 export const databaseAddonCheckoutConfigured = Object.values(databaseAddonIds).some(Boolean);
+const defaultBillingCountry = env.DODO_PAYMENTS_DEFAULT_COUNTRY.trim().toUpperCase();
 export const databaseAddonTierCheckoutEnabled: Record<DatabaseAddonTierCode, boolean> = {
   starter: Boolean(databaseAddonIds.starter),
   growth: Boolean(databaseAddonIds.growth),
@@ -273,7 +274,13 @@ export const createBillingCheckoutSession = async (
       customer: {
         customer_id: input.customerId,
       },
+      billing_address: {
+        country: defaultBillingCountry,
+      },
       billing_currency: 'USD',
+      minimal_address: true,
+      allow_customer_editing_country: true,
+      allow_customer_editing_zipcode: true,
       show_saved_payment_methods: true,
       feature_flags: {
         always_create_new_customer: false,

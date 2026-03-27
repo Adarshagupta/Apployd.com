@@ -239,6 +239,9 @@ const normalizedPrice = (value: string): string => {
   return numeric.length > 0 ? numeric : '0';
 };
 
+const formatDatabaseAddonOptionLabel = (tier: DatabaseAddonTier): string =>
+  `${tier.name} · ${tier.price} · ${tier.storage} · ${tier.ram} RAM · ${tier.compute}`;
+
 const pricingJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
@@ -400,12 +403,12 @@ export default function PricingPage() {
                                   >
                                     {databaseAddonTiers.map((tier) => (
                                       <option key={`${plan.code}-${tier.code}`} value={tier.code}>
-                                        {tier.name} - {tier.price}
+                                        {formatDatabaseAddonOptionLabel(tier)}
                                       </option>
                                     ))}
                                   </select>
                                   <p style={{ margin: 0, fontSize: '0.74rem', color: pricingMutedText }}>
-                                    Any pricing plan can be paired with any database tier.
+                                    Any pricing plan can be paired with any database tier. Each option includes price, storage, RAM, and vCPU-min.
                                   </p>
                                 </div>
                                 <div style={{ borderRadius: 10, border: `1px solid ${pricingSurfaceBorder}`, overflowX: 'auto', overflowY: 'hidden' }}>
@@ -414,7 +417,7 @@ export default function PricingPage() {
                                     <tr style={{ background: pricingTableHeaderBackground }}>
                                       <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', color: pricingMutedText }}>Plan</th>
                                       <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', color: pricingMutedText }}>Storage</th>
-                                      <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', color: pricingMutedText }}>Compute</th>
+                                      <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', color: pricingMutedText }}>vCPU-min</th>
                                       <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', color: pricingMutedText }}>RAM</th>
                                       <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'right', color: pricingMutedText }}>Price/mo</th>
                                     </tr>

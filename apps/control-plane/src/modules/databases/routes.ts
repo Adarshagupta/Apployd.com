@@ -88,6 +88,24 @@ const toProjectDisplayName = (value: string, fallback: string): string => {
 };
 
 const ROLE_PROPAGATION_RETRY_DELAYS_MS = [250, 500, 1000, 1500, 2000, 3000, 5000] as const;
+const NEON_OPERATION_WAIT_MAX_ATTEMPTS = ROLE_PROPAGATION_RETRY_DELAYS_MS.length + 6;
+
+type NeonOperationStatus =
+  | 'scheduling'
+  | 'running'
+  | 'finished'
+  | 'failed'
+  | 'error'
+  | 'cancelling'
+  | 'cancelled'
+  | 'skipped';
+
+interface NeonOperationSnapshot {
+  id: string;
+  status: NeonOperationStatus | string;
+  action: string | null;
+  error: string | null;
+}
 
 const sleep = async (ms: number): Promise<void> => {
   await new Promise((resolve) => {
@@ -99,6 +117,61 @@ const getRetryDelayMs = (attempt: number): number =>
   ROLE_PROPAGATION_RETRY_DELAYS_MS[attempt]
   ?? ROLE_PROPAGATION_RETRY_DELAYS_MS[ROLE_PROPAGATION_RETRY_DELAYS_MS.length - 1]
   ?? 1500;
+
+const parseNeonOperationSnapshot = (value: unknown): NeonOperationSnapshot | null => {
+  const operation = asRecord(value);
+  const id = asString(operation?.id);
+  const status = asString(operation?.status);
+  if (!id || !status) {
+    return null;
+  }
+
+  return {
+    id,
+    status,
+    action: asString(operation?.action),
+    error: asString(operation?.error),
+  };
+};
+
+const extractNeonOperationSnapshots = (payload: unknown): NeonOperationSnapshot[] => {
+  const root = asRecord(payload);
+  const nestedRecords = [
+    root,
+    asRecord(root?.project),
+    asRecord(root?.branch),
+    asRecord(root?.database),
+    asRecord(root?.role),
+    asRecord(root?.endpoint),
+  ];
+
+  const snapshots = nestedRecords.flatMap((record) => {
+    if (!record) {
+      return [];
+    }
+    return [
+      parseNeonOperationSnapshot(record),
+      parseNeonOperationSnapshot(record.operation),
+      ...asArray(record.operations).map((entry) => parseNeonOperationSnapshot(entry)),
+    ].filter((entry): entry is NeonOperationSnapshot => Boolean(entry));
+  });
+
+  return Array.from(
+    snapshots.reduce((accumulator, operation) => {
+      accumulator.set(operation.id, operation);
+      return accumulator;
+    }, new Map<string, NeonOperationSnapshot>()).values(),
+  );
+};
+
+const extractNeonOperationIds = (payload: unknown): string[] =>
+  extractNeonOperationSnapshots(payload).map((operation) => operation.id);
+
+const isPendingNeonOperationStatus = (status: string | null | undefined): boolean =>
+  status === 'scheduling' || status === 'running' || status === 'cancelling';
+
+const isFailedNeonOperationStatus = (status: string | null | undefined): boolean =>
+  status === 'failed' || status === 'error' || status === 'cancelled';
 
 const normalizeProviderLabel = (message: string): string =>
   message.replace(/\bneon\b/gi, 'Apployd PostgreSQL DB');
@@ -147,6 +220,165 @@ const neonRequest = async <T>(input: {
   }
 
   return payload as T;
+};
+
+const describeNeonOperation = (operation: NeonOperationSnapshot): string => {
+  const actionLabel = operation.action?.trim() || `operation ${operation.id}`;
+  return operation.error
+    ? `${actionLabel} (${operation.status}): ${operation.error}`
+    : `${actionLabel} (${operation.status})`;
+};
+
+const getNeonOperation = async (input: {
+  apiKey: string;
+  neonProjectId: string;
+  operationId: string;
+}): Promise<NeonOperationSnapshot> => {
+  const payload = await neonRequest<unknown>({
+    path: `/projects/${encodeURIComponent(input.neonProjectId)}/operations/${encodeURIComponent(input.operationId)}`,
+    apiKey: input.apiKey,
+  });
+
+  const operations = extractNeonOperationSnapshots(payload);
+  const operation = operations.find((entry) => entry.id === input.operationId) ?? operations[0] ?? null;
+  if (!operation) {
+    throw new Error(`Neon operation "${input.operationId}" could not be resolved.`);
+  }
+  return operation;
+};
+
+const listNeonOperations = async (input: {
+  apiKey: string;
+  neonProjectId: string;
+}): Promise<NeonOperationSnapshot[]> => {
+  const payload = await neonRequest<unknown>({
+    path: `/projects/${encodeURIComponent(input.neonProjectId)}/operations`,
+    apiKey: input.apiKey,
+  });
+  return extractNeonOperationSnapshots(payload);
+};
+
+const waitForNeonOperations = async (input: {
+  apiKey: string;
+  neonProjectId: string;
+  operationIds: string[];
+  contextLabel: string;
+}): Promise<void> => {
+  const pendingOperationIds = Array.from(
+    new Set(
+      input.operationIds
+        .map((operationId) => operationId.trim())
+        .filter((operationId) => operationId.length > 0),
+    ),
+  );
+  if (pendingOperationIds.length === 0) {
+    return;
+  }
+
+  for (let attempt = 0; attempt <= NEON_OPERATION_WAIT_MAX_ATTEMPTS; attempt += 1) {
+    const operations = await Promise.all(
+      pendingOperationIds.map(async (operationId) => {
+        try {
+          return await getNeonOperation({
+            apiKey: input.apiKey,
+            neonProjectId: input.neonProjectId,
+            operationId,
+          });
+        } catch (error) {
+          if (attempt >= NEON_OPERATION_WAIT_MAX_ATTEMPTS) {
+            throw error;
+          }
+          return null;
+        }
+      }),
+    );
+
+    const resolvedOperations = operations.filter((entry): entry is NeonOperationSnapshot => Boolean(entry));
+    if (resolvedOperations.length !== pendingOperationIds.length) {
+      await sleep(getRetryDelayMs(attempt));
+      continue;
+    }
+
+    const failedOperation = resolvedOperations.find((operation) => isFailedNeonOperationStatus(operation.status));
+    if (failedOperation) {
+      throw new Error(`Neon ${input.contextLabel} failed while waiting for ${describeNeonOperation(failedOperation)}.`);
+    }
+
+    if (!resolvedOperations.some((operation) => isPendingNeonOperationStatus(operation.status))) {
+      return;
+    }
+
+    if (attempt >= NEON_OPERATION_WAIT_MAX_ATTEMPTS) {
+      break;
+    }
+    await sleep(getRetryDelayMs(attempt));
+  }
+
+  throw new Error(`Neon ${input.contextLabel} did not finish before timeout.`);
+};
+
+const waitForNeonProjectToBeIdle = async (input: {
+  apiKey: string;
+  neonProjectId: string;
+  contextLabel: string;
+}): Promise<void> => {
+  for (let attempt = 0; attempt <= NEON_OPERATION_WAIT_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const operations = await listNeonOperations({
+        apiKey: input.apiKey,
+        neonProjectId: input.neonProjectId,
+      });
+      if (!operations.some((operation) => isPendingNeonOperationStatus(operation.status))) {
+        return;
+      }
+    } catch (error) {
+      if (attempt >= NEON_OPERATION_WAIT_MAX_ATTEMPTS) {
+        throw error;
+      }
+    }
+
+    if (attempt >= NEON_OPERATION_WAIT_MAX_ATTEMPTS) {
+      break;
+    }
+    await sleep(getRetryDelayMs(attempt));
+  }
+
+  throw new Error(`Neon ${input.contextLabel} is still waiting on earlier project operations.`);
+};
+
+const isNeonOperationBusyError = (error: unknown): boolean => {
+  const message = neonErrorMessage(error);
+  return (
+    message.includes('running conflicting operations')
+    || message.includes('scheduling of new ones is prohibited')
+    || message.includes('project already has running')
+    || message.includes('conflicting operations')
+  );
+};
+
+const runNeonProjectMutationWithRetries = async <T>(input: {
+  apiKey: string;
+  neonProjectId: string;
+  contextLabel: string;
+  execute: () => Promise<T>;
+}): Promise<T> => {
+  for (let attempt = 0; attempt <= NEON_OPERATION_WAIT_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await input.execute();
+    } catch (error) {
+      if (!isNeonOperationBusyError(error) || attempt >= NEON_OPERATION_WAIT_MAX_ATTEMPTS) {
+        throw error;
+      }
+      await waitForNeonProjectToBeIdle({
+        apiKey: input.apiKey,
+        neonProjectId: input.neonProjectId,
+        contextLabel: input.contextLabel,
+      });
+      await sleep(getRetryDelayMs(attempt));
+    }
+  }
+
+  throw new Error(`Neon ${input.contextLabel} could not be scheduled after waiting for project operations.`);
 };
 
 const resolveBranchId = async (input: {
@@ -253,26 +485,55 @@ const resolveEndpointInfo = async (input: {
     return { endpointId, host };
   }
 
-  const createdPayload = await neonRequest<unknown>({
-    path: `/projects/${encodeURIComponent(input.neonProjectId)}/endpoints`,
-    method: 'POST',
+  const createdPayload = await runNeonProjectMutationWithRetries({
     apiKey: input.apiKey,
-    body: {
-      endpoint: {
-        branch_id: input.neonBranchId,
-        type: 'read_write',
-      },
-    },
+    neonProjectId: input.neonProjectId,
+    contextLabel: 'endpoint creation',
+    execute: () =>
+      neonRequest<unknown>({
+        path: `/projects/${encodeURIComponent(input.neonProjectId)}/endpoints`,
+        method: 'POST',
+        apiKey: input.apiKey,
+        body: {
+          endpoint: {
+            branch_id: input.neonBranchId,
+            type: 'read_write',
+          },
+        },
+      }),
   });
+  const endpointOperationIds = extractNeonOperationIds(createdPayload);
+  if (endpointOperationIds.length > 0) {
+    await waitForNeonOperations({
+      apiKey: input.apiKey,
+      neonProjectId: input.neonProjectId,
+      operationIds: endpointOperationIds,
+      contextLabel: 'endpoint creation',
+    });
+  }
   const createdRoot = asRecord(createdPayload);
   const createdEndpoint = asRecord(createdRoot?.endpoint) ?? createdRoot;
-  const createdHost = asString(createdEndpoint?.host);
   const createdId = asString(createdEndpoint?.id);
+  const refreshedEndpoint =
+    createdId || !asString(createdEndpoint?.host)
+      ? pickEndpoint(
+          asArray(
+            asRecord(
+              await neonRequest<unknown>({
+                path: `/projects/${encodeURIComponent(input.neonProjectId)}/endpoints`,
+                apiKey: input.apiKey,
+              }),
+            )?.endpoints,
+          ),
+        )
+      : null;
+  const createdHost = asString(createdEndpoint?.host) ?? asString(refreshedEndpoint?.host);
+  const resolvedEndpointId = createdId ?? asString(refreshedEndpoint?.id);
   if (!createdHost) {
     throw new Error('Unable to resolve Neon endpoint host.');
   }
   return {
-    endpointId: createdId,
+    endpointId: resolvedEndpointId,
     host: createdHost,
   };
 };
@@ -341,6 +602,9 @@ const neonErrorMessage = (error: unknown): string =>
   (error as Error)?.message?.toLowerCase?.() ?? '';
 
 const isNeonAlreadyExistsError = (error: unknown): boolean => {
+  if (isNeonOperationBusyError(error)) {
+    return false;
+  }
   const message = neonErrorMessage(error);
   return (
     message.includes('already exists')
@@ -399,6 +663,15 @@ const mapNeonProvisionError = (error: unknown): {
     return {
       statusCode: 409,
       code: 'neon_role_not_ready',
+      message: `${rawMessage} Retry in a few seconds.`,
+      retryable: true,
+    };
+  }
+
+  if (isNeonOperationBusyError(error)) {
+    return {
+      statusCode: 409,
+      code: 'neon_project_busy',
       message: `${rawMessage} Retry in a few seconds.`,
       retryable: true,
     };
@@ -514,16 +787,31 @@ const ensureRoleOnBranch = async (input: {
   roleName: string;
 }): Promise<void> => {
   try {
-    await neonRequest<unknown>({
-      path: `/projects/${encodeURIComponent(input.neonProjectId)}/branches/${encodeURIComponent(input.neonBranchId)}/roles`,
-      method: 'POST',
+    const payload = await runNeonProjectMutationWithRetries({
       apiKey: input.apiKey,
-      body: {
-        role: {
-          name: input.roleName,
-        },
-      },
+      neonProjectId: input.neonProjectId,
+      contextLabel: 'role creation',
+      execute: () =>
+        neonRequest<unknown>({
+          path: `/projects/${encodeURIComponent(input.neonProjectId)}/branches/${encodeURIComponent(input.neonBranchId)}/roles`,
+          method: 'POST',
+          apiKey: input.apiKey,
+          body: {
+            role: {
+              name: input.roleName,
+            },
+          },
+        }),
     });
+    const roleOperationIds = extractNeonOperationIds(payload);
+    if (roleOperationIds.length > 0) {
+      await waitForNeonOperations({
+        apiKey: input.apiKey,
+        neonProjectId: input.neonProjectId,
+        operationIds: roleOperationIds,
+        contextLabel: 'role creation',
+      });
+    }
   } catch (error) {
     if (isNeonAlreadyExistsError(error)) {
       await waitForRoleOnBranch(input);
@@ -546,17 +834,32 @@ const ensureDatabaseOnBranch = async (input: {
 
   for (let attempt = 0; attempt <= ROLE_PROPAGATION_RETRY_DELAYS_MS.length; attempt += 1) {
     try {
-      await neonRequest<unknown>({
-        path: `/projects/${encodeURIComponent(input.neonProjectId)}/branches/${encodeURIComponent(input.neonBranchId)}/databases`,
-        method: 'POST',
+      const payload = await runNeonProjectMutationWithRetries({
         apiKey: input.apiKey,
-        body: {
-          database: {
-            name: input.databaseName,
-            owner_name: requestedRole,
-          },
-        },
+        neonProjectId: input.neonProjectId,
+        contextLabel: 'database creation',
+        execute: () =>
+          neonRequest<unknown>({
+            path: `/projects/${encodeURIComponent(input.neonProjectId)}/branches/${encodeURIComponent(input.neonBranchId)}/databases`,
+            method: 'POST',
+            apiKey: input.apiKey,
+            body: {
+              database: {
+                name: input.databaseName,
+                owner_name: requestedRole,
+              },
+            },
+          }),
       });
+      const databaseOperationIds = extractNeonOperationIds(payload);
+      if (databaseOperationIds.length > 0) {
+        await waitForNeonOperations({
+          apiKey: input.apiKey,
+          neonProjectId: input.neonProjectId,
+          operationIds: databaseOperationIds,
+          contextLabel: 'database creation',
+        });
+      }
       return { ownerRoleName: requestedRole };
     } catch (error) {
       if (isNeonAlreadyExistsError(error)) {
@@ -588,12 +891,27 @@ const resetRolePassword = async (input: {
 }): Promise<string> => {
   for (let attempt = 0; attempt <= ROLE_PROPAGATION_RETRY_DELAYS_MS.length; attempt += 1) {
     try {
-      const payload = await neonRequest<unknown>({
-        path: `/projects/${encodeURIComponent(input.neonProjectId)}/branches/${encodeURIComponent(input.neonBranchId)}/roles/${encodeURIComponent(input.roleName)}/reset_password`,
-        method: 'POST',
+      const payload = await runNeonProjectMutationWithRetries({
         apiKey: input.apiKey,
-        body: {},
+        neonProjectId: input.neonProjectId,
+        contextLabel: 'password reset',
+        execute: () =>
+          neonRequest<unknown>({
+            path: `/projects/${encodeURIComponent(input.neonProjectId)}/branches/${encodeURIComponent(input.neonBranchId)}/roles/${encodeURIComponent(input.roleName)}/reset_password`,
+            method: 'POST',
+            apiKey: input.apiKey,
+            body: {},
+          }),
       });
+      const passwordOperationIds = extractNeonOperationIds(payload);
+      if (passwordOperationIds.length > 0) {
+        await waitForNeonOperations({
+          apiKey: input.apiKey,
+          neonProjectId: input.neonProjectId,
+          operationIds: passwordOperationIds,
+          contextLabel: 'password reset',
+        });
+      }
 
       const root = asRecord(payload);
       const password =
@@ -692,6 +1010,20 @@ const createNeonProject = async (input: {
   if (!neonProjectId) {
     throw new Error('Neon project creation response did not include a project ID.');
   }
+  const createProjectOperationIds = extractNeonOperationIds(payload);
+  if (createProjectOperationIds.length > 0) {
+    await waitForNeonOperations({
+      apiKey: input.apiKey,
+      neonProjectId,
+      operationIds: createProjectOperationIds,
+      contextLabel: 'project creation',
+    });
+  }
+  await waitForNeonProjectToBeIdle({
+    apiKey: input.apiKey,
+    neonProjectId,
+    contextLabel: 'project creation',
+  });
   return neonProjectId;
 };
 
