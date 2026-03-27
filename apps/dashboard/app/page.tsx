@@ -49,31 +49,39 @@ const navLinks = [
 const platformModules = [
   {
     id: '01',
-    subtitle: 'Advanced Intelligent Analytics Platform',
-    title: 'Analytics',
-    labels: ['SYSTEM', 'REAL-TIME'],
-    metrics: ['PERFORMANCE', 'PREDICTIVE'],
+    subtitle: 'Release orchestration',
+    title: 'Deployments',
+    copy:
+      'One release flow for web apps, APIs, Python services, and static sites.',
+    labels: ['WORKLOADS', 'Web, API, Python'],
+    metrics: ['ENVIRONMENTS', 'Preview to production'],
   },
   {
     id: '02',
-    subtitle: 'Unified Deployment Data Control',
-    title: 'Data',
-    labels: ['SYSTEM', 'CONNECTED'],
-    metrics: ['PERFORMANCE', 'TRACEABLE'],
+    subtitle: 'Managed infrastructure',
+    title: 'Databases & Secrets',
+    copy:
+      'Provision PostgreSQL and manage environment variables in the same workspace.',
+    labels: ['DATA LAYER', 'Managed Postgres'],
+    metrics: ['CONFIG', 'Secrets & env vars'],
   },
   {
     id: '03',
-    subtitle: 'Adaptive Automation Workflow System',
-    title: 'Automation',
-    labels: ['SYSTEM', 'SMART'],
-    metrics: ['PERFORMANCE', 'EFFICIENT'],
+    subtitle: 'Operational visibility',
+    title: 'Observability',
+    copy:
+      'Track deploy events, logs, checks, and usage without leaving the control plane.',
+    labels: ['SIGNALS', 'Logs & health'],
+    metrics: ['TRACKING', 'Events & usage'],
   },
   {
     id: '04',
-    subtitle: 'Secure Production Runtime Layer',
-    title: 'Security',
-    labels: ['SYSTEM', 'ISOLATED'],
-    metrics: ['PERFORMANCE', 'RESILIENT'],
+    subtitle: 'Team governance',
+    title: 'Workspaces & Billing',
+    copy:
+      'Keep teams organized with role-based workspaces, plans, and invoice visibility.',
+    labels: ['ACCESS', 'Role-based workspaces'],
+    metrics: ['SPEND', 'Plans & invoices'],
   },
 ];
 
@@ -132,38 +140,76 @@ const heroStats = [
   { label: 'Active Streams', value: '24/7' },
 ];
 
-const platformOverviewCards = [
+const testimonials = [
   {
-    title: 'Supported workloads',
-    copy: 'Deploy web apps, APIs, Python services, and static sites from a single platform workflow.',
+    quote: 'Deploy status is finally readable for the whole team.',
+    initials: 'EL',
+    area: 'Release clarity',
+    author: 'Engineering Lead',
+    role: 'Fintech API team',
   },
   {
-    title: 'Transparent billing',
-    copy: 'Review pricing tiers, plan limits, invoices, usage, warning thresholds, and overage controls from the billing surface.',
+    quote: 'Billing stopped being a spreadsheet conversation.',
+    initials: 'FO',
+    area: 'Billing',
+    author: 'Founder',
+    role: 'B2B SaaS team',
   },
   {
-    title: 'Multi-workspace teams',
-    copy: 'Create and switch between workspaces, invite members, and manage owner, admin, developer, and viewer roles per workspace.',
+    quote: 'Logs and rollout checks live where we deploy.',
+    initials: 'PE',
+    area: 'Observability',
+    author: 'Platform Engineer',
+    role: 'Multi-service infrastructure team',
   },
   {
-    title: 'Managed databases',
-    copy: 'Provision Apployd PostgreSQL DB instances from the dashboard and move connection strings into workspace secrets.',
+    quote: 'Secrets and config are easier to manage under pressure.',
+    initials: 'BE',
+    area: 'Config',
+    author: 'Backend Engineer',
+    role: 'Payments platform',
   },
   {
-    title: 'Real-time visibility',
-    copy: 'Track deployment events, logs, usage analytics, audit history, and security signals from the control plane.',
+    quote: 'Workspace roles cleaned up access without slowing releases.',
+    initials: 'CT',
+    area: 'Access',
+    author: 'CTO',
+    role: 'Healthtech product team',
   },
   {
-    title: 'Developer tooling',
-    copy: 'Use the dashboard, docs, VS Code extension, built-in Code Studio editor, terminal, and AI agent in one workflow.',
+    quote: 'New services go live with fewer setup messages.',
+    initials: 'PR',
+    area: 'Launch speed',
+    author: 'Product Engineer',
+    role: 'Marketplace backend',
   },
   {
-    title: 'Integrations',
-    copy: 'Connect GitHub and work alongside Docker, PostgreSQL, Redis, Sentry, OpenTelemetry, Prometheus, and Slack-based workflows.',
+    quote: 'Database setup feels like part of the product now.',
+    initials: 'IL',
+    area: 'Data layer',
+    author: 'Infra Lead',
+    role: 'Growth SaaS team',
   },
   {
-    title: 'Support paths',
-    copy: 'Plans span community, email, priority, 24/7 priority, and dedicated support, alongside docs, help, and contact channels.',
+    quote: 'When something breaks, the release trail is already there.',
+    initials: 'SR',
+    area: 'Incidents',
+    author: 'SRE',
+    role: 'API platform team',
+  },
+  {
+    quote: 'Preview to production is one path instead of three tools.',
+    initials: 'FS',
+    area: 'Preview flow',
+    author: 'Full-stack Engineer',
+    role: 'Client dashboard team',
+  },
+  {
+    quote: 'Product, engineering, and ops finally look at the same screen.',
+    initials: 'OM',
+    area: 'Team alignment',
+    author: 'Operations Manager',
+    role: 'Workflow automation team',
   },
 ] as const;
 
@@ -216,10 +262,10 @@ const homepageFaqJsonLd = {
 const homepageAboutJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'AboutPage',
-  name: 'Apployd platform overview',
+  name: 'Apployd deployment platform',
   url: `${siteUrl}/`,
   description:
-    'Overview of Apployd deployment workflows, billing visibility, team workspaces, managed databases, integrations, observability, and developer tooling.',
+    'Apployd homepage for deployment workflows, billing visibility, team workspaces, managed databases, integrations, observability, and developer tooling.',
   about: {
     '@type': 'SoftwareApplication',
     name: 'Apployd',
@@ -274,6 +320,122 @@ function AnalyticsSvg() {
     </svg>
   );
 }
+
+function LaunchCatalogMock() {
+  const items = [
+    { label: 'Static site', tone: 'muted' as const },
+    { label: 'Web app', tone: 'active' as const },
+    { label: 'Private API', tone: 'default' as const },
+    { label: 'Background worker', tone: 'default' as const },
+    { label: 'Managed Postgres', tone: 'soft' as const },
+  ];
+
+  return (
+    <div className={styles.launchCatalogMock}>
+      <div className={styles.launchMockTopBar}>
+        <span className={styles.launchTopBarPlus}>+</span>
+        <span>New service</span>
+      </div>
+      <div className={styles.launchCatalogList}>
+        {items.map((item) => (
+          <div key={item.label} className={styles.launchCatalogItem} data-tone={item.tone}>
+            <span className={styles.launchCatalogIcon} aria-hidden="true" />
+            <strong>{item.label}</strong>
+            <span className={styles.launchCatalogMark} aria-hidden="true" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LaunchConfigMock() {
+  const fields = [
+    { label: 'Branch', value: 'main' },
+    { label: 'Install', value: 'npm install' },
+    { label: 'Start', value: 'npm start' },
+    { label: 'Region', value: 'Frankfurt' },
+  ];
+
+  return (
+    <div className={styles.launchConfigMock}>
+      <div className={styles.launchConfigFields}>
+        {fields.map((field) => (
+          <div key={field.label} className={styles.launchConfigRow}>
+            <span>{field.label}</span>
+            <strong>{field.value}</strong>
+          </div>
+        ))}
+      </div>
+      <div className={styles.launchDeployBar}>
+        <div className={styles.launchDeployButton}>Deploy preview</div>
+        <div className={styles.launchDeployFeed}>
+          <span>cached dependencies</span>
+          <span>health checks passed</span>
+          <span>release promoted</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LaunchReleaseMock() {
+  const items = [
+    { title: 'payments-api live', meta: '2m ago' },
+    { title: 'dashboard-preview ready', meta: '9m ago' },
+    { title: 'worker rollout complete', meta: '14m ago' },
+  ];
+
+  return (
+    <div className={styles.launchReleaseMock}>
+      <div className={styles.launchCommandLine}>
+        <code>git push origin main</code>
+        <span>release started</span>
+      </div>
+      <div className={styles.launchTimelinePanel}>
+        <div className={styles.launchTimelineHeader}>
+          <div className={styles.launchRepoMeta}>
+            <span className={styles.launchRepoDot} aria-hidden="true" />
+            <p>acme / platform</p>
+          </div>
+          <strong>Live traffic</strong>
+        </div>
+        <div className={styles.launchTimelineList}>
+          {items.map((item) => (
+            <div key={item.title} className={styles.launchTimelineItem}>
+              <span className={styles.launchTimelineState} aria-hidden="true" />
+              <div>
+                <strong>{item.title}</strong>
+                <p>{item.meta}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const launchSteps = [
+  {
+    id: '01',
+    title: 'Pick the workload',
+    copy: 'Start with a web app, API, worker, static site, or database flow from one launch surface.',
+    mock: LaunchCatalogMock,
+  },
+  {
+    id: '02',
+    title: 'Wire the release',
+    copy: 'Connect the repo, branch, and commands once. Apployd keeps deploy settings clean and repeatable.',
+    mock: LaunchConfigMock,
+  },
+  {
+    id: '03',
+    title: 'Ship with live signals',
+    copy: 'Push changes and follow the rollout through logs, checks, and live release updates in one view.',
+    mock: LaunchReleaseMock,
+  },
+] as const;
 
 /* Step 2: Data – connected nodes / data flow / database schema */
 function DataSvg() {
@@ -595,16 +757,11 @@ export default function HomePage() {
         <div className={`${styles.sectionBackdrop} ${styles.heroBackdrop}`} aria-hidden="true" />
         <div className={styles.container}>
           <div className={styles.heroContent}>
-            <div className={styles.heroMeta}>
-              <span>DEPLOYMENT</span>
-              <span>PLATFORM</span>
-              <span>OBSERVABILITY</span>
-            </div>
             <div className={styles.heroLayout}>
               <div className={styles.heroMain}>
                 <h1 className={styles.heroTitle}>Build & Deploy with confidence</h1>
                 <p className={styles.heroCopy}>
-                  Apployd helps teams deploy web apps, APIs, Python services, and static sites with transparent billing, team workspaces, managed databases, secure secrets, and live operational feedback.
+                  Deploy web apps, APIs, Python services, and static sites from one clear workflow. Connect a repo, ship predictable releases, and keep each rollout visible as it happens.
                 </p>
                 <div className={styles.heroActions}>
                   <Link href="/signup" className={styles.primaryButton}>
@@ -614,22 +771,17 @@ export default function HomePage() {
                     Sign In
                   </Link>
                 </div>
-                <div className={styles.heroSignalRow}>
-                  <span>TRANSPARENT BILLING</span>
-                  <span>TEAM WORKSPACES</span>
-                  <span>LIVE LOGS</span>
-                </div>
               </div>
               <aside className={styles.heroPanel}>
-                <p>DEPLOY SIGNALS</p>
-                <h3>47s</h3>
+                <p>DEPLOY FLOW</p>
+                <h3>Git to live</h3>
                 <div>
-                  <span>Median Deploy</span>
-                  <strong>99.9% Uptime Target</strong>
+                  <span>Trigger</span>
+                  <strong>Fresh build on every push</strong>
                 </div>
                 <div>
-                  <span>Runtime</span>
-                  <strong>Queued {`>>>`} Live</strong>
+                  <span>Output</span>
+                  <strong>Logs, checks, live URL</strong>
                 </div>
                 <div className={styles.heroTerminal}>
                   <code>$ apployd deploy --project payments-api</code>
@@ -650,34 +802,34 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section id="overview" data-parallax-section className={`${styles.section} ${styles.overviewSection}`}>
-        <SectionThreeBackground className={styles.sectionThreeCanvas ?? ''} variant="product" />
-        <div className={`${styles.sectionBackdrop} ${styles.overviewBackdrop}`} aria-hidden="true" />
+      <section id="launch" data-parallax-section className={`${styles.section} ${styles.launchSection}`}>
+        <SectionThreeBackground className={styles.sectionThreeCanvas ?? ''} variant="launch" />
+        <div className={`${styles.sectionBackdrop} ${styles.launchBackdrop}`} aria-hidden="true" />
         <div className={styles.container}>
-          <div className={styles.overviewHeader}>
-            <p className={styles.sectionLabel}>PLATFORM OVERVIEW</p>
-            <h2 className={styles.sectionTitle}>What Apployd includes</h2>
-            <p className={styles.overviewIntro}>
-              Apployd brings deployment workflows, pricing visibility, workspace-based team management, database provisioning, integrations, observability, and coding tools into a single managed platform. The goal is to make the product surface easier to understand from the homepage.
+          <div className={styles.launchHeader}>
+            <p className={styles.sectionLabel}>HOW IT WORKS</p>
+            <h2 className={styles.sectionTitle}>Three steps from idea to live service</h2>
+            <p className={styles.launchIntro}>
+              Choose what you want to run, point Apployd at the repo, and let the platform carry the release path with live operational feedback.
             </p>
           </div>
+          <div className={styles.launchGrid}>
+            {launchSteps.map((step) => {
+              const Mock = step.mock;
 
-          <div className={styles.overviewGrid}>
-            {platformOverviewCards.map((card) => (
-              <article key={card.title} className={styles.overviewCard}>
-                <h3 className={styles.overviewCardTitle}>{card.title}</h3>
-                <p className={styles.overviewCardCopy}>{card.copy}</p>
-              </article>
-            ))}
-          </div>
-
-          <div className={styles.overviewFaqGrid}>
-            {homepageFaqItems.map((item) => (
-              <article key={item.question} className={styles.overviewFaqItem}>
-                <h3 className={styles.overviewFaqQuestion}>{item.question}</h3>
-                <p className={styles.overviewFaqAnswer}>{item.answer}</p>
-              </article>
-            ))}
+              return (
+                <article key={step.id} className={styles.launchCard}>
+                  <span className={styles.launchStepBadge}>{step.id}</span>
+                  <div className={styles.launchCardBody}>
+                    <h3 className={styles.launchCardTitle}>{step.title}</h3>
+                    <p className={styles.launchCardCopy}>{step.copy}</p>
+                  </div>
+                  <div className={styles.launchMockShell}>
+                    <Mock />
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -692,46 +844,71 @@ export default function HomePage() {
                 <span key={index}>+</span>
               ))}
             </div>
-            <p className={styles.sectionLabel}>ABOUT US</p>
-            <h2 className={styles.sectionTitle}>The Core Platform Powering Tools</h2>
+            <div className={styles.productLead}>
+              <p className={styles.sectionLabel}>PLATFORM</p>
+              <h2 className={styles.sectionTitle}>One control plane for shipping production apps</h2>
+              <p className={styles.productIntro}>
+                Deploy, observe, and operate production apps from one clean workspace.
+              </p>
+            </div>
           </div>
 
-          <ProductStepTracker />
-          <div className={styles.productLayout}>
-            <aside className={styles.stepRail}>
-              {platformModules.map((module, index) => (
-                <div key={module.id} className={styles.stepDot} data-step-index={index}>
-                  {module.id}
-                </div>
-              ))}
-            </aside>
-
-            <div className={`${styles.platformVisual} ${styles.parallaxFast}`}>
-              <div className={styles.visualStack}>
-                <div className={styles.visualLayer} data-visual-index={0}><AnalyticsSvg /></div>
-                <div className={styles.visualLayer} data-visual-index={1}><DataSvg /></div>
-                <div className={styles.visualLayer} data-visual-index={2}><AutomationSvg /></div>
-                <div className={styles.visualLayer} data-visual-index={3}><SecuritySvg /></div>
-              </div>
-            </div>
-
-            <div className={styles.platformInfo}>
-              {platformModules.map((module, index) => (
-                <article key={module.id} className={styles.platformCard} data-card-index={index} style={{ animationDelay: `${index * 90}ms` }}>
-                  <p className={styles.cardSubtitle}>{module.subtitle}</p>
-                  <h3 className={styles.cardTitle}>{module.title}</h3>
-                  <div className={styles.cardMeta}>
-                    <div>
-                      <span>{module.labels[0]}</span>
-                      <strong>{module.labels[1]}</strong>
-                    </div>
-                    <div>
-                      <span>{module.metrics[0]}</span>
-                      <strong>{module.metrics[1]}</strong>
-                    </div>
+          <div className={styles.productStage}>
+            <ProductStepTracker />
+            <div className={styles.productLayout}>
+              <aside className={styles.stepRail}>
+                {platformModules.map((module, index) => (
+                  <div key={module.id} className={styles.stepDot} data-step-index={index}>
+                    {module.id}
                   </div>
-                </article>
-              ))}
+                ))}
+              </aside>
+
+              <div className={`${styles.platformVisual} ${styles.parallaxFast}`}>
+                <div className={styles.visualFrame}>
+                  <div className={styles.visualChrome}>
+                    <div className={styles.visualChromeDots} aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+                    <p>Apployd Control Plane</p>
+                  </div>
+                  <div className={styles.visualStack}>
+                    <div className={styles.visualLayer} data-visual-index={0}><AnalyticsSvg /></div>
+                    <div className={styles.visualLayer} data-visual-index={1}><DataSvg /></div>
+                    <div className={styles.visualLayer} data-visual-index={2}><AutomationSvg /></div>
+                    <div className={styles.visualLayer} data-visual-index={3}><SecuritySvg /></div>
+                  </div>
+                  <div className={styles.visualFooter}>
+                    <span>Build</span>
+                    <span>Observe</span>
+                    <span>Operate</span>
+                  </div>
+                </div>
+              </div>
+              <div className={styles.platformInfo}>
+                {platformModules.map((module, index) => (
+                  <article key={module.id} className={styles.platformCard} data-card-index={index} style={{ animationDelay: `${index * 90}ms` }}>
+                    <div className={styles.cardTop}>
+                      <p className={styles.cardSubtitle}>{module.subtitle}</p>
+                      <span className={styles.cardIndex}>{module.id}</span>
+                    </div>
+                    <h3 className={styles.cardTitle}>{module.title}</h3>
+                    <p className={styles.cardCopy}>{module.copy}</p>
+                    <div className={styles.cardMeta}>
+                      <div>
+                        <span>{module.labels[0]}</span>
+                        <strong>{module.labels[1]}</strong>
+                      </div>
+                      <div>
+                        <span>{module.metrics[0]}</span>
+                        <strong>{module.metrics[1]}</strong>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -858,6 +1035,38 @@ export default function HomePage() {
                 </span>
               ))}
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="testimonials" data-parallax-section className={`${styles.section} ${styles.testimonialsSection}`}>
+        <SectionThreeBackground className={styles.sectionThreeCanvas ?? ''} variant="testimonials" />
+        <div className={`${styles.sectionBackdrop} ${styles.testimonialsBackdrop}`} aria-hidden="true" />
+        <div className={styles.container}>
+          <div className={styles.testimonialsHeader}>
+            <p className={styles.sectionLabel}>TESTIMONIALS</p>
+            <div className={styles.testimonialsHeadRow}>
+              <h2 className={styles.testimonialsTitle}>What teams say</h2>
+              <p className={styles.testimonialsHint}>Horizontal scroll</p>
+            </div>
+          </div>
+          <div className={styles.testimonialsGrid}>
+            {testimonials.map((item, index) => (
+              <article key={`${item.author}-${item.role}`} className={styles.testimonialCard}>
+                <div className={styles.testimonialTop}>
+                  <span className={styles.testimonialSignal}>{item.area}</span>
+                  <span className={styles.testimonialIndex}>{String(index + 1).padStart(2, '0')}</span>
+                </div>
+                <blockquote className={styles.testimonialQuote}>“{item.quote}”</blockquote>
+                <div className={styles.testimonialMeta}>
+                  <span className={styles.testimonialAvatar}>{item.initials}</span>
+                  <div className={styles.testimonialUser}>
+                    <strong>{item.author}</strong>
+                    <p>{item.role}</p>
+                  </div>
+                </div>
+              </article>
+            ))}
           </div>
         </div>
       </section>

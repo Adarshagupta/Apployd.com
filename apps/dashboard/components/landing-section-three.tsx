@@ -4,15 +4,17 @@ import { useEffect, useRef } from 'react';
 
 import * as THREE from 'three';
 
-type SectionVariant = 'hero' | 'product' | 'features' | 'lab' | 'workflow' | 'integration' | 'cta';
+type SectionVariant = 'hero' | 'launch' | 'product' | 'features' | 'lab' | 'workflow' | 'integration' | 'testimonials' | 'cta';
 
 const paletteByVariant: Record<SectionVariant, { line: number; point: number; ring: number }> = {
   hero: { line: 0x5a7ec7, point: 0x7fb6ff, ring: 0x3a5eb7 },
+  launch: { line: 0x5678ce, point: 0x87bdff, ring: 0x3567d0 },
   product: { line: 0x4f74d0, point: 0x78b2ff, ring: 0x2f5ed3 },
   features: { line: 0x6481c7, point: 0x85c2ff, ring: 0x4a67c2 },
   lab: { line: 0x3a7fe0, point: 0x47a5ff, ring: 0x2f8dff },
   workflow: { line: 0x4e70ca, point: 0x75b4ff, ring: 0x4062c4 },
   integration: { line: 0x4e70ca, point: 0x72a8ff, ring: 0x3c61bf },
+  testimonials: { line: 0x5a7ac8, point: 0x8bbfff, ring: 0x3d68c8 },
   cta: { line: 0x5574c3, point: 0x76a7ff, ring: 0x4866b8 },
 };
 

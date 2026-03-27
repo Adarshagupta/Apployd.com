@@ -103,11 +103,18 @@ export const metadata: Metadata = {
 };
 
 const GOOGLE_TAG_ID = 'AW-17976896275';
+const THEME_BOOTSTRAP_SCRIPT = `(function(){try{var preferenceKey='apployd_theme_preference_set';var landingKey='apployd_landing_theme';var dashboardKey='apployd_dashboard_theme';var attribute='data-landing-theme';var hasPreference=window.localStorage.getItem(preferenceKey)==='1';if(!hasPreference){window.localStorage.setItem(landingKey,'light');window.localStorage.setItem(dashboardKey,'light');document.documentElement.setAttribute(attribute,'light');return;}var landingTheme=window.localStorage.getItem(landingKey);var dashboardTheme=window.localStorage.getItem(dashboardKey);var theme=(landingTheme==='light'||landingTheme==='dark')?landingTheme:(dashboardTheme==='light'||dashboardTheme==='dark')?dashboardTheme:'light';document.documentElement.setAttribute(attribute,theme);}catch(_error){document.documentElement.setAttribute('data-landing-theme','light');}})();`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${heading.variable} ${mono.variable}`} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${heading.variable} ${mono.variable}`}
+      data-landing-theme="light"
+      suppressHydrationWarning
+    >
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} />
         <script async src={`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_TAG_ID}`} />
         <script
           dangerouslySetInnerHTML={{

@@ -10,7 +10,10 @@ import { useWorkspaceContext } from '../../../components/workspace-provider';
 
 type DashboardTheme = 'light' | 'dark';
 const THEME_STORAGE_KEY = 'apployd_dashboard_theme';
+const LANDING_THEME_STORAGE_KEY = 'apployd_landing_theme';
+const THEME_PREFERENCE_SET_KEY = 'apployd_theme_preference_set';
 const THEME_UPDATED_EVENT = 'apployd:dashboard-theme-updated';
+const LANDING_THEME_UPDATED_EVENT = 'apployd:landing-theme-updated';
 const AUTH_STORAGE_KEY = 'apployd_token';
 
 function SkeletonBlock({ className }: { className: string }) {
@@ -21,7 +24,7 @@ export default function SettingsPage() {
   const { selectedOrganizationId, subscription } = useWorkspaceContext();
   const [me, setMe] = useState<{ id: string; email: string; name: string | null; createdAt?: string } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [theme, setTheme] = useState<DashboardTheme>('dark');
+  const [theme, setTheme] = useState<DashboardTheme>('light');
   const [githubConnected, setGithubConnected] = useState(false);
   const [message, setMessage] = useState('');
   useDashboardMessageToast(message);
@@ -55,13 +58,16 @@ export default function SettingsPage() {
       return;
     }
 
+    const hasThemePreference = window.localStorage.getItem(THEME_PREFERENCE_SET_KEY) === '1';
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored === 'light' || stored === 'dark') {
+    if (hasThemePreference && (stored === 'light' || stored === 'dark')) {
       setTheme(stored);
       return;
     }
 
-    setTheme('dark');
+    window.localStorage.setItem(THEME_STORAGE_KEY, 'light');
+    window.localStorage.setItem(LANDING_THEME_STORAGE_KEY, 'light');
+    setTheme('light');
   }, []);
 
   const toggleTheme = () => {
@@ -71,8 +77,11 @@ export default function SettingsPage() {
 
     setTheme((current) => {
       const next: DashboardTheme = current === 'dark' ? 'light' : 'dark';
+      window.localStorage.setItem(THEME_PREFERENCE_SET_KEY, '1');
       window.localStorage.setItem(THEME_STORAGE_KEY, next);
+      window.localStorage.setItem(LANDING_THEME_STORAGE_KEY, next);
       window.dispatchEvent(new Event(THEME_UPDATED_EVENT));
+      window.dispatchEvent(new Event(LANDING_THEME_UPDATED_EVENT));
       return next;
     });
   };

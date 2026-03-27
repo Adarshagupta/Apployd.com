@@ -6,13 +6,19 @@ type LandingTheme = 'light' | 'dark';
 
 const LANDING_THEME_STORAGE_KEY = 'apployd_landing_theme';
 const DASHBOARD_THEME_STORAGE_KEY = 'apployd_dashboard_theme';
+const THEME_PREFERENCE_SET_KEY = 'apployd_theme_preference_set';
 const LANDING_THEME_ATTRIBUTE = 'data-landing-theme';
 const LANDING_THEME_UPDATED_EVENT = 'apployd:landing-theme-updated';
 const DASHBOARD_THEME_UPDATED_EVENT = 'apployd:dashboard-theme-updated';
 
 function resolveTheme(): LandingTheme {
   if (typeof window === 'undefined') {
-    return 'dark';
+    return 'light';
+  }
+
+  const hasThemePreference = window.localStorage.getItem(THEME_PREFERENCE_SET_KEY) === '1';
+  if (!hasThemePreference) {
+    return 'light';
   }
 
   const landingTheme = window.localStorage.getItem(LANDING_THEME_STORAGE_KEY);
@@ -25,7 +31,7 @@ function resolveTheme(): LandingTheme {
     return dashboardTheme;
   }
 
-  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  return 'light';
 }
 
 function applyTheme(theme: LandingTheme) {
@@ -40,6 +46,10 @@ export function LandingThemeSync() {
   useEffect(() => {
     const syncTheme = () => {
       const theme = resolveTheme();
+      if (window.localStorage.getItem(THEME_PREFERENCE_SET_KEY) !== '1') {
+        window.localStorage.setItem(LANDING_THEME_STORAGE_KEY, 'light');
+        window.localStorage.setItem(DASHBOARD_THEME_STORAGE_KEY, 'light');
+      }
       applyTheme(theme);
     };
 

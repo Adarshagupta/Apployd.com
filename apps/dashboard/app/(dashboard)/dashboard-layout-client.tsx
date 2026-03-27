@@ -91,6 +91,8 @@ const PROJECT_DETAIL_RE = /^\/projects\/[a-f0-9-]+/i;
 
 type DashboardTheme = 'light' | 'dark';
 const THEME_STORAGE_KEY = 'apployd_dashboard_theme';
+const LANDING_THEME_STORAGE_KEY = 'apployd_landing_theme';
+const THEME_PREFERENCE_SET_KEY = 'apployd_theme_preference_set';
 const AUTH_STORAGE_KEY = 'apployd_token';
 const THEME_UPDATED_EVENT = 'apployd:dashboard-theme-updated';
 const CONTENT_ADMIN_EMAIL_DOMAIN = '@apployd.com';
@@ -117,7 +119,7 @@ const canManageContent = (email: string | null): boolean => {
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname() || '/overview';
   const router = useRouter();
-  const [theme, setTheme] = useState<DashboardTheme>('dark');
+  const [theme, setTheme] = useState<DashboardTheme>('light');
   const [authChecked, setAuthChecked] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [topbarMenuOpen, setTopbarMenuOpen] = useState(false);
@@ -139,13 +141,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       return;
     }
 
+    const hasThemePreference = window.localStorage.getItem(THEME_PREFERENCE_SET_KEY) === '1';
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored === 'light' || stored === 'dark') {
+    if (hasThemePreference && (stored === 'light' || stored === 'dark')) {
       setTheme(stored);
       return;
     }
 
-    setTheme('dark');
+    window.localStorage.setItem(THEME_STORAGE_KEY, 'light');
+    window.localStorage.setItem(LANDING_THEME_STORAGE_KEY, 'light');
+    setTheme('light');
   }, [router]);
 
   useEffect(() => {
@@ -195,6 +200,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     }
 
     const syncThemeFromStorage = () => {
+      if (window.localStorage.getItem(THEME_PREFERENCE_SET_KEY) !== '1') {
+        setTheme('light');
+        return;
+      }
       const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
       if (stored === 'light' || stored === 'dark') {
         setTheme(stored);

@@ -6,6 +6,7 @@ type LandingTheme = 'light' | 'dark';
 
 const LANDING_THEME_STORAGE_KEY = 'apployd_landing_theme';
 const DASHBOARD_THEME_STORAGE_KEY = 'apployd_dashboard_theme';
+const THEME_PREFERENCE_SET_KEY = 'apployd_theme_preference_set';
 const LANDING_THEME_ATTRIBUTE = 'data-landing-theme';
 const LANDING_THEME_UPDATED_EVENT = 'apployd:landing-theme-updated';
 const DASHBOARD_THEME_UPDATED_EVENT = 'apployd:dashboard-theme-updated';
@@ -23,7 +24,7 @@ function applyLandingTheme(theme: LandingTheme) {
 }
 
 export function LandingThemeToggle({ className }: LandingThemeToggleProps) {
-  const [theme, setTheme] = useState<LandingTheme>('dark');
+  const [theme, setTheme] = useState<LandingTheme>('light');
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -31,22 +32,21 @@ export function LandingThemeToggle({ className }: LandingThemeToggleProps) {
     }
 
     const stored = window.localStorage.getItem(LANDING_THEME_STORAGE_KEY);
-    if (stored === 'light' || stored === 'dark') {
+    const hasThemePreference = window.localStorage.getItem(THEME_PREFERENCE_SET_KEY) === '1';
+    if (hasThemePreference && (stored === 'light' || stored === 'dark')) {
       setTheme(stored);
       applyLandingTheme(stored);
       return;
     }
 
     const dashboardStored = window.localStorage.getItem(DASHBOARD_THEME_STORAGE_KEY);
-    if (dashboardStored === 'light' || dashboardStored === 'dark') {
+    if (hasThemePreference && (dashboardStored === 'light' || dashboardStored === 'dark')) {
       setTheme(dashboardStored);
       applyLandingTheme(dashboardStored);
       return;
     }
 
-    const initialTheme: LandingTheme = window.matchMedia('(prefers-color-scheme: light)').matches
-      ? 'light'
-      : 'dark';
+    const initialTheme: LandingTheme = 'light';
     setTheme(initialTheme);
     applyLandingTheme(initialTheme);
   }, []);
@@ -69,7 +69,12 @@ export function LandingThemeToggle({ className }: LandingThemeToggleProps) {
     <button
       type="button"
       className={className}
-      onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
+      onClick={() => {
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(THEME_PREFERENCE_SET_KEY, '1');
+        }
+        setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
+      }}
       aria-label={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
       aria-pressed={isLight}
     >

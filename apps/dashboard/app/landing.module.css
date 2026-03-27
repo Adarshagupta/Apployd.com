@@ -304,25 +304,6 @@
   animation: fade-up 0.8s ease both;
 }
 
-.heroMeta {
-  margin: 0 0 1rem;
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.42rem;
-}
-
-.heroMeta span {
-  font-family: var(--font-mono), monospace;
-  font-size: 0.74rem;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  color: rgba(219, 227, 248, 0.8);
-  border: 1px solid rgba(194, 204, 232, 0.3);
-  border-radius: 999px;
-  padding: 0.35rem 0.62rem;
-}
-
 .heroLayout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
@@ -401,24 +382,6 @@
   transform: translateY(-1px);
 }
 
-.heroSignalRow {
-  margin-top: 1.15rem;
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 0.42rem;
-}
-
-.heroSignalRow span {
-  font-family: var(--font-mono), monospace;
-  font-size: 0.72rem;
-  letter-spacing: 0.1em;
-  color: rgba(208, 217, 241, 0.8);
-  border-radius: 999px;
-  border: 1px solid rgba(191, 201, 228, 0.26);
-  background: rgba(8, 11, 17, 0.55);
-  padding: 0.28rem 0.5rem;
-}
-
 .heroPanel {
   border-radius: 0;
   border: none;
@@ -437,8 +400,9 @@
 
 .heroPanel h3 {
   margin: 0.25rem 0 0;
-  font-size: 2.2rem;
+  font-size: clamp(1.7rem, 3vw, 2.2rem);
   line-height: 1;
+  letter-spacing: -0.04em;
 }
 
 .heroPanel div {
@@ -515,6 +479,394 @@
   letter-spacing: 0.06em;
 }
 
+.launchSection {
+  padding-top: 4.9rem;
+  padding-bottom: 3.2rem;
+}
+
+.launchBackdrop {
+  background:
+    radial-gradient(circle at 18% 34%, rgba(52, 118, 235, 0.12), transparent 30%),
+    radial-gradient(circle at 78% 64%, rgba(70, 183, 145, 0.08), transparent 32%),
+    linear-gradient(180deg, rgba(13, 21, 42, 0.08), transparent 72%);
+  transform: translate3d(0, calc(var(--section-progress) * -20px), 0) scale(1.08);
+}
+
+.launchHeader {
+  display: grid;
+  gap: 0.45rem;
+  max-width: 860px;
+}
+
+.launchIntro {
+  margin: 0;
+  max-width: 780px;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: rgba(202, 214, 243, 0.76);
+}
+
+.launchGrid {
+  margin-top: 1.6rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.launchCard {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto auto;
+  gap: 1rem;
+  border: 1px solid rgba(156, 176, 221, 0.12);
+  background:
+    linear-gradient(180deg, rgba(9, 12, 21, 0.84), rgba(6, 8, 14, 0.7)),
+    radial-gradient(circle at top left, rgba(42, 141, 255, 0.08), transparent 38%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 22px 46px rgba(0, 0, 0, 0.14);
+  padding: 1.2rem;
+  overflow: hidden;
+}
+
+.launchCard::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 74px 74px;
+  opacity: 0.08;
+  pointer-events: none;
+}
+
+.launchStepBadge {
+  position: relative;
+  z-index: 1;
+  width: 2.8rem;
+  height: 2.8rem;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(98, 136, 210, 0.28);
+  background: linear-gradient(135deg, rgba(47, 141, 255, 0.28), rgba(92, 193, 255, 0.08));
+  font-family: var(--font-mono), monospace;
+  font-size: 0.82rem;
+  letter-spacing: 0.12em;
+  color: rgba(236, 242, 255, 0.92);
+}
+
+.launchCardBody {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.launchCardTitle {
+  margin: 0;
+  font-size: clamp(1.55rem, 2.6vw, 2.3rem);
+  line-height: 1.04;
+  font-weight: 500;
+}
+
+.launchCardCopy {
+  margin: 0;
+  max-width: 28ch;
+  line-height: 1.55;
+  color: rgba(197, 208, 236, 0.74);
+}
+
+.launchMockShell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-self: start;
+  border: 1px solid rgba(162, 180, 218, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+    linear-gradient(180deg, rgba(6, 9, 15, 0.9), rgba(5, 7, 12, 0.82));
+  padding: 0.95rem;
+  overflow: hidden;
+}
+
+.launchMockShell::after {
+  content: '';
+  position: absolute;
+  inset: auto -12% -28% 28%;
+  height: 180px;
+  background: radial-gradient(circle, rgba(42, 141, 255, 0.16), transparent 68%);
+  filter: blur(34px);
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.launchCatalogMock,
+.launchConfigMock,
+.launchReleaseMock {
+  position: relative;
+  display: grid;
+  min-height: 100%;
+}
+
+.launchMockTopBar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 0.7rem;
+  font-size: 0.92rem;
+  color: rgba(225, 233, 248, 0.86);
+}
+
+.launchTopBarPlus {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(168, 184, 220, 0.22);
+  font-size: 1rem;
+  line-height: 1;
+  color: rgba(233, 239, 252, 0.88);
+}
+
+.launchCatalogList {
+  display: grid;
+  gap: 0.48rem;
+  padding-top: 0.7rem;
+}
+
+.launchCatalogItem {
+  display: grid;
+  grid-template-columns: 1.15rem minmax(0, 1fr) 1rem;
+  align-items: center;
+  gap: 0.7rem;
+  border: 1px solid rgba(157, 177, 217, 0.14);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.75rem 0.8rem;
+  color: rgba(228, 235, 250, 0.86);
+}
+
+.launchCatalogItem strong {
+  font-size: 0.98rem;
+  font-weight: 500;
+}
+
+.launchCatalogItem[data-tone='active'] {
+  border-color: rgba(96, 161, 255, 0.26);
+  background: linear-gradient(90deg, rgba(42, 141, 255, 0.2), rgba(120, 198, 255, 0.06));
+}
+
+.launchCatalogItem[data-tone='muted'] {
+  opacity: 0.84;
+}
+
+.launchCatalogItem[data-tone='soft'] {
+  opacity: 0.6;
+}
+
+.launchCatalogIcon,
+.launchCatalogMark,
+.launchTimelineState,
+.launchRepoDot {
+  display: inline-block;
+  border-radius: 999px;
+}
+
+.launchCatalogIcon {
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 1px solid rgba(188, 199, 226, 0.3);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.launchCatalogMark {
+  width: 0.7rem;
+  height: 0.7rem;
+  border: 1px solid rgba(188, 199, 226, 0.28);
+  background: transparent;
+}
+
+.launchCatalogItem[data-tone='active'] .launchCatalogMark {
+  background: #5cc1ff;
+  border-color: #5cc1ff;
+  box-shadow: 0 0 16px rgba(92, 193, 255, 0.35);
+}
+
+.launchConfigMock {
+  grid-template-rows: 1fr auto;
+  gap: 0.9rem;
+}
+
+.launchConfigFields {
+  display: grid;
+  gap: 0.56rem;
+}
+
+.launchConfigRow {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.launchConfigRow span {
+  font-size: 0.84rem;
+  color: rgba(191, 204, 235, 0.68);
+}
+
+.launchConfigRow strong {
+  border: 1px solid rgba(157, 177, 217, 0.14);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.78rem 0.82rem;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: rgba(232, 238, 252, 0.9);
+}
+
+.launchDeployBar {
+  display: grid;
+  grid-template-columns: 138px minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.launchDeployButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.2rem;
+  background: #111827;
+  color: #f8fbff;
+  font-weight: 500;
+}
+
+.launchDeployFeed {
+  display: grid;
+  gap: 0.34rem;
+  min-height: 3.2rem;
+  border: 1px solid rgba(157, 177, 217, 0.14);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.66rem 0.8rem;
+}
+
+.launchDeployFeed span {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  color: rgba(196, 210, 241, 0.78);
+}
+
+.launchReleaseMock {
+  grid-template-rows: auto 1fr;
+  gap: 0.9rem;
+}
+
+.launchCommandLine {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+}
+
+.launchCommandLine code {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.78rem;
+  color: rgba(240, 244, 255, 0.9);
+}
+
+.launchCommandLine span {
+  font-size: 0.75rem;
+  color: rgba(195, 208, 236, 0.66);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.launchTimelinePanel {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  border: 1px solid rgba(157, 177, 217, 0.14);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.launchTimelineHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.82rem 0.9rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.launchRepoMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.launchRepoMeta p,
+.launchTimelineHeader strong,
+.launchTimelineItem p,
+.launchTimelineItem strong {
+  margin: 0;
+}
+
+.launchRepoDot {
+  width: 0.7rem;
+  height: 0.7rem;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.launchRepoMeta p {
+  font-size: 0.84rem;
+  color: rgba(216, 225, 246, 0.8);
+}
+
+.launchTimelineHeader strong {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: rgba(157, 213, 185, 0.92);
+}
+
+.launchTimelineList {
+  display: grid;
+}
+
+.launchTimelineItem {
+  display: grid;
+  grid-template-columns: 0.9rem minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+  padding: 0.9rem;
+}
+
+.launchTimelineItem + .launchTimelineItem {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.launchTimelineState {
+  width: 0.78rem;
+  height: 0.78rem;
+  margin-top: 0.18rem;
+  background: #1bb36b;
+  box-shadow: 0 0 12px rgba(27, 179, 107, 0.3);
+}
+
+.launchTimelineItem strong {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: rgba(231, 238, 252, 0.9);
+}
+
+.launchTimelineItem p {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: rgba(189, 202, 233, 0.64);
+}
+
 .overviewSection {
   padding-top: 4.8rem;
 }
@@ -571,13 +923,32 @@
 
 .productSection {
   padding-top: 4.8rem;
+  overflow: visible;
 }
 
 .productHeader {
   display: grid;
-  grid-template-columns: 180px 130px minmax(0, 1fr);
+  grid-template-columns: 180px minmax(0, 1fr);
   align-items: start;
-  gap: 1rem;
+  gap: 1.15rem;
+}
+
+.productLead {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 860px;
+}
+
+.productLead .sectionLabel {
+  margin: 0;
+}
+
+.productIntro {
+  margin: 0;
+  max-width: 760px;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: rgba(202, 214, 243, 0.76);
 }
 
 .plusGrid {
@@ -628,18 +999,33 @@
 }
 
 .productLayout {
-  margin-top: 2.2rem;
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr) minmax(290px, 0.84fr);
-  gap: 1.1rem;
-  align-items: center;
+  gap: 1.35rem;
+  align-items: start;
+}
+
+.productStage {
+  position: relative;
+  margin-top: 2.4rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.productStage::before {
+  display: none;
 }
 
 .stepRail {
   display: flex;
   flex-direction: column;
   gap: 0.95rem;
-  position: relative;
+  position: sticky;
+  top: 7.8rem;
+  align-self: start;
 }
 
 /* connecting rail line that fills as you scroll */
@@ -701,13 +1087,95 @@
 }
 
 .platformVisual {
-  border-radius: 0;
-  border: none;
-  background: transparent;
-  padding: 1.2rem 0;
+  position: sticky;
+  top: 6.9rem;
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.visualFrame {
+  position: relative;
+  width: 100%;
+  align-self: flex-start;
+  border: 1px solid rgba(160, 180, 222, 0.14);
+  background:
+    linear-gradient(180deg, rgba(7, 10, 18, 0.96), rgba(5, 8, 14, 0.88)),
+    radial-gradient(circle at top, rgba(42, 141, 255, 0.08), transparent 40%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 18px 40px rgba(0, 0, 0, 0.18);
+  padding: 1rem 1rem 0.9rem;
+  overflow: hidden;
+}
+
+.visualFrame::before {
+  content: '';
+  position: absolute;
+  inset: 72px -12% auto;
+  height: 240px;
+  background: radial-gradient(circle, rgba(42, 141, 255, 0.16), transparent 68%);
+  filter: blur(28px);
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.visualFrame::after {
+  content: '';
+  position: absolute;
+  inset: 52px 1rem 3.1rem;
+  border: 1px solid rgba(161, 178, 216, 0.08);
+  pointer-events: none;
+}
+
+.visualChrome {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.visualChromeDots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.visualChromeDots span {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: rgba(220, 228, 248, 0.28);
+}
+
+.visualChromeDots span:first-child {
+  background: rgba(255, 106, 106, 0.72);
+}
+
+.visualChromeDots span:nth-child(2) {
+  background: rgba(255, 190, 72, 0.72);
+}
+
+.visualChromeDots span:nth-child(3) {
+  background: rgba(22, 186, 143, 0.72);
+}
+
+.visualChrome p {
+  margin: 0;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: rgba(196, 208, 239, 0.68);
 }
 
 .visualStack {
+  position: relative;
+  z-index: 1;
   position: relative;
   width: 100%;
   aspect-ratio: 760 / 520;
@@ -752,19 +1220,30 @@
 
 .platformInfo {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.9rem;
+  align-content: start;
 }
 
 .platformCard {
+  position: relative;
   border-radius: 0;
-  border: none;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  background: transparent;
-  padding: 0.92rem 0;
-  opacity: 0.25;
+  border: 1px solid rgba(156, 176, 221, 0.08);
+  background: rgba(5, 8, 14, 0.34);
+  padding: 1rem 1rem 1.05rem 1.2rem;
+  opacity: 0.36;
   transform: translateY(16px);
-  filter: blur(1px);
+  filter: blur(0.8px);
   transition: all 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.platformCard::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 1rem;
+  bottom: 1rem;
+  width: 2px;
+  background: linear-gradient(180deg, rgba(92, 193, 255, 0.1), rgba(42, 141, 255, 0.1));
 }
 
 .platformCard[data-active="true"] {
@@ -774,24 +1253,58 @@
 }
 
 .platformCard[data-current="true"] {
-  border-top-color: rgba(47, 141, 255, 0.25);
+  border-color: rgba(47, 141, 255, 0.22);
+  background:
+    linear-gradient(180deg, rgba(11, 18, 31, 0.88), rgba(7, 11, 20, 0.72)),
+    radial-gradient(circle at left top, rgba(42, 141, 255, 0.08), transparent 36%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 14px 34px rgba(0, 0, 0, 0.16);
+}
+
+.platformCard[data-current="true"]::before {
+  background: linear-gradient(180deg, #5cc1ff, #2a8dff);
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.cardIndex {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.76rem;
+  letter-spacing: 0.12em;
+  color: rgba(194, 206, 236, 0.38);
 }
 
 .cardSubtitle {
   margin: 0;
-  font-size: 0.84rem;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: rgba(206, 216, 242, 0.74);
 }
 
 .cardTitle {
-  margin: 0.45rem 0 0;
-  font-size: clamp(1.55rem, 3vw, 2.9rem);
-  line-height: 1;
+  margin: 0.4rem 0 0;
+  font-size: clamp(1.55rem, 3vw, 2.55rem);
+  line-height: 1.05;
   font-weight: 500;
 }
 
+.cardCopy {
+  margin: 0.6rem 0 0;
+  max-width: 31rem;
+  line-height: 1.58;
+  color: rgba(197, 208, 236, 0.76);
+}
+
 .cardMeta {
-  margin-top: 0.7rem;
+  margin-top: 0.9rem;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.56rem;
@@ -806,15 +1319,42 @@
 .cardMeta span {
   display: block;
   font-size: 0.72rem;
+  font-family: var(--font-mono), monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: rgba(195, 207, 236, 0.66);
 }
 
 .cardMeta strong {
   display: block;
-  margin-top: 0.2rem;
-  font-size: 0.79rem;
-  letter-spacing: 0.08em;
+  margin-top: 0.28rem;
+  font-size: 0.96rem;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  font-family: inherit;
+  font-weight: 500;
+  color: rgba(234, 240, 252, 0.92);
+}
+
+.visualFooter {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-top: 0.95rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.visualFooter span {
+  border: 1px solid rgba(159, 178, 221, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.34rem 0.64rem;
   font-family: var(--font-mono), monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(204, 216, 243, 0.72);
 }
 
 .featuresHeader {
@@ -1124,6 +1664,164 @@
   padding: 0.58rem 0.8rem;
 }
 
+.testimonialsSection {
+  padding-top: 3.4rem;
+}
+
+.testimonialsBackdrop {
+  background:
+    radial-gradient(circle at 20% 30%, rgba(55, 121, 235, 0.1), transparent 30%),
+    radial-gradient(circle at 80% 70%, rgba(68, 181, 147, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(13, 21, 42, 0.08), transparent 74%);
+  transform: translate3d(0, calc(var(--section-progress) * -18px), 0) scale(1.08);
+}
+
+.testimonialsHeader {
+  display: grid;
+  gap: 0.28rem;
+  max-width: 760px;
+}
+
+.testimonialsHeadRow {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.testimonialsTitle {
+  margin: 0;
+  font-size: clamp(1.18rem, 2.2vw, 1.8rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  font-weight: 500;
+}
+
+.testimonialsHint {
+  margin: 0;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.64rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(196, 209, 240, 0.62);
+}
+
+.testimonialsGrid {
+  margin-top: 0.95rem;
+  display: flex;
+  gap: 0.72rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  padding-bottom: 0.18rem;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.testimonialsGrid::-webkit-scrollbar {
+  display: none;
+}
+
+.testimonialCard {
+  flex: 0 0 248px;
+  position: relative;
+  display: grid;
+  gap: 0.62rem;
+  min-height: 168px;
+  border: 1px solid rgba(156, 176, 221, 0.12);
+  background:
+    linear-gradient(180deg, rgba(10, 13, 22, 0.78), rgba(6, 8, 14, 0.66)),
+    radial-gradient(circle at top left, rgba(42, 141, 255, 0.08), transparent 36%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 14px 28px rgba(0, 0, 0, 0.1);
+  padding: 0.78rem 0.82rem 0.8rem;
+  overflow: hidden;
+  scroll-snap-align: start;
+}
+
+.testimonialCard::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.9rem;
+  bottom: 0.9rem;
+  width: 2px;
+  background: linear-gradient(180deg, rgba(92, 193, 255, 0.14), rgba(42, 141, 255, 0.08));
+}
+
+.testimonialTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.testimonialSignal,
+.testimonialIndex {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.testimonialSignal {
+  color: rgba(206, 216, 242, 0.72);
+}
+
+.testimonialIndex {
+  color: rgba(190, 203, 234, 0.42);
+}
+
+.testimonialQuote {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: rgba(235, 240, 252, 0.92);
+}
+
+.testimonialMeta {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.56rem;
+  padding-top: 0.62rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.testimonialAvatar {
+  width: 2rem;
+  height: 2rem;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(156, 176, 221, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  color: rgba(231, 238, 252, 0.9);
+}
+
+.testimonialUser {
+  display: grid;
+  gap: 0.14rem;
+}
+
+.testimonialUser strong {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: rgba(231, 238, 252, 0.92);
+}
+
+.testimonialUser p {
+  margin: 0;
+  font-size: 0.72rem;
+  color: rgba(191, 203, 234, 0.68);
+}
+
 .ctaSection {
   padding-bottom: 6rem;
 }
@@ -1338,23 +2036,29 @@
   color: #0f172a;
 }
 
-:global(html[data-landing-theme='light']) .heroMeta span,
-:global(html[data-landing-theme='light']) .heroSignalRow span {
-  color: rgba(27, 43, 69, 0.82);
-  border-color: rgba(103, 131, 183, 0.33);
-  background: rgba(252, 254, 255, 0.76);
-}
-
 :global(html[data-landing-theme='light']) .heroCopy,
 :global(html[data-landing-theme='light']) .heroPanel p,
 :global(html[data-landing-theme='light']) .heroPanel span,
 :global(html[data-landing-theme='light']) .heroTerminal code,
 :global(html[data-landing-theme='light']) .heroStatCard p,
+:global(html[data-landing-theme='light']) .testimonialsHint,
+:global(html[data-landing-theme='light']) .testimonialSignal,
+:global(html[data-landing-theme='light']) .testimonialUser p,
+:global(html[data-landing-theme='light']) .launchIntro,
+:global(html[data-landing-theme='light']) .launchCardCopy,
+:global(html[data-landing-theme='light']) .launchMockTopBar,
+:global(html[data-landing-theme='light']) .launchConfigRow span,
+:global(html[data-landing-theme='light']) .launchDeployFeed span,
+:global(html[data-landing-theme='light']) .launchCommandLine span,
+:global(html[data-landing-theme='light']) .launchRepoMeta p,
+:global(html[data-landing-theme='light']) .launchTimelineItem p,
+:global(html[data-landing-theme='light']) .productIntro,
 :global(html[data-landing-theme='light']) .sectionLabel,
 :global(html[data-landing-theme='light']) .overviewIntro,
 :global(html[data-landing-theme='light']) .overviewCardCopy,
 :global(html[data-landing-theme='light']) .overviewFaqAnswer,
 :global(html[data-landing-theme='light']) .cardSubtitle,
+:global(html[data-landing-theme='light']) .cardCopy,
 :global(html[data-landing-theme='light']) .cardMeta span,
 :global(html[data-landing-theme='light']) .featureCard p,
 :global(html[data-landing-theme='light']) .labCardTall p,
@@ -1364,17 +2068,163 @@
   color: rgba(37, 54, 82, 0.76);
 }
 
+:global(html[data-landing-theme='light']) .cardMeta strong {
+  color: rgba(16, 29, 52, 0.92);
+}
+
+:global(html[data-landing-theme='light']) .launchCardTitle,
+:global(html[data-landing-theme='light']) .launchCatalogItem strong,
+:global(html[data-landing-theme='light']) .launchCommandLine code,
+:global(html[data-landing-theme='light']) .launchTimelineItem strong,
+:global(html[data-landing-theme='light']) .testimonialQuote,
+:global(html[data-landing-theme='light']) .testimonialUser strong,
+:global(html[data-landing-theme='light']) .testimonialsTitle {
+  color: rgba(16, 29, 52, 0.92);
+}
+
+:global(html[data-landing-theme='light']) .launchTimelineHeader strong {
+  color: #0d8a53;
+}
+
 :global(html[data-landing-theme='light']) .heroPanel,
 :global(html[data-landing-theme='light']) .heroPanel div,
 :global(html[data-landing-theme='light']) .heroTerminal,
+:global(html[data-landing-theme='light']) .launchTimelineItem + .launchTimelineItem,
+:global(html[data-landing-theme='light']) .productStage,
 :global(html[data-landing-theme='light']) .overviewCard,
 :global(html[data-landing-theme='light']) .overviewFaqItem,
-:global(html[data-landing-theme='light']) .platformCard,
 :global(html[data-landing-theme='light']) .featureCard,
 :global(html[data-landing-theme='light']) .labCardTall,
 :global(html[data-landing-theme='light']) .labCard,
 :global(html[data-landing-theme='light']) .ctaCard {
   border-top-color: rgba(116, 143, 191, 0.28);
+}
+
+:global(html[data-landing-theme='light']) .launchMockTopBar,
+:global(html[data-landing-theme='light']) .launchTimelineHeader {
+  border-color: rgba(116, 143, 191, 0.28);
+}
+
+:global(html[data-landing-theme='light']) .launchCard,
+:global(html[data-landing-theme='light']) .launchMockShell,
+:global(html[data-landing-theme='light']) .launchCatalogItem,
+:global(html[data-landing-theme='light']) .launchConfigRow strong,
+:global(html[data-landing-theme='light']) .launchDeployFeed,
+:global(html[data-landing-theme='light']) .launchTimelinePanel,
+:global(html[data-landing-theme='light']) .testimonialCard {
+  border-color: rgba(109, 137, 188, 0.2);
+}
+
+:global(html[data-landing-theme='light']) .launchCard {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(247, 250, 255, 0.82)),
+    radial-gradient(circle at top left, rgba(42, 141, 255, 0.08), transparent 38%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.84),
+    0 18px 38px rgba(95, 122, 176, 0.1);
+}
+
+:global(html[data-landing-theme='light']) .testimonialCard {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(247, 250, 255, 0.82)),
+    radial-gradient(circle at top left, rgba(42, 141, 255, 0.07), transparent 36%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 18px 36px rgba(95, 122, 176, 0.1);
+}
+
+:global(html[data-landing-theme='light']) .testimonialMeta {
+  border-top-color: rgba(116, 143, 191, 0.22);
+}
+
+:global(html[data-landing-theme='light']) .testimonialIndex {
+  color: rgba(57, 77, 108, 0.42);
+}
+
+:global(html[data-landing-theme='light']) .testimonialAvatar {
+  border-color: rgba(109, 137, 188, 0.22);
+  background: rgba(255, 255, 255, 0.76);
+  color: rgba(16, 29, 52, 0.84);
+}
+
+:global(html[data-landing-theme='light']) .launchMockShell,
+:global(html[data-landing-theme='light']) .launchCatalogItem,
+:global(html[data-landing-theme='light']) .launchConfigRow strong,
+:global(html[data-landing-theme='light']) .launchDeployFeed,
+:global(html[data-landing-theme='light']) .launchTimelinePanel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(248, 251, 255, 0.82)),
+    rgba(255, 255, 255, 0.86);
+}
+
+:global(html[data-landing-theme='light']) .launchStepBadge {
+  border-color: rgba(77, 123, 208, 0.24);
+  background: linear-gradient(135deg, rgba(42, 141, 255, 0.18), rgba(92, 193, 255, 0.06));
+  color: #163565;
+}
+
+:global(html[data-landing-theme='light']) .launchCatalogIcon,
+:global(html[data-landing-theme='light']) .launchCatalogMark,
+:global(html[data-landing-theme='light']) .launchTopBarPlus,
+:global(html[data-landing-theme='light']) .launchRepoDot {
+  border-color: rgba(109, 137, 188, 0.24);
+  background: rgba(112, 137, 184, 0.08);
+}
+
+:global(html[data-landing-theme='light']) .launchTopBarPlus {
+  color: rgba(45, 61, 88, 0.72);
+}
+
+:global(html[data-landing-theme='light']) .launchCatalogItem[data-tone='active'] {
+  border-color: rgba(42, 141, 255, 0.24);
+  background: linear-gradient(90deg, rgba(42, 141, 255, 0.14), rgba(92, 193, 255, 0.04));
+}
+
+:global(html[data-landing-theme='light']) .platformCard,
+:global(html[data-landing-theme='light']) .visualFrame,
+:global(html[data-landing-theme='light']) .visualFrame::after,
+:global(html[data-landing-theme='light']) .visualChrome,
+:global(html[data-landing-theme='light']) .visualFooter {
+  border-color: rgba(109, 137, 188, 0.22);
+}
+
+:global(html[data-landing-theme='light']) .visualFrame {
+  background:
+    linear-gradient(180deg, rgba(253, 254, 255, 0.96), rgba(244, 248, 255, 0.92)),
+    radial-gradient(circle at top, rgba(42, 141, 255, 0.08), transparent 40%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 16px 36px rgba(95, 122, 176, 0.12);
+}
+
+:global(html[data-landing-theme='light']) .visualChrome p,
+:global(html[data-landing-theme='light']) .visualFooter span,
+:global(html[data-landing-theme='light']) .cardIndex {
+  color: rgba(45, 61, 88, 0.68);
+}
+
+:global(html[data-landing-theme='light']) .visualChromeDots span {
+  background: rgba(76, 97, 138, 0.22);
+}
+
+:global(html[data-landing-theme='light']) .visualFooter span {
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(109, 137, 188, 0.24);
+}
+
+:global(html[data-landing-theme='light']) .platformCard {
+  border-color: rgba(109, 137, 188, 0.16);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+:global(html[data-landing-theme='light']) .platformCard[data-current="true"] {
+  border-color: rgba(42, 141, 255, 0.28);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 249, 255, 0.82)),
+    radial-gradient(circle at left top, rgba(42, 141, 255, 0.08), transparent 36%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 14px 30px rgba(95, 122, 176, 0.12);
 }
 
 :global(html[data-landing-theme='light']) .stepRail::before {
@@ -1533,6 +2383,18 @@
     gap: 0.8rem;
   }
 
+  .productStage {
+    padding: 0;
+  }
+
+  .launchGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .testimonialsGrid {
+    gap: 0.65rem;
+  }
+
   .overviewGrid,
   .overviewFaqGrid {
     grid-template-columns: 1fr;
@@ -1543,6 +2405,8 @@
   }
 
   .stepRail {
+    position: relative;
+    top: auto;
     flex-direction: row;
     flex-wrap: wrap;
   }
@@ -1558,6 +2422,11 @@
 
   .workflowLayout {
     grid-template-columns: 1fr;
+  }
+
+  .platformVisual {
+    position: relative;
+    top: auto;
   }
 }
 
@@ -1587,16 +2456,30 @@
     justify-content: center;
   }
 
-  .heroSignalRow {
-    justify-content: center;
-  }
-
   .heroPanel {
     margin: 0 auto;
   }
 
   .heroStats {
     grid-template-columns: 1fr;
+  }
+
+  .launchGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .launchCard {
+    padding: 1rem;
+  }
+
+  .testimonialCard {
+    flex-basis: 220px;
+    min-height: 160px;
+    padding: 0.76rem;
+  }
+
+  .launchMockShell {
+    padding: 0.85rem;
   }
 
   .plusGrid {
@@ -1610,6 +2493,22 @@
   .labCardTall,
   .labCard {
     grid-column: span 12;
+  }
+
+  .productStage {
+    padding: 0;
+  }
+
+  .productLayout {
+    gap: 1rem;
+  }
+
+  .visualFrame {
+    padding: 0.85rem 0.85rem 0.8rem;
+  }
+
+  .platformCard {
+    padding: 0.92rem 0.85rem 0.95rem 1rem;
   }
 
   .labHeader .sectionTitle {
