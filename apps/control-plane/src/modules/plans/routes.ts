@@ -4,7 +4,11 @@ import { z } from 'zod';
 
 import { getPlanEntitlements } from '../../domain/plan-entitlements.js';
 import { AccessService } from '../../services/access-service.js';
-import { isCheckoutEnabledForPlan } from '../../services/billing-provider-service.js';
+import {
+  databaseAddonCheckoutConfigured,
+  databaseAddonTierCheckoutEnabled,
+  isCheckoutEnabledForPlan,
+} from '../../services/billing-provider-service.js';
 import { prisma } from '../../lib/prisma.js';
 
 export const planRoutes: FastifyPluginAsync = async (app) => {
@@ -21,6 +25,22 @@ export const planRoutes: FastifyPluginAsync = async (app) => {
         checkoutEnabled: isCheckoutEnabledForPlan(plan.code),
         entitlements: getPlanEntitlements(plan.code),
       })),
+      addons: {
+        database: {
+          checkoutEnabled: databaseAddonCheckoutConfigured,
+          tiers: {
+            starter: {
+              checkoutEnabled: databaseAddonTierCheckoutEnabled.starter,
+            },
+            growth: {
+              checkoutEnabled: databaseAddonTierCheckoutEnabled.growth,
+            },
+            scale: {
+              checkoutEnabled: databaseAddonTierCheckoutEnabled.scale,
+            },
+          },
+        },
+      },
     };
   });
 

@@ -12,8 +12,16 @@ const paidPlanProductIds = {
   max: env.DODO_PAYMENTS_PRODUCT_ID_MAX,
 } as const;
 
+const databaseAddonIds = {
+  starter: env.DODO_PAYMENTS_ADDON_ID_DATABASE_STARTER,
+  growth: env.DODO_PAYMENTS_ADDON_ID_DATABASE_GROWTH,
+  scale: env.DODO_PAYMENTS_ADDON_ID_DATABASE_SCALE,
+} as const;
+
 type CheckoutEnabledPlanCode = Exclude<PlanCode, 'free' | 'enterprise'>;
 type DodoCheckoutPlanCode = keyof typeof paidPlanProductIds;
+export type DatabaseAddonTierCode = keyof typeof databaseAddonIds;
+export type BillingCheckoutKind = 'plan' | 'database_addon';
 type BillingMetadata = Record<string, string>;
 type DodoEnvironment = 'test' | 'live';
 type DodoSubscriptionStatus = 'pending' | 'active' | 'on_hold' | 'cancelled' | 'failed' | 'expired';
@@ -144,12 +152,19 @@ interface CreateBillingCheckoutSessionInput {
   customerId: string;
   returnUrl: string;
   cancelUrl: string;
+  databaseAddonTier?: DatabaseAddonTierCode | null;
   metadata: BillingMetadata;
 }
 
 export const billingProvider = 'dodo_payments';
 export const billingProviderLabel = 'Dodo Payments';
 export const billingProviderConfigured = Boolean(env.DODO_PAYMENTS_API_KEY);
+export const databaseAddonCheckoutConfigured = Object.values(databaseAddonIds).some(Boolean);
+export const databaseAddonTierCheckoutEnabled: Record<DatabaseAddonTierCode, boolean> = {
+  starter: Boolean(databaseAddonIds.starter),
+  growth: Boolean(databaseAddonIds.growth),
+  scale: Boolean(databaseAddonIds.scale),
+};
 
 export const isCheckoutEnabledForPlan = (planCode: PlanCode): boolean => {
   if (planCode === 'free' || planCode === 'enterprise') {
@@ -161,6 +176,14 @@ export const isCheckoutEnabledForPlan = (planCode: PlanCode): boolean => {
 
 export const getCheckoutProductId = (planCode: CheckoutEnabledPlanCode): string | null =>
   paidPlanProductIds[planCode as DodoCheckoutPlanCode] ?? null;
+
+export const getDatabaseAddonId = (tierCode: DatabaseAddonTierCode | null | undefined): string | null => {
+  if (!tierCode) {
+    return null;
+  }
+
+  return databaseAddonIds[tierCode] ?? null;
+};
 
 export const encodeBillingReference = (value: string): string => `${DODO_PROVIDER_PREFIX}${value}`;
 
@@ -182,6 +205,20 @@ export const getPlanCodeForProductId = (productId: string | null | undefined): C
     .find(([, configuredProductId]) => configuredProductId === productId);
 
   return match?.[0] ?? null;
+};
+
+export const getBillingCheckoutKindForProductId = (
+  productId: string | null | undefined,
+): BillingCheckoutKind | null => {
+  if (!productId) {
+    return null;
+  }
+
+  if (getPlanCodeForProductId(productId)) {
+    return 'plan';
+  }
+
+  return null;
 };
 
 export const createBillingCustomer = async (input: {
@@ -209,6 +246,11 @@ export const createBillingCheckoutSession = async (
     throw new Error(`Plan ${input.planCode} is not configured for ${billingProviderLabel} checkout.`);
   }
 
+  const addonId = getDatabaseAddonId(input.databaseAddonTier ?? null);
+  if (input.databaseAddonTier && !addonId) {
+    throw new Error(`Database add-on tier ${input.databaseAddonTier} is not configured for ${billingProviderLabel}.`);
+  }
+
   const session = await billingApiRequest<DodoCheckoutSessionResponse>('/checkouts', {
     method: 'POST',
     body: {
@@ -216,6 +258,16 @@ export const createBillingCheckoutSession = async (
         {
           product_id: productId,
           quantity: 1,
+          ...(addonId
+            ? {
+                addons: [
+                  {
+                    addon_id: addonId,
+                    quantity: 1,
+                  },
+                ],
+              }
+            : {}),
         },
       ],
       customer: {

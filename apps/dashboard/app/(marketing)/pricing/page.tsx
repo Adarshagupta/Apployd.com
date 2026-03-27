@@ -28,6 +28,15 @@ interface PlanCard {
   features: PlanFeature[];
 }
 
+interface DatabaseAddonTier {
+  code: string;
+  name: string;
+  storage: string;
+  compute: string;
+  ram: string;
+  price: string;
+}
+
 const plans: PlanCard[] = [
   {
     code: 'free',
@@ -170,6 +179,49 @@ const plans: PlanCard[] = [
   },
 ];
 
+const databaseAddonTiers: DatabaseAddonTier[] = [
+  {
+    code: 'hobby',
+    name: 'Hobby',
+    storage: '1 GB',
+    compute: '500 mCPU-min',
+    ram: '512 MB',
+    price: 'Free or $0',
+  },
+  {
+    code: 'starter',
+    name: 'Starter',
+    storage: '5 GB',
+    compute: '2,000 mCPU-min',
+    ram: '1 GB',
+    price: '$5.00',
+  },
+  {
+    code: 'growth',
+    name: 'Growth',
+    storage: '20 GB',
+    compute: '8,000 mCPU-min',
+    ram: '4 GB',
+    price: '$19.99',
+  },
+  {
+    code: 'scale',
+    name: 'Scale',
+    storage: '100 GB',
+    compute: '40,000 mCPU-min',
+    ram: '16 GB',
+    price: '$70.00',
+  },
+] as const;
+
+const recommendedDatabaseAddonByPlan: Record<string, string> = {
+  free: 'hobby',
+  dev: 'starter',
+  pro: 'growth',
+  max: 'scale',
+  enterprise: 'scale',
+};
+
 const quickViewRows = [
   { feature: 'Auto Deploy', free: 'Yes', dev: 'Yes', pro: 'Yes', max: 'Yes', enterprise: 'Yes' },
   { feature: 'Custom Domain', free: 'No', dev: 'Yes', pro: 'Yes', max: 'Yes', enterprise: 'Yes' },
@@ -234,77 +286,142 @@ export default function PricingPage() {
               alignItems: 'start',
             }}
           >
-            {plans.map((plan) => (
-              <article
-                key={plan.code}
-                style={{
-                  position: 'relative',
-                  borderRadius: 16,
-                  border: plan.popular
-                    ? '1.5px solid rgba(42,141,255,0.5)'
-                    : '1px solid rgba(161,178,216,0.16)',
-                  background: 'rgba(8,10,16,0.68)',
-                  padding: '1.2rem',
-                }}
-              >
-                {plan.popular ? (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: -11,
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      fontSize: '0.68rem',
-                      fontWeight: 700,
-                      letterSpacing: '0.12em',
-                      textTransform: 'uppercase',
-                      color: '#fff',
-                      background: 'linear-gradient(135deg, #2a8dff, #1b6fd1)',
-                      borderRadius: 999,
-                      padding: '0.24rem 0.72rem',
-                    }}
-                  >
-                    Most Popular
-                  </span>
-                ) : null}
-                <p style={{ margin: 0, fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(202,214,243,0.66)' }}>
-                  {plan.name}
-                </p>
-                <p style={{ margin: '0.6rem 0 0', fontSize: '2.3rem', fontWeight: 700, lineHeight: 1 }}>
-                  {plan.price}
-                  <span style={{ fontSize: '0.8rem', fontWeight: 400, color: 'rgba(200,210,240,0.62)' }}>
-                    {plan.period}
-                  </span>
-                </p>
-                <p style={{ margin: '0.56rem 0 0', color: 'rgba(210,222,247,0.78)', fontSize: '0.86rem' }}>
-                  Best for: {plan.bestFor}
-                </p>
-                <a
-                  href={plan.href}
-                  className={styles.primaryButton}
+            {plans.map((plan) => {
+              const recommendedAddonCode = recommendedDatabaseAddonByPlan[plan.code] ?? 'starter';
+              const recommendedAddon =
+                databaseAddonTiers.find((tier) => tier.code === recommendedAddonCode) ?? databaseAddonTiers[0];
+
+              return (
+                <article
+                  key={plan.code}
                   style={{
-                    width: '100%',
-                    textAlign: 'center',
-                    marginTop: '0.9rem',
-                    background: plan.popular ? 'linear-gradient(135deg, #2a8dff, #1b6fd1)' : '#000',
+                    position: 'relative',
+                    borderRadius: 16,
+                    border: plan.popular
+                      ? '1.5px solid rgba(42,141,255,0.5)'
+                      : '1px solid rgba(161,178,216,0.16)',
+                    background: 'rgba(8,10,16,0.68)',
+                    padding: '1.2rem',
                   }}
                 >
-                  {plan.cta}
-                </a>
-                <div style={{ marginTop: '0.95rem', borderRadius: 12, border: '1px solid rgba(150,170,220,0.16)', overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <tbody>
-                      {plan.features.map((row, idx) => (
-                        <tr key={`${plan.code}-${row.label}`} style={{ borderTop: idx === 0 ? 'none' : '1px solid rgba(150,170,220,0.14)' }}>
-                          <td style={{ padding: '0.46rem 0.56rem', fontSize: '0.78rem', color: 'rgba(197,211,244,0.82)' }}>{row.label}</td>
-                          <td style={{ padding: '0.46rem 0.56rem', fontSize: '0.78rem', textAlign: 'right', color: 'rgba(237,242,255,0.92)' }}>{row.value}</td>
+                  {plan.popular ? (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: -11,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        fontSize: '0.68rem',
+                        fontWeight: 700,
+                        letterSpacing: '0.12em',
+                        textTransform: 'uppercase',
+                        color: '#fff',
+                        background: 'linear-gradient(135deg, #2a8dff, #1b6fd1)',
+                        borderRadius: 999,
+                        padding: '0.24rem 0.72rem',
+                      }}
+                    >
+                      Most Popular
+                    </span>
+                  ) : null}
+                  <p style={{ margin: 0, fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(202,214,243,0.66)' }}>
+                    {plan.name}
+                  </p>
+                  <p style={{ margin: '0.6rem 0 0', fontSize: '2.3rem', fontWeight: 700, lineHeight: 1 }}>
+                    {plan.price}
+                    <span style={{ fontSize: '0.8rem', fontWeight: 400, color: 'rgba(200,210,240,0.62)' }}>
+                      {plan.period}
+                    </span>
+                  </p>
+                  <p style={{ margin: '0.56rem 0 0', color: 'rgba(210,222,247,0.78)', fontSize: '0.86rem' }}>
+                    Best for: {plan.bestFor}
+                  </p>
+                  <a
+                    href={plan.href}
+                    className={styles.primaryButton}
+                    style={{
+                      width: '100%',
+                      textAlign: 'center',
+                      marginTop: '0.9rem',
+                      background: plan.popular ? 'linear-gradient(135deg, #2a8dff, #1b6fd1)' : '#000',
+                    }}
+                  >
+                    {plan.cta}
+                  </a>
+                  <div style={{ marginTop: '0.95rem', borderRadius: 12, border: '1px solid rgba(150,170,220,0.16)', overflow: 'hidden' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <tbody>
+                        {plan.features.map((row, idx) => (
+                          <tr key={`${plan.code}-${row.label}`} style={{ borderTop: idx === 0 ? 'none' : '1px solid rgba(150,170,220,0.14)' }}>
+                            <td style={{ padding: '0.46rem 0.56rem', fontSize: '0.78rem', color: 'rgba(197,211,244,0.82)' }}>{row.label}</td>
+                            <td style={{ padding: '0.46rem 0.56rem', fontSize: '0.78rem', textAlign: 'right', color: 'rgba(237,242,255,0.92)' }}>{row.value}</td>
+                          </tr>
+                        ))}
+                        <tr style={{ borderTop: '1px solid rgba(150,170,220,0.14)' }}>
+                          <td colSpan={2} style={{ padding: '0.62rem 0.56rem 0.72rem' }}>
+                            <details>
+                              <summary
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  gap: '0.75rem',
+                                  cursor: 'pointer',
+                                  fontSize: '0.78rem',
+                                  fontWeight: 600,
+                                  color: 'rgba(237,242,255,0.92)',
+                                }}
+                              >
+                                <span>Database add-on</span>
+                                <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'rgba(200,210,240,0.62)' }}>
+                                  {recommendedAddon.name} - {recommendedAddon.price}
+                                </span>
+                              </summary>
+                              <div style={{ marginTop: '0.72rem', borderRadius: 10, border: '1px solid rgba(150,170,220,0.14)', overflowX: 'auto', overflowY: 'hidden' }}>
+                                <table style={{ width: '100%', minWidth: 440, borderCollapse: 'collapse' }}>
+                                  <thead>
+                                    <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
+                                      <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', color: 'rgba(197,211,244,0.64)' }}>Plan</th>
+                                      <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', color: 'rgba(197,211,244,0.64)' }}>Storage</th>
+                                      <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', color: 'rgba(197,211,244,0.64)' }}>Compute</th>
+                                      <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', color: 'rgba(197,211,244,0.64)' }}>RAM</th>
+                                      <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'right', color: 'rgba(197,211,244,0.64)' }}>Price/mo</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {databaseAddonTiers.map((tier, idx) => {
+                                      const recommended = tier.code === recommendedAddon.code;
+
+                                      return (
+                                        <tr
+                                          key={`${plan.code}-${tier.code}`}
+                                          style={{
+                                            borderTop: idx === 0 ? 'none' : '1px solid rgba(150,170,220,0.12)',
+                                            background: recommended ? 'rgba(42,141,255,0.08)' : 'transparent',
+                                          }}
+                                        >
+                                          <td style={{ padding: '0.48rem 0.5rem', fontSize: '0.72rem', color: recommended ? '#7ec0ff' : 'rgba(237,242,255,0.9)' }}>
+                                            {tier.name}
+                                          </td>
+                                          <td style={{ padding: '0.48rem 0.5rem', fontSize: '0.72rem', color: 'rgba(210,222,247,0.76)' }}>{tier.storage}</td>
+                                          <td style={{ padding: '0.48rem 0.5rem', fontSize: '0.72rem', color: 'rgba(210,222,247,0.76)' }}>{tier.compute}</td>
+                                          <td style={{ padding: '0.48rem 0.5rem', fontSize: '0.72rem', color: 'rgba(210,222,247,0.76)' }}>{tier.ram}</td>
+                                          <td style={{ padding: '0.48rem 0.5rem', fontSize: '0.72rem', textAlign: 'right', color: 'rgba(237,242,255,0.9)' }}>{tier.price}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </details>
+                          </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </article>
-            ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </div>
       </section>

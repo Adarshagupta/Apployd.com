@@ -14,6 +14,7 @@ import {
   createBillingCustomer,
   decodeBillingReference,
   encodeBillingReference,
+  getBillingCheckoutKindForProductId,
   getPlanCodeForProductId,
   parseBillingWebhookEvent,
   retrieveBillingPayment,
@@ -21,14 +22,18 @@ import {
   listBillingPaymentsForSubscription,
   listBillingSubscriptionsForCustomer,
   verifyBillingWebhookSignature,
+  type DatabaseAddonTierCode,
   type BillingPayment,
   type BillingSubscription,
   type BillingWebhookEvent,
 } from '../../services/billing-provider-service.js';
 
+const databaseAddonTierCodes = ['starter', 'growth', 'scale'] as const;
+
 const checkoutSchema = z.object({
   organizationId: z.string().cuid(),
   planCode: z.enum(['dev', 'pro', 'max']),
+  databaseAddonTier: z.enum(databaseAddonTierCodes).optional(),
   successUrl: z.string().url(),
   cancelUrl: z.string().url(),
 });
@@ -79,6 +84,7 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
       select: { name: true },
     });
     const customerName = organization?.name?.trim() || user.email;
+    const databaseAddonTier = parseDatabaseAddonTierCode(body.databaseAddonTier) ?? undefined;
 
     let billingCustomerId = decodeBillingReference(subscription.stripeCustomerId);
     if (!billingCustomerId) {
@@ -104,9 +110,12 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
       customerId: billingCustomerId,
       returnUrl: body.successUrl,
       cancelUrl: body.cancelUrl,
+      databaseAddonTier,
       metadata: {
+        checkoutType: 'plan',
         organizationId: body.organizationId,
         planCode: body.planCode,
+        ...(databaseAddonTier ? { databaseAddonTier } : {}),
         currentSubscriptionId: subscription.id,
       },
     });
@@ -234,6 +243,7 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
 };
 
 const knownPlanCodes: PlanCode[] = ['free', 'dev', 'pro', 'max', 'enterprise'];
+const knownCheckoutKinds = ['plan', 'database_addon'] as const;
 
 const parsePlanCode = (value?: string | null): PlanCode | null => {
   if (!value) {
@@ -243,6 +253,39 @@ const parsePlanCode = (value?: string | null): PlanCode | null => {
   const normalized = value.trim().toLowerCase();
   return knownPlanCodes.includes(normalized as PlanCode) ? (normalized as PlanCode) : null;
 };
+
+const parseCheckoutKind = (value?: string | null): (typeof knownCheckoutKinds)[number] | null => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return knownCheckoutKinds.includes(normalized as (typeof knownCheckoutKinds)[number])
+    ? (normalized as (typeof knownCheckoutKinds)[number])
+    : null;
+};
+
+const parseDatabaseAddonTierCode = (value?: string | null): DatabaseAddonTierCode | null => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return databaseAddonTierCodes.includes(normalized as DatabaseAddonTierCode)
+    ? (normalized as DatabaseAddonTierCode)
+    : null;
+};
+
+const resolveCheckoutKindForSubscription = (subscription: BillingSubscription): (typeof knownCheckoutKinds)[number] | null =>
+  parseCheckoutKind(subscription.metadata.checkoutType)
+  ?? getBillingCheckoutKindForProductId(subscription.productId);
+
+const resolveCheckoutKindForPayment = (
+  payment: BillingPayment,
+  providerSubscription: BillingSubscription | null,
+): (typeof knownCheckoutKinds)[number] | null =>
+  parseCheckoutKind(payment.metadata.checkoutType)
+  ?? (providerSubscription ? resolveCheckoutKindForSubscription(providerSubscription) : null);
 
 const syncLatestOrganizationSubscription = async (input: {
   subscription: SubscriptionWithPlan;
@@ -269,6 +312,10 @@ const syncLatestOrganizationSubscription = async (input: {
 
   if (!providerSubscription) {
     return { subscription: null, reason: 'no_provider_subscription' };
+  }
+
+  if (resolveCheckoutKindForSubscription(providerSubscription) !== 'plan') {
+    return { subscription: input.subscription, reason: 'non_plan_subscription' };
   }
 
   const updated = await syncSubscriptionRecord({
@@ -302,6 +349,9 @@ const handleSubscriptionWebhookEvent = async (event: BillingWebhookEvent): Promi
   }
 
   const providerSubscription = await retrieveBillingSubscription(providerSubscriptionId);
+  if (resolveCheckoutKindForSubscription(providerSubscription) !== 'plan') {
+    return;
+  }
   const targetSubscription = await findTargetSubscription({
     organizationId: getOrganizationIdFromSources(
       providerSubscription.metadata,
@@ -343,6 +393,9 @@ const handlePaymentWebhookEvent = async (event: BillingWebhookEvent): Promise<vo
 
   if (payment.subscriptionId) {
     const providerSubscription = await retrieveBillingSubscription(payment.subscriptionId).catch(() => null);
+    if (resolveCheckoutKindForPayment(payment, providerSubscription) !== 'plan') {
+      return;
+    }
     if (providerSubscription) {
       targetSubscription = await syncSubscriptionRecord({
         targetSubscription,

@@ -15,6 +15,7 @@ const PROJECT_ID_PARAMS_SCHEMA = z.object({
 
 const SECRET_KEY_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
 const PG_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+const NEON_DEFAULT_ROLE_NAME = 'neondb_owner';
 
 const provisionNeonDatabaseBodySchema = z.object({
   projectName: z.string().trim().min(2).max(120).optional(),
@@ -540,25 +541,8 @@ const ensureDatabaseOnBranch = async (input: {
   databaseName: string;
   roleName?: string | null;
 }): Promise<{ ownerRoleName: string | null }> => {
-  const requestedRole = input.roleName?.trim() || null;
-  if (!requestedRole) {
-    await neonRequest<unknown>({
-      path: `/projects/${encodeURIComponent(input.neonProjectId)}/branches/${encodeURIComponent(input.neonBranchId)}/databases`,
-      method: 'POST',
-      apiKey: input.apiKey,
-      body: {
-        database: {
-          name: input.databaseName,
-        },
-      },
-    }).catch((error) => {
-      if (isNeonAlreadyExistsError(error)) {
-        return null;
-      }
-      throw error;
-    });
-    return { ownerRoleName: null };
-  }
+  const customRoleRequested = input.roleName?.trim() || null;
+  const requestedRole = customRoleRequested ?? NEON_DEFAULT_ROLE_NAME;
 
   for (let attempt = 0; attempt <= ROLE_PROPAGATION_RETRY_DELAYS_MS.length; attempt += 1) {
     try {
@@ -579,28 +563,10 @@ const ensureDatabaseOnBranch = async (input: {
         return { ownerRoleName: requestedRole };
       }
       if (!isNeonRoleMissingError(error) || attempt >= ROLE_PROPAGATION_RETRY_DELAYS_MS.length) {
-        if (!isNeonRoleMissingError(error)) {
-          throw error;
-        }
-
-        try {
-          await neonRequest<unknown>({
-            path: `/projects/${encodeURIComponent(input.neonProjectId)}/branches/${encodeURIComponent(input.neonBranchId)}/databases`,
-            method: 'POST',
-            apiKey: input.apiKey,
-            body: {
-              database: {
-                name: input.databaseName,
-              },
-            },
-          });
-          return { ownerRoleName: null };
-        } catch (fallbackError) {
-          if (isNeonAlreadyExistsError(fallbackError)) {
-            return { ownerRoleName: null };
-          }
-          throw fallbackError;
-        }
+        throw error;
+      }
+      if (!customRoleRequested) {
+        throw error;
       }
       await ensureRoleOnBranch({
         apiKey: input.apiKey,
@@ -663,6 +629,7 @@ const createNeonProject = async (input: {
   roleName?: string | null;
 }): Promise<string> => {
   const requestedRole = input.roleName?.trim() || null;
+  const ownerRoleName = requestedRole ?? NEON_DEFAULT_ROLE_NAME;
 
   const primaryBody = {
     project: {
@@ -677,7 +644,7 @@ const createNeonProject = async (input: {
     },
     database: {
       name: input.databaseName,
-      ...(requestedRole ? { owner_name: requestedRole } : {}),
+      owner_name: ownerRoleName,
     },
     ...(requestedRole
       ? {
@@ -704,29 +671,20 @@ const createNeonProject = async (input: {
   } as const;
 
   let payload: unknown;
-  if (!requestedRole) {
+  try {
+    payload = await neonRequest<unknown>({
+      path: '/projects',
+      method: 'POST',
+      apiKey: input.apiKey,
+      body: primaryBody as unknown as Record<string, unknown>,
+    });
+  } catch {
     payload = await neonRequest<unknown>({
       path: '/projects',
       method: 'POST',
       apiKey: input.apiKey,
       body: fallbackBody as unknown as Record<string, unknown>,
     });
-  } else {
-    try {
-      payload = await neonRequest<unknown>({
-        path: '/projects',
-        method: 'POST',
-        apiKey: input.apiKey,
-        body: primaryBody as unknown as Record<string, unknown>,
-      });
-    } catch {
-      payload = await neonRequest<unknown>({
-        path: '/projects',
-        method: 'POST',
-        apiKey: input.apiKey,
-        body: fallbackBody as unknown as Record<string, unknown>,
-      });
-    }
   }
 
   const root = asRecord(payload);
@@ -809,7 +767,7 @@ const provisionNeonManagedDatabase = async (input: {
   let neonBranchId = '';
   let neonEndpointId: string | null = null;
   let databaseUrl = '';
-  let resolvedRoleName = requestedRoleName ?? 'default';
+  let resolvedRoleName = requestedRoleName ?? NEON_DEFAULT_ROLE_NAME;
 
   try {
     neonProjectId = await createNeonProject({
