@@ -1,0 +1,243 @@
+.heroIntro {
+  max-width: 540px;
+  margin: 1rem auto 0;
+  font-size: 1.05rem;
+  line-height: 1.65;
+  color: rgba(212, 221, 244, 0.7);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.filterChip {
+  border-radius: 999px;
+  border: 1px solid rgba(161, 178, 216, 0.2);
+  background: rgba(8, 10, 16, 0.6);
+  color: rgba(220, 228, 248, 0.7);
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+}
+
+.filterChipActive {
+  background: rgba(42, 141, 255, 0.15);
+  color: #6bb4ff;
+}
+
+.postGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.5rem;
+}
+
+.postCard {
+  border-radius: 14px;
+  border: 1px solid rgba(161, 178, 216, 0.14);
+  background: rgba(8, 10, 16, 0.6);
+  padding: 1.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  transition: border-color 0.2s ease, transform 0.2s ease, background-color 0.2s ease;
+}
+
+.postCard:hover {
+  border-color: rgba(109, 137, 188, 0.28);
+  transform: translateY(-1px);
+}
+
+.postMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.kindBadge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #6bb4ff;
+  border: 1px solid rgba(42, 141, 255, 0.25);
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+}
+
+.metaText {
+  font-size: 0.76rem;
+  color: rgba(200, 210, 240, 0.5);
+}
+
+.postTitle {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: rgba(241, 245, 255, 0.94);
+}
+
+.postExcerpt {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: rgba(200, 210, 240, 0.68);
+  flex: 1;
+}
+
+.readTime {
+  font-size: 0.76rem;
+  color: rgba(200, 210, 240, 0.44);
+  font-family: var(--font-mono), monospace;
+}
+
+.emptyCard {
+  border-radius: 14px;
+  border: 1px solid rgba(161, 178, 216, 0.14);
+  background: rgba(8, 10, 16, 0.6);
+  padding: 1.4rem;
+}
+
+.emptyCard p {
+  margin: 0;
+  color: rgba(212, 221, 244, 0.72);
+  font-size: 0.95rem;
+}
+
+.newsletterIntro {
+  margin: 0.6rem 0 1.4rem;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: rgba(212, 221, 244, 0.66);
+}
+
+.newsletterForm {
+  display: flex;
+  gap: 0.5rem;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.newsletterInput {
+  flex: 1;
+  border-radius: 999px;
+  border: 1px solid rgba(161, 178, 216, 0.2);
+  background: rgba(8, 10, 16, 0.7);
+  color: #f3f5fa;
+  font-size: 0.88rem;
+  padding: 0.7rem 1rem;
+  outline: none;
+}
+
+.newsletterInput::placeholder {
+  color: rgba(200, 210, 240, 0.48);
+}
+
+.articleBackLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgba(202, 216, 245, 0.75);
+  font-size: 0.86rem;
+  border: 1px solid rgba(161, 178, 216, 0.18);
+  border-radius: 999px;
+  padding: 0.32rem 0.75rem;
+}
+
+.articleMeta {
+  margin-top: 1.2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.articleTitle {
+  margin: 1rem 0 0;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+
+.articleExcerpt {
+  margin: 0.9rem 0 0;
+  color: rgba(212, 221, 244, 0.72);
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+.articleBody {
+  display: grid;
+  gap: 1rem;
+}
+
+.articleParagraph {
+  margin: 0;
+  color: rgba(223, 231, 248, 0.82);
+  font-size: 0.98rem;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+:global(html[data-landing-theme='light']) .heroIntro,
+:global(html[data-landing-theme='light']) .newsletterIntro,
+:global(html[data-landing-theme='light']) .articleExcerpt,
+:global(html[data-landing-theme='light']) .postExcerpt,
+:global(html[data-landing-theme='light']) .emptyCard p {
+  color: rgba(37, 54, 82, 0.74);
+}
+
+:global(html[data-landing-theme='light']) .postTitle,
+:global(html[data-landing-theme='light']) .articleTitle,
+:global(html[data-landing-theme='light']) .articleParagraph {
+  color: rgba(16, 29, 52, 0.92);
+}
+
+:global(html[data-landing-theme='light']) .metaText,
+:global(html[data-landing-theme='light']) .readTime,
+:global(html[data-landing-theme='light']) .articleBackLink {
+  color: rgba(57, 77, 108, 0.58);
+}
+
+:global(html[data-landing-theme='light']) .postCard,
+:global(html[data-landing-theme='light']) .emptyCard,
+:global(html[data-landing-theme='light']) .newsletterInput {
+  border-color: rgba(109, 137, 188, 0.2);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(247, 250, 255, 0.82)),
+    radial-gradient(circle at top left, rgba(42, 141, 255, 0.07), transparent 36%);
+}
+
+:global(html[data-landing-theme='light']) .filterChip {
+  border-color: rgba(109, 137, 188, 0.2);
+  background: rgba(255, 255, 255, 0.82);
+  color: rgba(37, 54, 82, 0.74);
+}
+
+:global(html[data-landing-theme='light']) .filterChipActive {
+  background: rgba(42, 141, 255, 0.12);
+  color: #1a74d8;
+}
+
+:global(html[data-landing-theme='light']) .newsletterInput {
+  color: rgba(16, 29, 52, 0.92);
+}
+
+:global(html[data-landing-theme='light']) .newsletterInput::placeholder {
+  color: rgba(57, 77, 108, 0.48);
+}
+
+@media (max-width: 720px) {
+  .postGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .newsletterForm {
+    flex-direction: column;
+  }
+}

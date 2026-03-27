@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { buildPageMetadata, SITE_NAME, siteUrl } from '../../../lib/seo';
 import { fetchPublishedContentPosts, toContentCanonicalPath } from '../../../lib/content';
 import styles from '../../landing.module.css';
+import blogStyles from './blog.module.css';
 
 export const metadata: Metadata = buildPageMetadata({
   title: 'Blog',
@@ -75,7 +76,7 @@ export default async function BlogPage() {
           <h1 className={styles.sectionTitle} style={{ fontSize: 'clamp(2.2rem, 5vw, 3.6rem)' }}>
             Engineering and product updates
           </h1>
-          <p style={{ maxWidth: 540, margin: '1rem auto 0', fontSize: '1.05rem', color: 'rgba(212,221,244,0.7)' }}>
+          <p className={blogStyles.heroIntro}>
             Behind the scenes of building a managed SaaS deployment platform.
           </p>
         </div>
@@ -83,20 +84,11 @@ export default async function BlogPage() {
 
       <section className={styles.section} style={{ paddingTop: 0, paddingBottom: '1.5rem', borderTop: 'none' }}>
         <div className={styles.container}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', justifyContent: 'center' }}>
+          <div className={blogStyles.filters}>
             {categories.map((category, index) => (
               <button
                 key={category}
-                style={{
-                  borderRadius: 999,
-                  border: '1px solid rgba(161,178,216,0.2)',
-                  background: index === 0 ? 'rgba(42,141,255,0.15)' : 'rgba(8,10,16,0.6)',
-                  color: index === 0 ? '#6bb4ff' : 'rgba(220,228,248,0.7)',
-                  fontSize: '0.82rem',
-                  fontWeight: 500,
-                  padding: '0.45rem 0.9rem',
-                  cursor: 'pointer',
-                }}
+                className={`${blogStyles.filterChip} ${index === 0 ? blogStyles.filterChipActive : ''}`}
               >
                 {category}
               </button>
@@ -108,63 +100,36 @@ export default async function BlogPage() {
       <section className={styles.section}>
         <div className={styles.container}>
           {posts.length ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
+            <div className={blogStyles.postGrid}>
               {posts.map((post) => (
                 <a
                   key={post.id}
                   href={toContentCanonicalPath(post.slug)}
-                  style={{
-                    borderRadius: 14,
-                    border: '1px solid rgba(161,178,216,0.14)',
-                    background: 'rgba(8,10,16,0.6)',
-                    padding: '1.6rem',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.8rem',
-                    transition: 'border-color 0.2s',
-                  }}
+                  className={blogStyles.postCard}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                    <span
-                      style={{
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        letterSpacing: '0.1em',
-                        textTransform: 'uppercase',
-                        color: '#6bb4ff',
-                        border: '1px solid rgba(42,141,255,0.25)',
-                        borderRadius: 999,
-                        padding: '0.2rem 0.55rem',
-                      }}
-                    >
+                  <div className={blogStyles.postMeta}>
+                    <span className={blogStyles.kindBadge}>
                       {post.kind === 'news' ? 'News' : 'Blog'}
                     </span>
-                    <span style={{ fontSize: '0.76rem', color: 'rgba(200,210,240,0.45)' }}>
+                    <span className={blogStyles.metaText}>
                       {formatDate(post.publishedAt ?? post.createdAt)}
                     </span>
                   </div>
-                  <h2 style={{ margin: 0, fontSize: '1.08rem', fontWeight: 600, lineHeight: 1.35 }}>
+                  <h2 className={blogStyles.postTitle}>
                     {post.title}
                   </h2>
-                  <p style={{ margin: 0, fontSize: '0.88rem', color: 'rgba(200,210,240,0.6)', lineHeight: 1.55, flex: 1 }}>
+                  <p className={blogStyles.postExcerpt}>
                     {post.excerpt}
                   </p>
-                  <span style={{ fontSize: '0.76rem', color: 'rgba(200,210,240,0.4)', fontFamily: 'var(--font-mono), monospace' }}>
+                  <span className={blogStyles.readTime}>
                     {toReadTimeLabel(post.readTimeMinutes)}
                   </span>
                 </a>
               ))}
             </div>
           ) : (
-            <article
-              style={{
-                borderRadius: 14,
-                border: '1px solid rgba(161,178,216,0.14)',
-                background: 'rgba(8,10,16,0.6)',
-                padding: '1.4rem',
-              }}
-            >
-              <p style={{ margin: 0, color: 'rgba(212,221,244,0.7)', fontSize: '0.95rem' }}>
+            <article className={blogStyles.emptyCard}>
+              <p>
                 No published posts yet. Publish your first blog or news update from the dashboard content studio.
               </p>
             </article>
@@ -178,23 +143,14 @@ export default async function BlogPage() {
           <h2 className={styles.sectionTitle} style={{ fontSize: 'clamp(1.4rem, 3vw, 2rem)' }}>
             Subscribe to our newsletter
           </h2>
-          <p style={{ margin: '0.6rem 0 1.4rem', fontSize: '0.92rem', color: 'rgba(212,221,244,0.6)' }}>
+          <p className={blogStyles.newsletterIntro}>
             Engineering deep-dives and product updates, delivered monthly.
           </p>
-          <div style={{ display: 'flex', gap: '0.5rem', maxWidth: 420, margin: '0 auto' }}>
+          <div className={blogStyles.newsletterForm}>
             <input
               type="email"
               placeholder="you@company.com"
-              style={{
-                flex: 1,
-                borderRadius: 999,
-                border: '1px solid rgba(161,178,216,0.2)',
-                background: 'rgba(8,10,16,0.7)',
-                color: '#f3f5fa',
-                fontSize: '0.88rem',
-                padding: '0.7rem 1rem',
-                outline: 'none',
-              }}
+              className={blogStyles.newsletterInput}
             />
             <button className={styles.primaryButton} style={{ minWidth: 'auto', padding: '0.7rem 1.2rem' }}>
               Subscribe

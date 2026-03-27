@@ -2068,6 +2068,12 @@
   color: rgba(37, 54, 82, 0.76);
 }
 
+:global(html[data-landing-theme='light']) .heroPanel h3,
+:global(html[data-landing-theme='light']) .heroPanel strong,
+:global(html[data-landing-theme='light']) .heroStatCard h4 {
+  color: rgba(16, 29, 52, 0.92);
+}
+
 :global(html[data-landing-theme='light']) .cardMeta strong {
   color: rgba(16, 29, 52, 0.92);
 }
@@ -2448,20 +2454,74 @@
     padding: 4.6rem 0;
   }
 
+  .heroSection {
+    min-height: auto;
+    align-items: flex-start;
+    padding-top: 2rem;
+    padding-bottom: 2.4rem;
+  }
+
   .heroContent {
+    display: grid;
+    gap: 1rem;
     text-align: center;
   }
 
+  .heroLayout {
+    gap: 1rem;
+  }
+
   .heroActions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     justify-content: center;
+  }
+
+  .primaryButton,
+  .secondaryButton {
+    min-width: 0;
+    width: 100%;
   }
 
   .heroPanel {
     margin: 0 auto;
+    width: 100%;
+    max-width: 380px;
+    text-align: left;
+    border: 1px solid rgba(161, 178, 216, 0.18);
+    background: rgba(255, 255, 255, 0.38);
+    padding: 0.9rem 0.95rem;
+    backdrop-filter: blur(8px);
+  }
+
+  .heroPanel h3 {
+    font-size: clamp(1.5rem, 8vw, 1.95rem);
+  }
+
+  .heroPanel div {
+    margin-top: 0.5rem;
+    padding: 0.45rem 0;
+  }
+
+  .heroTerminal {
+    margin-top: 0.55rem;
+  }
+
+  .heroTerminal code {
+    font-size: 0.62rem;
   }
 
   .heroStats {
-    grid-template-columns: 1fr;
+    max-width: 380px;
+    margin-left: auto;
+    margin-right: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem 0.85rem;
+  }
+
+  .heroStatCard {
+    padding: 0.3rem 0;
   }
 
   .launchGrid {
@@ -2520,6 +2580,18 @@
   .footerBottom {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+@media (max-width: 520px) {
+  .heroActions {
+    gap: 0.6rem;
+  }
+
+  .primaryButton,
+  .secondaryButton {
+    padding: 0.8rem 0.9rem;
+    font-size: 0.78rem;
   }
 }
 

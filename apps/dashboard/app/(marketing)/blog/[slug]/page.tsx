@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { fetchPublishedContentPostBySlug, toContentAbsoluteUrl } from '../../../../lib/content';
 import { buildPageMetadata, SITE_NAME, siteUrl } from '../../../../lib/seo';
 import styles from '../../../landing.module.css';
+import blogStyles from '../blog.module.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -104,54 +105,27 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         <div className={styles.container} style={{ maxWidth: 860 }}>
           <Link
             href="/blog"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              color: 'rgba(202,216,245,0.75)',
-              fontSize: '0.86rem',
-              border: '1px solid rgba(161,178,216,0.18)',
-              borderRadius: 999,
-              padding: '0.32rem 0.75rem',
-            }}
+            className={blogStyles.articleBackLink}
           >
             Back to blog
           </Link>
 
-          <div style={{ marginTop: '1.2rem', display: 'flex', flexWrap: 'wrap', gap: '0.6rem', alignItems: 'center' }}>
-            <span
-              style={{
-                fontSize: '0.72rem',
-                fontWeight: 600,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                color: '#6bb4ff',
-                border: '1px solid rgba(42,141,255,0.25)',
-                borderRadius: 999,
-                padding: '0.2rem 0.55rem',
-              }}
-            >
+          <div className={blogStyles.articleMeta}>
+            <span className={blogStyles.kindBadge}>
               {post.kind === 'news' ? 'News' : 'Blog'}
             </span>
-            <span style={{ fontSize: '0.82rem', color: 'rgba(200,210,240,0.45)' }}>
+            <span className={blogStyles.metaText}>
               {formatDate(post.publishedAt ?? post.createdAt)}
             </span>
-            <span style={{ fontSize: '0.82rem', color: 'rgba(200,210,240,0.45)' }}>
+            <span className={blogStyles.metaText}>
               {post.readTimeMinutes} min read
             </span>
           </div>
 
-          <h1
-            style={{
-              margin: '1rem 0 0',
-              fontSize: 'clamp(2rem, 5vw, 3rem)',
-              lineHeight: 1.08,
-              letterSpacing: '-0.02em',
-            }}
-          >
+          <h1 className={blogStyles.articleTitle}>
             {post.title}
           </h1>
-          <p style={{ margin: '0.9rem 0 0', color: 'rgba(212,221,244,0.72)', fontSize: '1rem', lineHeight: 1.65 }}>
+          <p className={blogStyles.articleExcerpt}>
             {post.excerpt}
           </p>
         </div>
@@ -160,17 +134,11 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
       <section className={styles.section} style={{ paddingTop: '0.5rem' }}>
         <div className={styles.container} style={{ maxWidth: 860 }}>
           <article>
-            <div style={{ display: 'grid', gap: '1rem' }}>
+            <div className={blogStyles.articleBody}>
               {paragraphs.map((paragraph, index) => (
                 <p
                   key={`${post.id}-paragraph-${index}`}
-                  style={{
-                    margin: 0,
-                    color: 'rgba(223,231,248,0.82)',
-                    fontSize: '0.98rem',
-                    lineHeight: 1.75,
-                    whiteSpace: 'pre-wrap',
-                  }}
+                  className={blogStyles.articleParagraph}
                 >
                   {paragraph}
                 </p>

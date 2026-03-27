@@ -1722,11 +1722,15 @@ a {
     background: var(--bg-0);
     position: sticky;
     top: 0;
+    z-index: 45;
+    overflow: visible;
     box-shadow: 1px 0 0 0 var(--line);
   }
 
   .nav-header {
     @apply flex items-center px-4 py-5;
+    position: relative;
+    z-index: 46;
     border-bottom: 1px solid var(--line);
   }
 
@@ -1932,6 +1936,7 @@ a {
   .ws-switcher {
     position: relative;
     width: 100%;
+    z-index: 70;
   }
 
   .ws-switcher-trigger {
