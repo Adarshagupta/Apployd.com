@@ -214,6 +214,8 @@ const databaseAddonTiers: DatabaseAddonTier[] = [
   },
 ] as const;
 
+const defaultDatabaseAddonTier = databaseAddonTiers[0]!;
+
 const recommendedDatabaseAddonByPlan: Record<string, string> = {
   free: 'hobby',
   dev: 'starter',
@@ -289,7 +291,7 @@ export default function PricingPage() {
             {plans.map((plan) => {
               const recommendedAddonCode = recommendedDatabaseAddonByPlan[plan.code] ?? 'starter';
               const recommendedAddon =
-                databaseAddonTiers.find((tier) => tier.code === recommendedAddonCode) ?? databaseAddonTiers[0];
+                databaseAddonTiers.find((tier) => tier.code === recommendedAddonCode) ?? defaultDatabaseAddonTier;
 
               return (
                 <article
