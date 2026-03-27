@@ -214,16 +214,6 @@ const databaseAddonTiers: DatabaseAddonTier[] = [
   },
 ] as const;
 
-const defaultDatabaseAddonTier = databaseAddonTiers[0]!;
-
-const recommendedDatabaseAddonByPlan: Record<string, string> = {
-  free: 'hobby',
-  dev: 'starter',
-  pro: 'growth',
-  max: 'scale',
-  enterprise: 'scale',
-};
-
 const quickViewRows = [
   { feature: 'Auto Deploy', free: 'Yes', dev: 'Yes', pro: 'Yes', max: 'Yes', enterprise: 'Yes' },
   { feature: 'Custom Domain', free: 'No', dev: 'Yes', pro: 'Yes', max: 'Yes', enterprise: 'Yes' },
@@ -233,6 +223,16 @@ const quickViewRows = [
   { feature: 'Analytics', free: 'Basic', dev: 'Standard', pro: 'Advanced', max: 'Pro', enterprise: 'Custom' },
   { feature: 'Support', free: 'Community', dev: 'Email', pro: 'Priority', max: '24/7', enterprise: 'Dedicated' },
 ];
+
+const pricingCardBackground = 'rgba(255,255,255,0.94)';
+const pricingCardBorder = 'rgba(148,163,184,0.24)';
+const pricingMutedText = '#64748b';
+const pricingBodyText = '#475569';
+const pricingHeadingText = '#0f172a';
+const pricingSurfaceBorder = 'rgba(148,163,184,0.18)';
+const pricingSurfaceBackground = 'rgba(248,250,252,0.92)';
+const pricingTableHeaderBackground = 'rgba(241,245,249,0.96)';
+const pricingTableRowBorder = 'rgba(148,163,184,0.16)';
 
 const normalizedPrice = (value: string): string => {
   const numeric = value.replace(/[^0-9.]/g, '');
@@ -272,7 +272,7 @@ export default function PricingPage() {
           <h1 className={styles.sectionTitle} style={{ fontSize: 'clamp(2.2rem, 5vw, 3.6rem)' }}>
             Start free. Upgrade when you grow.
           </h1>
-          <p style={{ maxWidth: 720, margin: '1rem auto 0', fontSize: '1.02rem', color: 'rgba(212,221,244,0.72)' }}>
+          <p style={{ maxWidth: 720, margin: '1rem auto 0', fontSize: '1.02rem', color: pricingBodyText }}>
             No hidden charges. Clear plan limits. Predictable scaling.
           </p>
         </div>
@@ -289,10 +289,6 @@ export default function PricingPage() {
             }}
           >
             {plans.map((plan) => {
-              const recommendedAddonCode = recommendedDatabaseAddonByPlan[plan.code] ?? 'starter';
-              const recommendedAddon =
-                databaseAddonTiers.find((tier) => tier.code === recommendedAddonCode) ?? defaultDatabaseAddonTier;
-
               return (
                 <article
                   key={plan.code}
@@ -301,9 +297,10 @@ export default function PricingPage() {
                     borderRadius: 16,
                     border: plan.popular
                       ? '1.5px solid rgba(42,141,255,0.5)'
-                      : '1px solid rgba(161,178,216,0.16)',
-                    background: 'rgba(8,10,16,0.68)',
+                      : `1px solid ${pricingCardBorder}`,
+                    background: pricingCardBackground,
                     padding: '1.2rem',
+                    boxShadow: '0 18px 44px rgba(15,23,42,0.08)',
                   }}
                 >
                   {plan.popular ? (
@@ -326,16 +323,16 @@ export default function PricingPage() {
                       Most Popular
                     </span>
                   ) : null}
-                  <p style={{ margin: 0, fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(202,214,243,0.66)' }}>
+                  <p style={{ margin: 0, fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: pricingMutedText }}>
                     {plan.name}
                   </p>
-                  <p style={{ margin: '0.6rem 0 0', fontSize: '2.3rem', fontWeight: 700, lineHeight: 1 }}>
+                  <p style={{ margin: '0.6rem 0 0', fontSize: '2.3rem', fontWeight: 700, lineHeight: 1, color: pricingHeadingText }}>
                     {plan.price}
-                    <span style={{ fontSize: '0.8rem', fontWeight: 400, color: 'rgba(200,210,240,0.62)' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 400, color: pricingMutedText }}>
                       {plan.period}
                     </span>
                   </p>
-                  <p style={{ margin: '0.56rem 0 0', color: 'rgba(210,222,247,0.78)', fontSize: '0.86rem' }}>
+                  <p style={{ margin: '0.56rem 0 0', color: pricingBodyText, fontSize: '0.86rem' }}>
                     Best for: {plan.bestFor}
                   </p>
                   <a
@@ -350,16 +347,16 @@ export default function PricingPage() {
                   >
                     {plan.cta}
                   </a>
-                  <div style={{ marginTop: '0.95rem', borderRadius: 12, border: '1px solid rgba(150,170,220,0.16)', overflow: 'hidden' }}>
+                  <div style={{ marginTop: '0.95rem', borderRadius: 12, border: `1px solid ${pricingSurfaceBorder}`, overflow: 'hidden' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <tbody>
                         {plan.features.map((row, idx) => (
-                          <tr key={`${plan.code}-${row.label}`} style={{ borderTop: idx === 0 ? 'none' : '1px solid rgba(150,170,220,0.14)' }}>
-                            <td style={{ padding: '0.46rem 0.56rem', fontSize: '0.78rem', color: 'rgba(197,211,244,0.82)' }}>{row.label}</td>
-                            <td style={{ padding: '0.46rem 0.56rem', fontSize: '0.78rem', textAlign: 'right', color: 'rgba(237,242,255,0.92)' }}>{row.value}</td>
+                          <tr key={`${plan.code}-${row.label}`} style={{ borderTop: idx === 0 ? 'none' : `1px solid ${pricingTableRowBorder}` }}>
+                            <td style={{ padding: '0.46rem 0.56rem', fontSize: '0.78rem', color: pricingBodyText }}>{row.label}</td>
+                            <td style={{ padding: '0.46rem 0.56rem', fontSize: '0.78rem', textAlign: 'right', color: pricingHeadingText }}>{row.value}</td>
                           </tr>
                         ))}
-                        <tr style={{ borderTop: '1px solid rgba(150,170,220,0.14)' }}>
+                        <tr style={{ borderTop: `1px solid ${pricingTableRowBorder}` }}>
                           <td colSpan={2} style={{ padding: '0.62rem 0.56rem 0.72rem' }}>
                             <details>
                               <summary
@@ -371,49 +368,80 @@ export default function PricingPage() {
                                   cursor: 'pointer',
                                   fontSize: '0.78rem',
                                   fontWeight: 600,
-                                  color: 'rgba(237,242,255,0.92)',
+                                  color: pricingHeadingText,
                                 }}
                               >
                                 <span>Database add-on</span>
-                                <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'rgba(200,210,240,0.62)' }}>
-                                  {recommendedAddon.name} - {recommendedAddon.price}
+                                <span style={{ fontSize: '0.72rem', fontWeight: 500, color: pricingMutedText }}>
+                                  Choose any tier
                                 </span>
                               </summary>
-                              <div style={{ marginTop: '0.72rem', borderRadius: 10, border: '1px solid rgba(150,170,220,0.14)', overflowX: 'auto', overflowY: 'hidden' }}>
+                              <div style={{ marginTop: '0.72rem', display: 'grid', gap: '0.72rem' }}>
+                                <div style={{ display: 'grid', gap: '0.4rem' }}>
+                                  <label
+                                    htmlFor={`db-addon-${plan.code}`}
+                                    style={{ fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: pricingMutedText }}
+                                  >
+                                    Select database tier
+                                  </label>
+                                  <select
+                                    id={`db-addon-${plan.code}`}
+                                    defaultValue="hobby"
+                                    style={{
+                                      width: '100%',
+                                      borderRadius: 10,
+                                      border: `1px solid ${pricingSurfaceBorder}`,
+                                      background: pricingSurfaceBackground,
+                                      color: pricingHeadingText,
+                                      padding: '0.72rem 0.8rem',
+                                      fontSize: '0.84rem',
+                                      outline: 'none',
+                                    }}
+                                  >
+                                    {databaseAddonTiers.map((tier) => (
+                                      <option key={`${plan.code}-${tier.code}`} value={tier.code}>
+                                        {tier.name} - {tier.price}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <p style={{ margin: 0, fontSize: '0.74rem', color: pricingMutedText }}>
+                                    Any pricing plan can be paired with any database tier.
+                                  </p>
+                                </div>
+                                <div style={{ borderRadius: 10, border: `1px solid ${pricingSurfaceBorder}`, overflowX: 'auto', overflowY: 'hidden' }}>
                                 <table style={{ width: '100%', minWidth: 440, borderCollapse: 'collapse' }}>
                                   <thead>
-                                    <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
-                                      <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', color: 'rgba(197,211,244,0.64)' }}>Plan</th>
-                                      <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', color: 'rgba(197,211,244,0.64)' }}>Storage</th>
-                                      <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', color: 'rgba(197,211,244,0.64)' }}>Compute</th>
-                                      <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', color: 'rgba(197,211,244,0.64)' }}>RAM</th>
-                                      <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'right', color: 'rgba(197,211,244,0.64)' }}>Price/mo</th>
+                                    <tr style={{ background: pricingTableHeaderBackground }}>
+                                      <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', color: pricingMutedText }}>Plan</th>
+                                      <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', color: pricingMutedText }}>Storage</th>
+                                      <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', color: pricingMutedText }}>Compute</th>
+                                      <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'left', color: pricingMutedText }}>RAM</th>
+                                      <th style={{ padding: '0.46rem 0.5rem', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', textAlign: 'right', color: pricingMutedText }}>Price/mo</th>
                                     </tr>
                                   </thead>
                                   <tbody>
                                     {databaseAddonTiers.map((tier, idx) => {
-                                      const recommended = tier.code === recommendedAddon.code;
-
                                       return (
                                         <tr
                                           key={`${plan.code}-${tier.code}`}
                                           style={{
-                                            borderTop: idx === 0 ? 'none' : '1px solid rgba(150,170,220,0.12)',
-                                            background: recommended ? 'rgba(42,141,255,0.08)' : 'transparent',
+                                            borderTop: idx === 0 ? 'none' : `1px solid ${pricingTableRowBorder}`,
+                                            background: 'transparent',
                                           }}
                                         >
-                                          <td style={{ padding: '0.48rem 0.5rem', fontSize: '0.72rem', color: recommended ? '#7ec0ff' : 'rgba(237,242,255,0.9)' }}>
+                                          <td style={{ padding: '0.48rem 0.5rem', fontSize: '0.72rem', color: pricingHeadingText }}>
                                             {tier.name}
                                           </td>
-                                          <td style={{ padding: '0.48rem 0.5rem', fontSize: '0.72rem', color: 'rgba(210,222,247,0.76)' }}>{tier.storage}</td>
-                                          <td style={{ padding: '0.48rem 0.5rem', fontSize: '0.72rem', color: 'rgba(210,222,247,0.76)' }}>{tier.compute}</td>
-                                          <td style={{ padding: '0.48rem 0.5rem', fontSize: '0.72rem', color: 'rgba(210,222,247,0.76)' }}>{tier.ram}</td>
-                                          <td style={{ padding: '0.48rem 0.5rem', fontSize: '0.72rem', textAlign: 'right', color: 'rgba(237,242,255,0.9)' }}>{tier.price}</td>
+                                          <td style={{ padding: '0.48rem 0.5rem', fontSize: '0.72rem', color: pricingBodyText }}>{tier.storage}</td>
+                                          <td style={{ padding: '0.48rem 0.5rem', fontSize: '0.72rem', color: pricingBodyText }}>{tier.compute}</td>
+                                          <td style={{ padding: '0.48rem 0.5rem', fontSize: '0.72rem', color: pricingBodyText }}>{tier.ram}</td>
+                                          <td style={{ padding: '0.48rem 0.5rem', fontSize: '0.72rem', textAlign: 'right', color: pricingHeadingText }}>{tier.price}</td>
                                         </tr>
                                       );
                                     })}
                                   </tbody>
                                 </table>
+                              </div>
                               </div>
                             </details>
                           </td>

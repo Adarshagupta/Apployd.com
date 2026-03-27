@@ -19,6 +19,23 @@ interface Plan {
   checkoutEnabled?: boolean;
 }
 
+type DatabaseAddonTierCode = 'starter' | 'growth' | 'scale';
+type DatabaseAddonSelection = 'hobby' | DatabaseAddonTierCode;
+
+interface PlanAddonTierAvailability {
+  checkoutEnabled?: boolean;
+}
+
+interface PlansResponse {
+  plans?: Plan[];
+  addons?: {
+    database?: {
+      checkoutEnabled?: boolean;
+      tiers?: Partial<Record<DatabaseAddonTierCode, PlanAddonTierAvailability>>;
+    };
+  };
+}
+
 interface Invoice {
   id: string;
   amountDueUsd: string;
@@ -48,6 +65,13 @@ interface PlanCatalogItem {
   analytics: string;
   bestFor: string;
   popular?: boolean;
+}
+
+interface DatabaseAddonTierOption {
+  code: DatabaseAddonSelection;
+  name: string;
+  price: string;
+  summary: string;
 }
 
 const planCatalog: PlanCatalogItem[] = [
@@ -154,6 +178,38 @@ const planCatalog: PlanCatalogItem[] = [
   },
 ];
 
+const databaseAddonCatalog: DatabaseAddonTierOption[] = [
+  {
+    code: 'hobby',
+    name: 'Hobby',
+    price: 'Included',
+    summary: '1 GB storage, 512 MB RAM',
+  },
+  {
+    code: 'starter',
+    name: 'Starter',
+    price: '$5.00 / month',
+    summary: '5 GB storage, 1 GB RAM',
+  },
+  {
+    code: 'growth',
+    name: 'Growth',
+    price: '$19.99 / month',
+    summary: '20 GB storage, 4 GB RAM',
+  },
+  {
+    code: 'scale',
+    name: 'Scale',
+    price: '$70.00 / month',
+    summary: '100 GB storage, 16 GB RAM',
+  },
+];
+
+const hobbyDatabaseAddon = databaseAddonCatalog.find((tier) => tier.code === 'hobby')!;
+const starterDatabaseAddon = databaseAddonCatalog.find((tier) => tier.code === 'starter')!;
+const growthDatabaseAddon = databaseAddonCatalog.find((tier) => tier.code === 'growth')!;
+const scaleDatabaseAddon = databaseAddonCatalog.find((tier) => tier.code === 'scale')!;
+
 function SkeletonBlock({ className }: { className: string }) {
   return <div aria-hidden="true" className={`skeleton ${className}`} />;
 }
@@ -162,6 +218,14 @@ export default function BillingPage() {
   const { selectedOrganizationId, subscription, refreshSubscription } = useWorkspaceContext();
   const searchParams = useSearchParams();
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [databaseAddonAvailability, setDatabaseAddonAvailability] = useState<Record<DatabaseAddonTierCode, boolean>>({
+    starter: false,
+    growth: false,
+    scale: false,
+  });
+  const [databaseAddonSelectionByPlan, setDatabaseAddonSelectionByPlan] = useState<
+    Partial<Record<string, DatabaseAddonSelection>>
+  >({});
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -223,11 +287,26 @@ export default function BillingPage() {
     return catalogPlan?.price ?? null;
   }, [availablePlansByCode, currentPlan]);
 
+  const availableDatabaseAddonOptions = useMemo(
+    () => [
+      hobbyDatabaseAddon,
+      ...(databaseAddonAvailability.starter ? [starterDatabaseAddon] : []),
+      ...(databaseAddonAvailability.growth ? [growthDatabaseAddon] : []),
+      ...(databaseAddonAvailability.scale ? [scaleDatabaseAddon] : []),
+    ],
+    [databaseAddonAvailability],
+  );
+
   const load = async () => {
     setLoading(true);
     try {
-      const planData = await apiClient.get('/plans');
+      const planData = (await apiClient.get('/plans')) as PlansResponse;
       setPlans(planData.plans ?? []);
+      setDatabaseAddonAvailability({
+        starter: Boolean(planData.addons?.database?.tiers?.starter?.checkoutEnabled),
+        growth: Boolean(planData.addons?.database?.tiers?.growth?.checkoutEnabled),
+        scale: Boolean(planData.addons?.database?.tiers?.scale?.checkoutEnabled),
+      });
 
       if (selectedOrganizationId) {
         if (checkoutStatus === 'succeeded' || checkoutStatus === 'processing') {
@@ -266,7 +345,7 @@ export default function BillingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedOrganizationId, checkoutStatus, providerSubscriptionId, refreshSubscription]);
 
-  const startUpgrade = async (planCode: string) => {
+  const startUpgrade = async (planCode: string, databaseAddonTier: DatabaseAddonTierCode | null) => {
     if (!selectedOrganizationId) {
       setMessage('Organization required');
       return;
@@ -279,6 +358,7 @@ export default function BillingPage() {
       const response = await apiClient.post('/billing/checkout-session', {
         organizationId: selectedOrganizationId,
         planCode,
+        ...(databaseAddonTier ? { databaseAddonTier } : {}),
         successUrl: `${window.location.origin}/billing`,
         cancelUrl: `${window.location.origin}/billing?status=cancelled`,
       });
@@ -408,6 +488,9 @@ export default function BillingPage() {
               catalogPlan.code !== 'enterprise'
               && catalogPlan.code !== 'free'
               && (!apiPlan || apiPlan.checkoutEnabled === false);
+            const selectedAddonTier = databaseAddonSelectionByPlan[catalogPlan.code] ?? 'hobby';
+            const selectedAddon = databaseAddonCatalog.find((tier) => tier.code === selectedAddonTier) ?? null;
+            const showAddonSelector = canCheckout && availableDatabaseAddonOptions.length > 0;
 
             return (
               <article
@@ -457,15 +540,53 @@ export default function BillingPage() {
                     Contact Sales
                   </a>
                 ) : canCheckout ? (
-                  <button
-                    className="btn-primary mt-4 w-full disabled:cursor-not-allowed disabled:opacity-60"
-                    onClick={() => startUpgrade(apiPlan.code)}
-                    disabled={redirectingToCheckout}
-                  >
-                    {redirectingToCheckout && redirectingPlanCode === apiPlan.code
-                      ? 'Redirecting...'
-                      : `Choose ${catalogPlan.name}`}
-                  </button>
+                  <>
+                    {showAddonSelector ? (
+                      <div className="mt-4 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                            Database add-on
+                          </p>
+                          <span className="text-[11px] text-slate-500">
+                            Choose database tier
+                          </span>
+                        </div>
+                        <select
+                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                          value={selectedAddonTier}
+                          onChange={(event) => {
+                            const nextSelection = event.target.value as DatabaseAddonSelection;
+                            setDatabaseAddonSelectionByPlan((current) => ({
+                              ...current,
+                              [catalogPlan.code]: nextSelection,
+                            }));
+                          }}
+                          disabled={redirectingToCheckout}
+                        >
+                          {availableDatabaseAddonOptions.map((tier) => (
+                            <option key={tier.code} value={tier.code}>
+                              {tier.name} · {tier.price}
+                            </option>
+                          ))}
+                        </select>
+                        {selectedAddon ? (
+                          <p className="text-xs text-slate-500">
+                            {selectedAddon.summary}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    <button
+                      className="btn-primary mt-4 w-full disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={() => startUpgrade(apiPlan.code, selectedAddonTier === 'hobby' ? null : selectedAddonTier)}
+                      disabled={redirectingToCheckout}
+                    >
+                      {redirectingToCheckout && redirectingPlanCode === apiPlan.code
+                        ? 'Redirecting...'
+                        : `Choose ${catalogPlan.name}`}
+                    </button>
+                  </>
                 ) : catalogPlan.code === 'free' ? (
                   <p className="mt-3 text-xs text-slate-500">Free plan available by default for new organizations.</p>
                 ) : unavailableInWorkspace ? (

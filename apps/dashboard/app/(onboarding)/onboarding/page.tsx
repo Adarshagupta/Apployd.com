@@ -46,11 +46,57 @@ interface PlanListResponse {
     code?: string | null;
     checkoutEnabled?: boolean;
   }>;
+  addons?: {
+    database?: {
+      tiers?: Partial<Record<DatabaseAddonTierCode, { checkoutEnabled?: boolean }>>;
+    };
+  };
+}
+
+type DatabaseAddonTierCode = 'starter' | 'growth' | 'scale';
+type DatabaseAddonSelection = 'hobby' | DatabaseAddonTierCode;
+
+interface DatabaseAddonTierOption {
+  code: DatabaseAddonSelection;
+  name: string;
+  price: string;
+  summary: string;
 }
 
 const CHECKOUT_PLAN_CODES = ['dev', 'pro', 'max'] as const;
 const PAID_PLAN_CODES = new Set(['dev', 'pro', 'max', 'enterprise']);
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due']);
+const databaseAddonCatalog: DatabaseAddonTierOption[] = [
+  {
+    code: 'hobby',
+    name: 'Hobby',
+    price: 'Included',
+    summary: '1 GB storage, 512 MB RAM',
+  },
+  {
+    code: 'starter',
+    name: 'Starter',
+    price: '$5.00 / month',
+    summary: '5 GB storage, 1 GB RAM',
+  },
+  {
+    code: 'growth',
+    name: 'Growth',
+    price: '$19.99 / month',
+    summary: '20 GB storage, 4 GB RAM',
+  },
+  {
+    code: 'scale',
+    name: 'Scale',
+    price: '$70.00 / month',
+    summary: '100 GB storage, 16 GB RAM',
+  },
+];
+
+const hobbyDatabaseAddon = databaseAddonCatalog.find((tier) => tier.code === 'hobby')!;
+const starterDatabaseAddon = databaseAddonCatalog.find((tier) => tier.code === 'starter')!;
+const growthDatabaseAddon = databaseAddonCatalog.find((tier) => tier.code === 'growth')!;
+const scaleDatabaseAddon = databaseAddonCatalog.find((tier) => tier.code === 'scale')!;
 
 const parseStep = (value: string | null): WizardStep | null => {
   if (value === 'github' || value === 'team' || value === 'billing' || value === 'finish') {
@@ -82,6 +128,14 @@ export default function StandaloneOnboardingPage() {
   const [subscriptionName, setSubscriptionName] = useState('Free');
   const [subscriptionCode, setSubscriptionCode] = useState('free');
   const [subscriptionStatus, setSubscriptionStatus] = useState('inactive');
+  const [databaseAddonAvailability, setDatabaseAddonAvailability] = useState<Record<DatabaseAddonTierCode, boolean>>({
+    starter: false,
+    growth: false,
+    scale: false,
+  });
+  const [databaseAddonSelectionByPlan, setDatabaseAddonSelectionByPlan] = useState<
+    Partial<Record<(typeof CHECKOUT_PLAN_CODES)[number], DatabaseAddonSelection>>
+  >({});
   const [availableCheckoutPlans, setAvailableCheckoutPlans] = useState<Array<(typeof CHECKOUT_PLAN_CODES)[number]>>(
     [...CHECKOUT_PLAN_CODES],
   );
@@ -98,6 +152,16 @@ export default function StandaloneOnboardingPage() {
       { id: 'finish' as const, label: 'Finish', done: false },
     ],
     [githubConnected, paidPlanActive, teamSetupDone],
+  );
+
+  const availableDatabaseAddonOptions = useMemo(
+    () => [
+      hobbyDatabaseAddon,
+      ...(databaseAddonAvailability.starter ? [starterDatabaseAddon] : []),
+      ...(databaseAddonAvailability.growth ? [growthDatabaseAddon] : []),
+      ...(databaseAddonAvailability.scale ? [scaleDatabaseAddon] : []),
+    ],
+    [databaseAddonAvailability],
   );
 
   const loadState = async () => {
@@ -163,6 +227,11 @@ export default function StandaloneOnboardingPage() {
       setSubscriptionCode(planCode);
       setSubscriptionStatus(planStatus);
       setSubscriptionName(planName);
+      setDatabaseAddonAvailability({
+        starter: Boolean(plans.addons?.database?.tiers?.starter?.checkoutEnabled),
+        growth: Boolean(plans.addons?.database?.tiers?.growth?.checkoutEnabled),
+        scale: Boolean(plans.addons?.database?.tiers?.scale?.checkoutEnabled),
+      });
       setAvailableCheckoutPlans(
         (plans.plans ?? [])
           .map((plan) => {
@@ -246,7 +315,7 @@ export default function StandaloneOnboardingPage() {
     }
   };
 
-  const startCheckout = async (planCode: 'dev' | 'pro' | 'max') => {
+  const startCheckout = async (planCode: 'dev' | 'pro' | 'max', databaseAddonTier: DatabaseAddonTierCode | null) => {
     if (!organization) {
       setMessage('Organization not loaded.');
       return;
@@ -259,6 +328,7 @@ export default function StandaloneOnboardingPage() {
       const response = (await apiClient.post('/billing/checkout-session', {
         organizationId: organization.id,
         planCode,
+        ...(databaseAddonTier ? { databaseAddonTier } : {}),
         successUrl: `${nextBase}/onboarding?step=billing`,
         cancelUrl: `${nextBase}/onboarding?step=billing&status=cancelled`,
       })) as { checkoutUrl?: string };
@@ -493,20 +563,55 @@ export default function StandaloneOnboardingPage() {
             <div className="rounded-xl border border-slate-200 p-4 text-sm text-slate-700">
               Current plan: {subscriptionName} ({subscriptionStatus})
             </div>
-            <div className="grid gap-2 sm:grid-cols-3">
-              {availableCheckoutPlans.map((planCode) => (
-                <button
-                  key={planCode}
-                  type="button"
-                  className="btn-primary"
-                  onClick={() => startCheckout(planCode)}
-                  disabled={actionLoading === `billing-${planCode}`}
-                >
-                  {actionLoading === `billing-${planCode}`
-                    ? 'Opening checkout...'
-                    : `Choose ${planCode.toUpperCase()}`}
-                </button>
-              ))}
+            <div className="grid gap-3 sm:grid-cols-3">
+              {availableCheckoutPlans.map((planCode) => {
+                const selectedAddonTier = databaseAddonSelectionByPlan[planCode] ?? 'hobby';
+                const selectedAddon = databaseAddonCatalog.find((tier) => tier.code === selectedAddonTier) ?? null;
+
+                return (
+                  <article key={planCode} className="rounded-xl border border-slate-200 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-900">
+                        {planCode}
+                      </p>
+                      <span className="text-[11px] text-slate-500">Choose database tier</span>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      <select
+                        className="field-input"
+                        value={selectedAddonTier}
+                        onChange={(event) => {
+                          const nextSelection = event.target.value as DatabaseAddonSelection;
+                          setDatabaseAddonSelectionByPlan((current) => ({
+                            ...current,
+                            [planCode]: nextSelection,
+                          }));
+                        }}
+                        disabled={actionLoading === `billing-${planCode}`}
+                      >
+                        {availableDatabaseAddonOptions.map((tier) => (
+                          <option key={tier.code} value={tier.code}>
+                            {tier.name} · {tier.price}
+                          </option>
+                        ))}
+                      </select>
+                      {selectedAddon ? (
+                        <p className="text-xs text-slate-600">{selectedAddon.summary}</p>
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-primary mt-3 w-full"
+                      onClick={() => startCheckout(planCode, selectedAddonTier === 'hobby' ? null : selectedAddonTier)}
+                      disabled={actionLoading === `billing-${planCode}`}
+                    >
+                      {actionLoading === `billing-${planCode}`
+                        ? 'Opening checkout...'
+                        : `Choose ${planCode.toUpperCase()}`}
+                    </button>
+                  </article>
+                );
+              })}
             </div>
             {!availableCheckoutPlans.length ? (
               <p className="text-sm text-slate-600">
