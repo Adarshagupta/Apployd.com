@@ -539,7 +539,9 @@ const readHeader = (headers: Record<string, unknown>, name: string): string | nu
 };
 
 const parseSignatureCandidates = (headerValue: string): string[] => {
-  const matches = [...headerValue.matchAll(/v\d+[=,]([A-Za-z0-9+/=_-]+)/g)].map((match) => match[1]);
+  const matches = [...headerValue.matchAll(/v\d+[=,]([A-Za-z0-9+/=_-]+)/g)]
+    .map((match) => match[1])
+    .filter((value): value is string => typeof value === 'string' && value.length > 0);
   if (matches.length > 0) {
     return matches;
   }

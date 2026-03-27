@@ -110,7 +110,7 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
       customerId: billingCustomerId,
       returnUrl: body.successUrl,
       cancelUrl: body.cancelUrl,
-      databaseAddonTier,
+      ...(databaseAddonTier ? { databaseAddonTier } : {}),
       metadata: {
         checkoutType: 'plan',
         organizationId: body.organizationId,
