@@ -5,7 +5,7 @@
 - Fastify control plane with JWT auth and org/project/deployment APIs.
 - Docker-based deployment engine + Redis queue.
 - Nginx per-project dynamic reverse proxy with WebSocket forwarding.
-- Stripe subscription checkout + webhook handling.
+- Dodo Payments checkout + webhook handling.
 - Resource pooling and per-project 50% allocation cap.
 - Free-tier auto-sleep (15 min inactivity) and wake endpoint.
 - Next.js dashboard with core deployment, usage, logs, billing, team pages.

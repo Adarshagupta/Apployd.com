@@ -226,7 +226,7 @@ paths:
     post:
       tags: [Billing]
       security: [{ bearerAuth: [] }]
-      summary: Start Stripe subscription checkout
+      summary: Start Dodo Payments subscription checkout
       responses:
         '200': { description: Checkout URL }
   /billing/invoices:
@@ -244,7 +244,7 @@ paths:
   /billing/webhook:
     post:
       tags: [Billing]
-      summary: Stripe webhook endpoint
+      summary: Billing webhook endpoint
       responses:
         '200': { description: Webhook accepted }
   /logs:

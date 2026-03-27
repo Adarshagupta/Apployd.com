@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { getPlanEntitlements } from '../../domain/plan-entitlements.js';
 import { AccessService } from '../../services/access-service.js';
+import { isCheckoutEnabledForPlan } from '../../services/billing-provider-service.js';
 import { prisma } from '../../lib/prisma.js';
 
 export const planRoutes: FastifyPluginAsync = async (app) => {
@@ -17,6 +18,7 @@ export const planRoutes: FastifyPluginAsync = async (app) => {
     return {
       plans: plans.map((plan) => ({
         ...plan,
+        checkoutEnabled: isCheckoutEnabledForPlan(plan.code),
         entitlements: getPlanEntitlements(plan.code),
       })),
     };

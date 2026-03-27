@@ -3,12 +3,19 @@ import type { Metadata } from 'next';
 const DEFAULT_SITE_URL = 'https://apployd.com';
 export const SITE_NAME = 'Apployd';
 export const SITE_DESCRIPTION =
-  'Apployd is a managed deployment platform to deploy web apps and APIs with Git-based workflows, secure secrets, preview environments, and real-time observability.';
+  'Apployd is a managed deployment platform for web apps, APIs, Python services, and static sites with transparent billing, team workspaces, managed databases, real-time observability, and built-in developer tooling.';
 export const SITE_PRIMARY_KEYWORDS = [
   'apployd',
   'apployd platform',
   'web app deployment platform',
   'api deployment platform',
+  'python app deployment',
+  'static site deployment',
+  'transparent billing',
+  'team workspaces',
+  'managed postgres',
+  'real-time logs',
+  'ai code editor',
   'managed deployment platform',
   'saas deployment platform',
   'preview deployments',
@@ -111,6 +118,7 @@ export const softwareApplicationJsonLd = {
   '@type': 'SoftwareApplication',
   name: SITE_NAME,
   applicationCategory: 'DeveloperApplication',
+  applicationSubCategory: 'Deployment and operations platform',
   operatingSystem: 'Web',
   offers: {
     '@type': 'Offer',
@@ -120,6 +128,14 @@ export const softwareApplicationJsonLd = {
     category: 'SoftwareSubscription',
   },
   description: SITE_DESCRIPTION,
+  featureList: [
+    'Web app, API, Python service, and static site deployments',
+    'Git-based deployment workflow with preview environments',
+    'Transparent billing with usage visibility, invoices, and spend guardrails',
+    'Workspace-based team management and role-based access control',
+    'Managed PostgreSQL databases, deployment events, and real-time logs',
+    'Dashboard, docs, VS Code extension, and built-in Code Studio with AI assistance',
+  ],
   url: siteUrl,
 };
 

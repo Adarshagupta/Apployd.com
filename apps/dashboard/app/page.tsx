@@ -8,23 +8,31 @@ import { SectionThreeBackground } from '../components/landing-section-three';
 import { LandingThreeBackground } from '../components/landing-three-background';
 import { LandingThemeToggle } from '../components/landing-theme-toggle';
 import { ThemeLogo } from '../components/theme-logo';
-import { buildPageMetadata } from '../lib/seo';
+import { buildPageMetadata, siteUrl } from '../lib/seo';
 
 import styles from './landing.module.css';
 
 export const metadata: Metadata = buildPageMetadata({
   title: 'Deploy Web Apps and APIs',
   description:
-    'Deploy web apps and APIs with Git-based workflows, preview deployments, custom domains, secure secrets, and real-time observability.',
+    'Deploy web apps, APIs, Python services, and static sites with transparent billing, team workspaces, managed databases, real-time logs, and built-in developer tooling.',
   path: '/',
   keywords: [
     'apployd',
     'web app deployment platform',
     'api deployment platform',
+    'python app deployment',
+    'static site deployment',
+    'transparent billing',
+    'team workspaces',
+    'managed postgres',
+    'real-time logs',
+    'ai code editor',
     'managed deployment platform',
     'saas deployment platform',
     'preview deployments',
     'custom domain hosting',
+    'deployment observability',
   ],
 });
 
@@ -71,19 +79,24 @@ const platformModules = [
 
 const featureCards = [
   {
-    title: 'Intelligent Automation',
-    copy: 'Smart workflows adapt, execute, and optimize deployment lifecycle tasks.',
-    tag: 'AUTOMATED',
+    title: 'Transparent Billing',
+    copy: 'Plan catalog details, invoice history, usage tracking, warning thresholds, and overage guardrails keep spend easier to predict.',
+    tag: 'BILLING',
   },
   {
-    title: 'Resource Precision',
-    copy: 'CPU, RAM, and bandwidth pools align infrastructure to demand in real time.',
-    tag: 'SCALABLE',
+    title: 'Team Workspaces',
+    copy: 'Create and switch workspaces, invite teammates, and manage owner, admin, developer, and viewer access.',
+    tag: 'RBAC',
   },
   {
-    title: 'Operational Reliability',
-    copy: 'Live events and logs provide continuous deployment visibility for teams.',
-    tag: 'RELIABLE',
+    title: 'Real-Time Operations',
+    copy: 'Deployment events, centralized logs, usage analytics, and canary controls keep releases visible as they happen.',
+    tag: 'OBSERVABILITY',
+  },
+  {
+    title: 'Code Studio',
+    copy: 'Work inside the built-in editor and terminal, then use the Codex-powered AI agent for repo-aware coding help.',
+    tag: 'AI TOOLING',
   },
 ];
 
@@ -118,6 +131,101 @@ const heroStats = [
   { label: 'Infra Savings', value: '70%' },
   { label: 'Active Streams', value: '24/7' },
 ];
+
+const platformOverviewCards = [
+  {
+    title: 'Supported workloads',
+    copy: 'Deploy web apps, APIs, Python services, and static sites from a single platform workflow.',
+  },
+  {
+    title: 'Transparent billing',
+    copy: 'Review pricing tiers, plan limits, invoices, usage, warning thresholds, and overage controls from the billing surface.',
+  },
+  {
+    title: 'Multi-workspace teams',
+    copy: 'Create and switch between workspaces, invite members, and manage owner, admin, developer, and viewer roles per workspace.',
+  },
+  {
+    title: 'Managed databases',
+    copy: 'Provision Apployd PostgreSQL DB instances from the dashboard and move connection strings into workspace secrets.',
+  },
+  {
+    title: 'Real-time visibility',
+    copy: 'Track deployment events, logs, usage analytics, audit history, and security signals from the control plane.',
+  },
+  {
+    title: 'Developer tooling',
+    copy: 'Use the dashboard, docs, VS Code extension, built-in Code Studio editor, terminal, and AI agent in one workflow.',
+  },
+  {
+    title: 'Integrations',
+    copy: 'Connect GitHub and work alongside Docker, PostgreSQL, Redis, Sentry, OpenTelemetry, Prometheus, and Slack-based workflows.',
+  },
+  {
+    title: 'Support paths',
+    copy: 'Plans span community, email, priority, 24/7 priority, and dedicated support, alongside docs, help, and contact channels.',
+  },
+] as const;
+
+const homepageFaqItems = [
+  {
+    question: 'What is Apployd?',
+    answer:
+      'Apployd is a managed deployment platform for shipping applications with deployment workflows, pricing visibility, team workspaces, operational controls, and observability in one place.',
+  },
+  {
+    question: 'What kinds of applications does Apployd support?',
+    answer:
+      'Apployd supports web apps, APIs, Python services, and static sites, along with operational features such as preview deployments, custom domains, secrets, and logs.',
+  },
+  {
+    question: 'How does billing stay easier to understand?',
+    answer:
+      'Apployd exposes plan tiers, workspace usage, invoice history, support levels, warning thresholds, and overage controls so billing and limits are visible from the product.',
+  },
+  {
+    question: 'Can teams manage multiple workspaces?',
+    answer:
+      'Yes. Teams can work across multiple workspaces, switch organization context, invite members, and apply role-based access for owners, admins, developers, and viewers.',
+  },
+  {
+    question: 'Does Apployd include databases and real-time logs?',
+    answer:
+      'Yes. Apployd includes managed PostgreSQL database workflows, deployment events, project logs, and container log streaming for operational visibility.',
+  },
+  {
+    question: 'What developer tooling is built in?',
+    answer:
+      'Teams can work through the dashboard, documentation, security and help pages, VS Code extension, and Code Studio with a built-in editor, terminal, and Codex-powered AI agent.',
+  },
+] as const;
+
+const homepageFaqJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: homepageFaqItems.map((item) => ({
+    '@type': 'Question',
+    name: item.question,
+    acceptedAnswer: {
+      '@type': 'Answer',
+      text: item.answer,
+    },
+  })),
+};
+
+const homepageAboutJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'AboutPage',
+  name: 'Apployd platform overview',
+  url: `${siteUrl}/`,
+  description:
+    'Overview of Apployd deployment workflows, billing visibility, team workspaces, managed databases, integrations, observability, and developer tooling.',
+  about: {
+    '@type': 'SoftwareApplication',
+    name: 'Apployd',
+    applicationCategory: 'DeveloperApplication',
+  },
+};
 
 /* Step 1: Analytics – bar chart / line graph / real-time dashboard */
 function AnalyticsSvg() {
@@ -445,6 +553,14 @@ export default function HomePage() {
       <LandingParallaxController />
       <LandingThreeBackground className={styles.threeCanvas ?? ''} />
       <div className={styles.pageVignette} />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(homepageFaqJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(homepageAboutJsonLd) }}
+      />
 
       <header className={styles.navWrap}>
         <div className={styles.navShell}>
@@ -488,7 +604,7 @@ export default function HomePage() {
               <div className={styles.heroMain}>
                 <h1 className={styles.heroTitle}>Build & Deploy with confidence</h1>
                 <p className={styles.heroCopy}>
-                  Apployd helps teams deploy APIs on their own infrastructure with encrypted secrets, deterministic Git-based workflows, and live operational feedback.
+                  Apployd helps teams deploy web apps, APIs, Python services, and static sites with transparent billing, team workspaces, managed databases, secure secrets, and live operational feedback.
                 </p>
                 <div className={styles.heroActions}>
                   <Link href="/signup" className={styles.primaryButton}>
@@ -499,9 +615,9 @@ export default function HomePage() {
                   </Link>
                 </div>
                 <div className={styles.heroSignalRow}>
-                  <span>PRECISE</span>
-                  <span>SYSTEM +5</span>
-                  <span>LIVE CONTROL</span>
+                  <span>TRANSPARENT BILLING</span>
+                  <span>TEAM WORKSPACES</span>
+                  <span>LIVE LOGS</span>
                 </div>
               </div>
               <aside className={styles.heroPanel}>
@@ -530,6 +646,38 @@ export default function HomePage() {
                 </article>
               ))}
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="overview" data-parallax-section className={`${styles.section} ${styles.overviewSection}`}>
+        <SectionThreeBackground className={styles.sectionThreeCanvas ?? ''} variant="product" />
+        <div className={`${styles.sectionBackdrop} ${styles.overviewBackdrop}`} aria-hidden="true" />
+        <div className={styles.container}>
+          <div className={styles.overviewHeader}>
+            <p className={styles.sectionLabel}>PLATFORM OVERVIEW</p>
+            <h2 className={styles.sectionTitle}>What Apployd includes</h2>
+            <p className={styles.overviewIntro}>
+              Apployd brings deployment workflows, pricing visibility, workspace-based team management, database provisioning, integrations, observability, and coding tools into a single managed platform. The goal is to make the product surface easier to understand from the homepage.
+            </p>
+          </div>
+
+          <div className={styles.overviewGrid}>
+            {platformOverviewCards.map((card) => (
+              <article key={card.title} className={styles.overviewCard}>
+                <h3 className={styles.overviewCardTitle}>{card.title}</h3>
+                <p className={styles.overviewCardCopy}>{card.copy}</p>
+              </article>
+            ))}
+          </div>
+
+          <div className={styles.overviewFaqGrid}>
+            {homepageFaqItems.map((item) => (
+              <article key={item.question} className={styles.overviewFaqItem}>
+                <h3 className={styles.overviewFaqQuestion}>{item.question}</h3>
+                <p className={styles.overviewFaqAnswer}>{item.answer}</p>
+              </article>
+            ))}
           </div>
         </div>
       </section>

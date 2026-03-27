@@ -49,7 +49,7 @@
 
 ## Billing Risk Controls
 
-- Stripe webhooks update subscription status.
+- Dodo Payments webhooks update subscription status.
 - Webhook idempotency is enforced through `webhook_events` unique provider/event keys.
 - Failed payments transition subscription to `past_due`.
 - Usage records retained for invoice and overage reconciliation.

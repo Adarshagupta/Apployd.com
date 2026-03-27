@@ -8,7 +8,7 @@ flowchart LR
   Dashboard --> API[Control Plane API\nFastify + TypeScript]
   API --> Postgres[(PostgreSQL)]
   API --> Redis[(Redis)]
-  API --> Stripe[Stripe Billing]
+  API --> Billing[Dodo Payments]
   API --> Queue[Deploy Queue]
   Queue --> Engine[Deployment Engine Worker]
   Engine --> Docker[Docker Hosts]
@@ -59,7 +59,7 @@ sequenceDiagram
 
 - Deployment API supports `Idempotency-Key` to prevent duplicate deploy execution.
 - Deployment worker uses Redis lock per deployment id to avoid concurrent duplicate processing.
-- Stripe webhook events are deduplicated in `webhook_events` before state mutation.
+- Billing webhook events are deduplicated in `webhook_events` before state mutation.
 
 ## Scaling Path
 

@@ -16,6 +16,7 @@ interface Plan {
   includedRamMb: number;
   includedCpuMillicore: number;
   includedBandwidthGb: number;
+  checkoutEnabled?: boolean;
 }
 
 interface Invoice {
@@ -205,7 +206,9 @@ export default function BillingPage() {
 
   const currentPlanCode = currentPlan?.code.toLowerCase() ?? null;
   const checkoutStatus = searchParams?.get('status');
-  const checkoutSuccess = checkoutStatus === 'success';
+  const providerSubscriptionId = searchParams?.get('subscription_id') ?? undefined;
+  const checkoutSuccess = checkoutStatus === 'succeeded';
+  const checkoutProcessing = checkoutStatus === 'processing';
   const currentPlanPrice = useMemo(() => {
     if (!currentPlan) {
       return null;
@@ -227,9 +230,10 @@ export default function BillingPage() {
       setPlans(planData.plans ?? []);
 
       if (selectedOrganizationId) {
-        if (checkoutStatus === 'success') {
+        if (checkoutStatus === 'succeeded' || checkoutStatus === 'processing') {
           await apiClient.post('/billing/sync-subscription', {
             organizationId: selectedOrganizationId,
+            ...(providerSubscriptionId ? { providerSubscriptionId } : {}),
           });
           await refreshSubscription();
         }
@@ -241,6 +245,12 @@ export default function BillingPage() {
       }
       if (checkoutStatus === 'cancelled') {
         setMessage('Checkout was cancelled.');
+      } else if (checkoutStatus === 'failed') {
+        setMessage('Payment failed. Update your payment method and try again.');
+      } else if (checkoutStatus === 'processing') {
+        setMessage('Payment is processing. Subscription state will refresh automatically.');
+      } else if (checkoutStatus === 'succeeded') {
+        setMessage('Payment successful. Subscription synced.');
       } else {
         setMessage('');
       }
@@ -254,7 +264,7 @@ export default function BillingPage() {
   useEffect(() => {
     load().catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedOrganizationId, checkoutStatus, refreshSubscription]);
+  }, [selectedOrganizationId, checkoutStatus, providerSubscriptionId, refreshSubscription]);
 
   const startUpgrade = async (planCode: string) => {
     if (!selectedOrganizationId) {
@@ -269,7 +279,7 @@ export default function BillingPage() {
       const response = await apiClient.post('/billing/checkout-session', {
         organizationId: selectedOrganizationId,
         planCode,
-        successUrl: `${window.location.origin}/billing?status=success`,
+        successUrl: `${window.location.origin}/billing`,
         cancelUrl: `${window.location.origin}/billing?status=cancelled`,
       });
 
@@ -349,6 +359,17 @@ export default function BillingPage() {
         </SectionCard>
       ) : null}
 
+      {checkoutProcessing ? (
+        <SectionCard title="Payment Processing" subtitle="Dodo Payments is still confirming the transaction.">
+          <div className="panel-muted p-4">
+            <p className="text-sm text-slate-700">
+              We received the checkout return and started syncing your subscription. Refresh this page in a moment if
+              the updated plan does not appear immediately.
+            </p>
+          </div>
+        </SectionCard>
+      ) : null}
+
       <SectionCard title="Subscription" subtitle="Manage plan upgrades, renewals, and invoice lifecycle.">
         <div className="grid gap-3">
           {loading ? (
@@ -378,8 +399,15 @@ export default function BillingPage() {
           {planCatalog.map((catalogPlan) => {
             const apiPlan = availablePlansByCode.get(catalogPlan.code);
             const isCurrent = currentPlanCode === catalogPlan.code;
-            const canCheckout = !!apiPlan && catalogPlan.code !== 'free' && catalogPlan.code !== 'enterprise';
-            const unavailableInWorkspace = catalogPlan.code !== 'enterprise' && catalogPlan.code !== 'free' && !apiPlan;
+            const canCheckout =
+              !!apiPlan
+              && apiPlan.checkoutEnabled !== false
+              && catalogPlan.code !== 'free'
+              && catalogPlan.code !== 'enterprise';
+            const unavailableInWorkspace =
+              catalogPlan.code !== 'enterprise'
+              && catalogPlan.code !== 'free'
+              && (!apiPlan || apiPlan.checkoutEnabled === false);
 
             return (
               <article
@@ -539,7 +567,7 @@ export default function BillingPage() {
         <div className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/45 px-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-xl">
             <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
-            <p className="text-sm font-semibold text-slate-900">Redirecting to Stripe checkout</p>
+            <p className="text-sm font-semibold text-slate-900">Redirecting to Dodo Payments checkout</p>
             <p className="mt-1 text-xs text-slate-600">
               {redirectingPlanCode
                 ? `Preparing ${redirectingPlanCode.toUpperCase()} plan checkout...`

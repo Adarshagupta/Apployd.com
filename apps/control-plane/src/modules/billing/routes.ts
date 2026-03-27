@@ -1,29 +1,53 @@
 import type { FastifyPluginAsync } from 'fastify';
 
-import { PlanCode, Prisma } from '@prisma/client';
+import { InvoiceStatus, PlanCode, Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { env } from '../../config/env.js';
-import { AccessService } from '../../services/access-service.js';
 import { prisma } from '../../lib/prisma.js';
-import { mapPlanPrice, stripe } from '../../services/stripe-service.js';
+import { AccessService } from '../../services/access-service.js';
+import {
+  billingProvider,
+  billingProviderConfigured,
+  billingProviderLabel,
+  createBillingCheckoutSession,
+  createBillingCustomer,
+  decodeBillingReference,
+  encodeBillingReference,
+  getPlanCodeForProductId,
+  parseBillingWebhookEvent,
+  retrieveBillingPayment,
+  retrieveBillingSubscription,
+  listBillingPaymentsForSubscription,
+  listBillingSubscriptionsForCustomer,
+  verifyBillingWebhookSignature,
+  type BillingPayment,
+  type BillingSubscription,
+  type BillingWebhookEvent,
+} from '../../services/billing-provider-service.js';
 
 const checkoutSchema = z.object({
   organizationId: z.string().cuid(),
-  planCode: z.enum(['dev', 'pro', 'max', 'enterprise']),
+  planCode: z.enum(['dev', 'pro', 'max']),
   successUrl: z.string().url(),
   cancelUrl: z.string().url(),
 });
+
 const syncSubscriptionSchema = z.object({
   organizationId: z.string().cuid(),
+  providerSubscriptionId: z.string().trim().min(1).optional(),
 });
+
+type SubscriptionWithPlan = Prisma.SubscriptionGetPayload<{
+  include: { plan: true };
+}>;
 
 export const billingRoutes: FastifyPluginAsync = async (app) => {
   const access = new AccessService();
 
   app.post('/billing/checkout-session', { preHandler: [app.authenticate] }, async (request, reply) => {
-    if (!stripe) {
-      return reply.serviceUnavailable('Billing not configured');
+    if (!billingProviderConfigured) {
+      return reply.serviceUnavailable(`${billingProviderLabel} not configured`);
     }
 
     const user = request.user as { userId: string; email: string };
@@ -43,75 +67,55 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
     const subscription = await prisma.subscription.findFirst({
       where: {
         organizationId: body.organizationId,
-        status: { in: ['active', 'trialing', 'past_due'] },
       },
       orderBy: { createdAt: 'desc' },
     });
-
     if (!subscription) {
       return reply.badRequest('No current subscription');
     }
 
-    let stripeCustomerId = subscription.stripeCustomerId;
-    if (!isStripeCustomerId(stripeCustomerId)) {
-      const organization = await prisma.organization.findUnique({
-        where: { id: body.organizationId },
-        select: { name: true },
-      });
-      const customer = await stripe.customers.create({
+    const organization = await prisma.organization.findUnique({
+      where: { id: body.organizationId },
+      select: { name: true },
+    });
+    const customerName = organization?.name?.trim() || user.email;
+
+    let billingCustomerId = decodeBillingReference(subscription.stripeCustomerId);
+    if (!billingCustomerId) {
+      const customer = await createBillingCustomer({
         email: user.email,
-        ...(organization?.name ? { name: organization.name } : {}),
+        name: customerName,
         metadata: {
           organizationId: body.organizationId,
         },
       });
-      stripeCustomerId = customer.id;
+      billingCustomerId = customer.customerId;
 
       await prisma.subscription.update({
         where: { id: subscription.id },
         data: {
-          stripeCustomerId,
+          stripeCustomerId: encodeBillingReference(billingCustomerId),
         },
       });
     }
 
-    const lineItem =
-      plan.stripePriceId
-        ? {
-            price: plan.stripePriceId,
-            quantity: 1,
-          }
-        : {
-            price_data: {
-              currency: 'usd',
-              unit_amount: mapPlanPrice(body.planCode),
-              recurring: { interval: 'month' as const },
-              product_data: { name: `Apployd ${plan.displayName}` },
-            },
-            quantity: 1,
-          };
-
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      customer: stripeCustomerId,
-      line_items: [lineItem],
-      success_url: body.successUrl,
-      cancel_url: body.cancelUrl,
-      client_reference_id: body.organizationId,
+    const session = await createBillingCheckoutSession({
+      planCode: body.planCode,
+      customerId: billingCustomerId,
+      returnUrl: body.successUrl,
+      cancelUrl: body.cancelUrl,
       metadata: {
         organizationId: body.organizationId,
         planCode: body.planCode,
         currentSubscriptionId: subscription.id,
       },
-      subscription_data: {
-        metadata: {
-          organizationId: body.organizationId,
-          planCode: body.planCode,
-        },
-      },
     });
 
-    return { checkoutUrl: session.url };
+    if (!session.checkoutUrl) {
+      return reply.badRequest('Checkout URL missing.');
+    }
+
+    return { checkoutUrl: session.checkoutUrl };
   });
 
   app.get('/billing/invoices', { preHandler: [app.authenticate] }, async (request, reply) => {
@@ -134,7 +138,6 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
       },
       orderBy: { createdAt: 'desc' },
     });
-
     if (!subscription) {
       return { invoices: [] };
     }
@@ -149,8 +152,8 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/billing/sync-subscription', { preHandler: [app.authenticate] }, async (request, reply) => {
-    if (!stripe) {
-      return reply.serviceUnavailable('Billing not configured');
+    if (!billingProviderConfigured) {
+      return reply.serviceUnavailable(`${billingProviderLabel} not configured`);
     }
 
     const user = request.user as { userId: string; email: string };
@@ -167,104 +170,51 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
       include: { plan: true },
       orderBy: { createdAt: 'desc' },
     });
-
     if (!subscription) {
       return reply.notFound('No subscription found for organization');
     }
 
-    if (!isStripeCustomerId(subscription.stripeCustomerId)) {
-      return { subscription, synced: false, reason: 'no_stripe_customer' };
-    }
-
-    const stripeSubscriptions = await stripe.subscriptions.list({
-      customer: subscription.stripeCustomerId,
-      status: 'all',
-      limit: 20,
-    });
-    const latest = pickPreferredStripeSubscription(stripeSubscriptions.data);
-
-    if (!latest) {
-      return { subscription, synced: false, reason: 'no_stripe_subscription' };
-    }
-
-    const metadataPlanCode = parsePlanCode(latest.metadata?.planCode);
-    const stripePriceId = latest.items.data[0]?.price?.id ?? null;
-    const matchedPlan =
-      (metadataPlanCode
-        ? await prisma.plan.findUnique({
-            where: { code: metadataPlanCode },
-          })
-        : null)
-      ?? (stripePriceId
-        ? await prisma.plan.findFirst({
-            where: { stripePriceId },
-          })
-        : null);
-
-    const periodStart =
-      typeof latest.current_period_start === 'number'
-        ? new Date(latest.current_period_start * 1000)
-        : subscription.currentPeriodStart;
-    const periodEnd =
-      typeof latest.current_period_end === 'number'
-        ? new Date(latest.current_period_end * 1000)
-        : subscription.currentPeriodEnd;
-
-    const updated = await prisma.subscription.update({
-      where: { id: subscription.id },
-      data: {
-        stripeCustomerId: subscription.stripeCustomerId,
-        stripeSubscriptionId: latest.id,
-        status: mapStripeSubscriptionStatus(latest.status, subscription.status),
-        currentPeriodStart: periodStart,
-        currentPeriodEnd: periodEnd,
-        cancelAtPeriodEnd: Boolean(latest.cancel_at_period_end),
-        ...(matchedPlan
-          ? {
-              planId: matchedPlan.id,
-              poolRamMb: matchedPlan.includedRamMb,
-              poolCpuMillicores: matchedPlan.includedCpuMillicore,
-              poolBandwidthGb: matchedPlan.includedBandwidthGb,
-              overageEnabled: matchedPlan.code !== 'free',
-            }
-          : {}),
-      },
-      include: { plan: true },
+    const synced = await syncLatestOrganizationSubscription({
+      subscription,
+      providerSubscriptionId: body.providerSubscriptionId ?? null,
     });
 
-    return { subscription: updated, synced: true };
+    if (!synced.subscription) {
+      return {
+        subscription,
+        synced: false,
+        reason: synced.reason,
+      };
+    }
+
+    return { subscription: synced.subscription, synced: true };
   });
 
   app.post('/billing/webhook', async (request, reply) => {
-    if (!stripe || !env.STRIPE_WEBHOOK_SECRET) {
+    if (!billingProviderConfigured || !env.DODO_PAYMENTS_WEBHOOK_SECRET) {
       return reply.serviceUnavailable('Billing not configured');
     }
 
-    const signature = request.headers['stripe-signature'];
-    if (!signature || typeof signature !== 'string') {
-      return reply.badRequest('Missing stripe-signature header');
+    const rawPayload = request.rawBody?.toString('utf8') ?? JSON.stringify(request.body ?? {});
+    if (!verifyBillingWebhookSignature(request.headers as Record<string, unknown>, rawPayload)) {
+      request.log.error('Billing webhook signature verification failed');
+      return reply.badRequest('Invalid billing webhook signature');
     }
 
-    let event;
-
+    let event: BillingWebhookEvent;
     try {
-      event = stripe.webhooks.constructEvent(
-        request.rawBody ?? JSON.stringify(request.body ?? {}),
-        signature,
-        env.STRIPE_WEBHOOK_SECRET,
-      );
+      event = parseBillingWebhookEvent(request.body, request.headers as Record<string, unknown>);
     } catch (error) {
-      request.log.error({ error }, 'Stripe webhook signature verification failed');
-      return reply.badRequest('Invalid webhook signature');
+      return reply.badRequest((error as Error).message);
     }
 
     try {
       await prisma.webhookEvent.create({
         data: {
-          provider: 'stripe',
+          provider: billingProvider,
           eventId: event.id,
           eventType: event.type,
-          payload: event.data.object as unknown as Prisma.InputJsonValue,
+          payload: event.raw as Prisma.InputJsonValue,
         },
       });
     } catch (error) {
@@ -277,209 +227,7 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
       throw error;
     }
 
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as {
-        mode?: string | null;
-        customer?: string | { id: string } | null;
-        subscription?: string | { id: string } | null;
-        metadata?: Record<string, string | undefined> | null;
-      };
-
-      if (session.mode === 'subscription') {
-        const organizationId = session.metadata?.organizationId;
-        const planCode = parsePlanCode(session.metadata?.planCode);
-        const stripeCustomerId = getStripeResourceId(session.customer);
-        const stripeSubscriptionId = getStripeResourceId(session.subscription);
-
-        if (organizationId && stripeCustomerId && stripeSubscriptionId) {
-          const targetSubscription = await prisma.subscription.findFirst({
-            where: { organizationId },
-            orderBy: { createdAt: 'desc' },
-          });
-
-          if (targetSubscription) {
-            const stripeSubscription = await stripe.subscriptions
-              .retrieve(stripeSubscriptionId)
-              .catch(() => null);
-
-            const now = new Date();
-            const periodStart =
-              typeof stripeSubscription?.current_period_start === 'number'
-                ? new Date(stripeSubscription.current_period_start * 1000)
-                : now;
-            const periodEnd =
-              typeof stripeSubscription?.current_period_end === 'number'
-                ? new Date(stripeSubscription.current_period_end * 1000)
-                : addOneMonth(periodStart);
-            const subscriptionStatus = mapStripeSubscriptionStatus(
-              stripeSubscription?.status,
-              'active',
-            );
-            const plan =
-              planCode
-                ? await prisma.plan.findUnique({
-                    where: { code: planCode },
-                  })
-                : null;
-
-            await prisma.subscription.update({
-              where: { id: targetSubscription.id },
-              data: {
-                stripeCustomerId,
-                stripeSubscriptionId,
-                status: subscriptionStatus,
-                currentPeriodStart: periodStart,
-                currentPeriodEnd: periodEnd,
-                cancelAtPeriodEnd: Boolean(stripeSubscription?.cancel_at_period_end),
-                ...(plan
-                  ? {
-                      planId: plan.id,
-                      poolRamMb: plan.includedRamMb,
-                      poolCpuMillicores: plan.includedCpuMillicore,
-                      poolBandwidthGb: plan.includedBandwidthGb,
-                      overageEnabled: plan.code !== 'free',
-                    }
-                  : {}),
-              },
-            });
-          }
-        }
-      }
-    }
-
-    if (event.type === 'invoice.payment_failed') {
-      const invoice = event.data.object;
-      const stripeSubscriptionId =
-        typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id;
-
-      if (stripeSubscriptionId) {
-        await prisma.subscription.updateMany({
-          where: { stripeSubscriptionId },
-          data: { status: 'past_due' },
-        });
-      }
-    }
-
-    if (event.type === 'invoice.finalized' || event.type === 'invoice.payment_succeeded') {
-      const invoice = event.data.object;
-      const stripeSubscriptionId =
-        typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id;
-
-      if (stripeSubscriptionId) {
-        const subscription = await prisma.subscription.findUnique({
-          where: { stripeSubscriptionId },
-        });
-
-        if (subscription) {
-          await prisma.invoice.upsert({
-            where: { stripeInvoiceId: invoice.id },
-            update: {
-              amountDueUsd: (invoice.amount_due / 100).toFixed(2),
-              amountPaidUsd: (invoice.amount_paid / 100).toFixed(2),
-              currency: invoice.currency,
-              status: mapInvoiceStatus(invoice.status),
-              hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
-              invoicePdfUrl: invoice.invoice_pdf ?? null,
-              dueAt: invoice.due_date ? new Date(invoice.due_date * 1000) : null,
-              paidAt: invoice.status_transitions?.paid_at
-                ? new Date(invoice.status_transitions.paid_at * 1000)
-                : null,
-            },
-            create: {
-              subscriptionId: subscription.id,
-              stripeInvoiceId: invoice.id,
-              amountDueUsd: (invoice.amount_due / 100).toFixed(2),
-              amountPaidUsd: (invoice.amount_paid / 100).toFixed(2),
-              currency: invoice.currency,
-              status: mapInvoiceStatus(invoice.status),
-              hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
-              invoicePdfUrl: invoice.invoice_pdf ?? null,
-              dueAt: invoice.due_date ? new Date(invoice.due_date * 1000) : null,
-              paidAt: invoice.status_transitions?.paid_at
-                ? new Date(invoice.status_transitions.paid_at * 1000)
-                : null,
-            },
-          });
-        }
-      }
-    }
-
-    if (
-      event.type === 'customer.subscription.created'
-      || event.type === 'customer.subscription.updated'
-      || event.type === 'customer.subscription.deleted'
-    ) {
-      const sub = event.data.object as {
-        id: string;
-        customer?: string | { id: string } | null;
-        status?: string | null;
-        current_period_start?: number | null;
-        current_period_end?: number | null;
-        cancel_at_period_end?: boolean | null;
-        metadata?: Record<string, string | undefined> | null;
-        items?: { data?: Array<{ price?: { id?: string | null } | null }> } | null;
-      };
-      const stripeSubscriptionId = sub.id;
-      const stripeCustomerId = getStripeResourceId(sub.customer);
-      const metadataPlanCode = parsePlanCode(sub.metadata?.planCode);
-      const stripePriceId = sub.items?.data?.[0]?.price?.id ?? null;
-
-      const targetSubscription =
-        (await prisma.subscription.findUnique({
-          where: { stripeSubscriptionId },
-        }))
-        ?? (stripeCustomerId
-          ? await prisma.subscription.findFirst({
-              where: { stripeCustomerId },
-              orderBy: { createdAt: 'desc' },
-            })
-          : null);
-
-      if (targetSubscription) {
-        const matchedPlan =
-          (metadataPlanCode
-            ? await prisma.plan.findUnique({
-                where: { code: metadataPlanCode },
-              })
-            : null)
-          ?? (stripePriceId
-            ? await prisma.plan.findFirst({
-                where: { stripePriceId },
-              })
-            : null);
-
-        const periodStart =
-          typeof sub.current_period_start === 'number'
-            ? new Date(sub.current_period_start * 1000)
-            : targetSubscription.currentPeriodStart;
-        const periodEnd =
-          typeof sub.current_period_end === 'number'
-            ? new Date(sub.current_period_end * 1000)
-            : targetSubscription.currentPeriodEnd;
-        const statusFallback = event.type === 'customer.subscription.deleted' ? 'canceled' : targetSubscription.status;
-
-        await prisma.subscription.update({
-          where: { id: targetSubscription.id },
-          data: {
-            stripeSubscriptionId,
-            ...(stripeCustomerId ? { stripeCustomerId } : {}),
-            status: mapStripeSubscriptionStatus(sub.status, statusFallback),
-            currentPeriodStart: periodStart,
-            currentPeriodEnd: periodEnd,
-            cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
-            ...(matchedPlan
-              ? {
-                  planId: matchedPlan.id,
-                  poolRamMb: matchedPlan.includedRamMb,
-                  poolCpuMillicores: matchedPlan.includedCpuMillicore,
-                  poolBandwidthGb: matchedPlan.includedBandwidthGb,
-                  overageEnabled: matchedPlan.code !== 'free',
-                }
-              : {}),
-          },
-        });
-      }
-    }
+    await handleBillingWebhookEvent(event);
 
     return reply.code(200).send({ received: true });
   });
@@ -487,7 +235,7 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
 
 const knownPlanCodes: PlanCode[] = ['free', 'dev', 'pro', 'max', 'enterprise'];
 
-const parsePlanCode = (value?: string): PlanCode | null => {
+const parsePlanCode = (value?: string | null): PlanCode | null => {
   if (!value) {
     return null;
   }
@@ -496,20 +244,372 @@ const parsePlanCode = (value?: string): PlanCode | null => {
   return knownPlanCodes.includes(normalized as PlanCode) ? (normalized as PlanCode) : null;
 };
 
-const isStripeCustomerId = (value: string): boolean => /^cus_[A-Za-z0-9]+$/.test(value);
+const syncLatestOrganizationSubscription = async (input: {
+  subscription: SubscriptionWithPlan;
+  providerSubscriptionId: string | null;
+}): Promise<{ subscription: SubscriptionWithPlan | null; reason: string }> => {
+  const providerSubscriptionId =
+    normalizeNullableString(input.providerSubscriptionId)
+    ?? decodeBillingReference(input.subscription.stripeSubscriptionId);
 
-const getStripeResourceId = (value: string | { id: string } | null | undefined): string | null => {
-  if (!value) {
+  let providerSubscription: BillingSubscription | null = null;
+  if (providerSubscriptionId) {
+    providerSubscription = await retrieveBillingSubscription(providerSubscriptionId).catch(() => null);
+  }
+
+  if (!providerSubscription) {
+    const providerCustomerId = decodeBillingReference(input.subscription.stripeCustomerId);
+    if (!providerCustomerId) {
+      return { subscription: null, reason: 'no_provider_customer' };
+    }
+
+    const subscriptions = await listBillingSubscriptionsForCustomer(providerCustomerId);
+    providerSubscription = pickPreferredBillingSubscription(subscriptions);
+  }
+
+  if (!providerSubscription) {
+    return { subscription: null, reason: 'no_provider_subscription' };
+  }
+
+  const updated = await syncSubscriptionRecord({
+    targetSubscription: input.subscription,
+    providerSubscription,
+  });
+
+  const latestPayment = await findLatestPaymentForSubscription(providerSubscription.subscriptionId);
+  if (latestPayment) {
+    await upsertInvoiceForSubscription(updated.id, latestPayment);
+  }
+
+  return { subscription: updated, reason: 'synced' };
+};
+
+const handleBillingWebhookEvent = async (event: BillingWebhookEvent): Promise<void> => {
+  if (event.type.startsWith('subscription.')) {
+    await handleSubscriptionWebhookEvent(event);
+    return;
+  }
+
+  if (event.type.startsWith('payment.')) {
+    await handlePaymentWebhookEvent(event);
+  }
+};
+
+const handleSubscriptionWebhookEvent = async (event: BillingWebhookEvent): Promise<void> => {
+  const providerSubscriptionId = getString(event.data.subscription_id);
+  if (!providerSubscriptionId) {
+    return;
+  }
+
+  const providerSubscription = await retrieveBillingSubscription(providerSubscriptionId);
+  const targetSubscription = await findTargetSubscription({
+    organizationId: getOrganizationIdFromSources(
+      providerSubscription.metadata,
+      providerSubscription.customerMetadata,
+      event.data,
+    ),
+    providerSubscriptionId: providerSubscription.subscriptionId,
+    providerCustomerId: providerSubscription.customerId,
+  });
+  if (!targetSubscription) {
+    return;
+  }
+
+  const updated = await syncSubscriptionRecord({
+    targetSubscription,
+    providerSubscription,
+  });
+  const latestPayment = await findLatestPaymentForSubscription(providerSubscription.subscriptionId);
+  if (latestPayment) {
+    await upsertInvoiceForSubscription(updated.id, latestPayment);
+  }
+};
+
+const handlePaymentWebhookEvent = async (event: BillingWebhookEvent): Promise<void> => {
+  const paymentId = getString(event.data.payment_id);
+  if (!paymentId) {
+    return;
+  }
+
+  const payment = await retrieveBillingPayment(paymentId);
+  let targetSubscription = await findTargetSubscription({
+    organizationId: getOrganizationIdFromSources(payment.metadata, payment.customerMetadata, event.data),
+    providerSubscriptionId: payment.subscriptionId,
+    providerCustomerId: payment.customerId,
+  });
+  if (!targetSubscription) {
+    return;
+  }
+
+  if (payment.subscriptionId) {
+    const providerSubscription = await retrieveBillingSubscription(payment.subscriptionId).catch(() => null);
+    if (providerSubscription) {
+      targetSubscription = await syncSubscriptionRecord({
+        targetSubscription,
+        providerSubscription,
+      });
+    } else if (isPastDuePaymentStatus(payment.status)) {
+      targetSubscription = await prisma.subscription.update({
+        where: { id: targetSubscription.id },
+        data: { status: 'past_due' },
+        include: { plan: true },
+      });
+    }
+  }
+
+  await upsertInvoiceForSubscription(targetSubscription.id, payment);
+};
+
+const syncSubscriptionRecord = async (input: {
+  targetSubscription: SubscriptionWithPlan;
+  providerSubscription: BillingSubscription;
+}): Promise<SubscriptionWithPlan> => {
+  const metadataPlanCode = parsePlanCode(input.providerSubscription.metadata.planCode);
+  const planCode = metadataPlanCode ?? getPlanCodeForProductId(input.providerSubscription.productId);
+  const matchedPlan =
+    planCode
+      ? await prisma.plan.findUnique({
+          where: { code: planCode },
+        })
+      : null;
+
+  const periodStart =
+    input.providerSubscription.currentPeriodStart
+    ?? input.providerSubscription.createdAt
+    ?? input.targetSubscription.currentPeriodStart;
+  const periodEnd =
+    input.providerSubscription.currentPeriodEnd
+    ?? addOneMonth(periodStart);
+
+  return prisma.subscription.update({
+    where: { id: input.targetSubscription.id },
+    data: {
+      ...(input.providerSubscription.customerId
+        ? {
+            stripeCustomerId: encodeBillingReference(input.providerSubscription.customerId),
+          }
+        : {}),
+      stripeSubscriptionId: encodeBillingReference(input.providerSubscription.subscriptionId),
+      status: mapBillingSubscriptionStatus(
+        input.providerSubscription.status,
+        input.targetSubscription.status,
+      ),
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: periodEnd,
+      cancelAtPeriodEnd: input.providerSubscription.cancelAtPeriodEnd,
+      ...(matchedPlan
+        ? {
+            planId: matchedPlan.id,
+            poolRamMb: matchedPlan.includedRamMb,
+            poolCpuMillicores: matchedPlan.includedCpuMillicore,
+            poolBandwidthGb: matchedPlan.includedBandwidthGb,
+            overageEnabled: matchedPlan.code !== 'free',
+          }
+        : {}),
+    },
+    include: { plan: true },
+  });
+};
+
+const upsertInvoiceForSubscription = async (
+  subscriptionId: string,
+  payment: BillingPayment,
+): Promise<void> => {
+  const paymentReference = encodeBillingReference(payment.paymentId);
+  const amountDue = formatMinorCurrencyAmount(payment.totalAmount);
+  const amountPaid = payment.status === 'succeeded' ? amountDue : '0.00';
+  const paidAt =
+    payment.status === 'succeeded'
+      ? payment.updatedAt ?? payment.createdAt
+      : null;
+
+  await prisma.invoice.upsert({
+    where: { stripeInvoiceId: paymentReference },
+    update: {
+      amountDueUsd: amountDue,
+      amountPaidUsd: amountPaid,
+      currency: (payment.currency ?? 'USD').toLowerCase(),
+      status: mapBillingPaymentStatusToInvoiceStatus(payment.status),
+      hostedInvoiceUrl: payment.invoiceUrl,
+      invoicePdfUrl: payment.invoiceUrl,
+      dueAt: null,
+      paidAt,
+    },
+    create: {
+      subscriptionId,
+      stripeInvoiceId: paymentReference,
+      amountDueUsd: amountDue,
+      amountPaidUsd: amountPaid,
+      currency: (payment.currency ?? 'USD').toLowerCase(),
+      status: mapBillingPaymentStatusToInvoiceStatus(payment.status),
+      hostedInvoiceUrl: payment.invoiceUrl,
+      invoicePdfUrl: payment.invoiceUrl,
+      dueAt: null,
+      paidAt,
+    },
+  });
+};
+
+const findLatestPaymentForSubscription = async (
+  providerSubscriptionId: string,
+): Promise<BillingPayment | null> => {
+  const payments = await listBillingPaymentsForSubscription(providerSubscriptionId);
+  if (!payments.length) {
     return null;
   }
-  if (typeof value === 'string') {
-    return value;
+
+  return [...payments].sort((left, right) => {
+    const leftTime = (left.updatedAt ?? left.createdAt)?.getTime() ?? 0;
+    const rightTime = (right.updatedAt ?? right.createdAt)?.getTime() ?? 0;
+    return rightTime - leftTime;
+  })[0] ?? null;
+};
+
+const findTargetSubscription = async (input: {
+  organizationId: string | null;
+  providerSubscriptionId: string | null;
+  providerCustomerId: string | null;
+}): Promise<SubscriptionWithPlan | null> => {
+  if (input.providerSubscriptionId) {
+    const bySubscriptionId = await prisma.subscription.findUnique({
+      where: {
+        stripeSubscriptionId: encodeBillingReference(input.providerSubscriptionId),
+      },
+      include: { plan: true },
+    });
+    if (bySubscriptionId) {
+      return bySubscriptionId;
+    }
   }
-  if (typeof value.id === 'string' && value.id.length > 0) {
-    return value.id;
+
+  if (input.providerCustomerId) {
+    const byCustomerId = await prisma.subscription.findFirst({
+      where: {
+        stripeCustomerId: encodeBillingReference(input.providerCustomerId),
+      },
+      include: { plan: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (byCustomerId) {
+      return byCustomerId;
+    }
   }
+
+  if (input.organizationId) {
+    return prisma.subscription.findFirst({
+      where: { organizationId: input.organizationId },
+      include: { plan: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   return null;
 };
+
+const getOrganizationIdFromSources = (
+  metadata: Record<string, string>,
+  customerMetadata: Record<string, string>,
+  eventData: Record<string, unknown>,
+): string | null => {
+  const direct =
+    normalizeNullableString(metadata.organizationId)
+    ?? normalizeNullableString(customerMetadata.organizationId);
+  if (direct) {
+    return direct;
+  }
+
+  const rawMetadata = asRecord(eventData.metadata);
+  const rawCustomer = asRecord(eventData.customer);
+  const rawCustomerMetadata = asRecord(rawCustomer.metadata);
+
+  return normalizeNullableString(rawMetadata.organizationId)
+    ?? normalizeNullableString(rawCustomerMetadata.organizationId);
+};
+
+const pickPreferredBillingSubscription = (
+  subscriptions: BillingSubscription[],
+): BillingSubscription | null => {
+  if (!subscriptions.length) {
+    return null;
+  }
+
+  return [...subscriptions].sort((left, right) => {
+    const priorityDifference = billingSubscriptionPriority(left.status) - billingSubscriptionPriority(right.status);
+    if (priorityDifference !== 0) {
+      return priorityDifference;
+    }
+
+    const leftTime = (left.currentPeriodEnd ?? left.createdAt)?.getTime() ?? 0;
+    const rightTime = (right.currentPeriodEnd ?? right.createdAt)?.getTime() ?? 0;
+    return rightTime - leftTime;
+  })[0] ?? null;
+};
+
+const billingSubscriptionPriority = (status: string | null): number => {
+  switch (status) {
+    case 'active':
+      return 0;
+    case 'on_hold':
+      return 1;
+    case 'pending':
+      return 2;
+    case 'failed':
+      return 3;
+    case 'cancelled':
+      return 4;
+    case 'expired':
+      return 5;
+    default:
+      return 6;
+  }
+};
+
+const mapBillingSubscriptionStatus = (
+  status: string | null,
+  fallback: SubscriptionWithPlan['status'],
+): SubscriptionWithPlan['status'] => {
+  switch (status) {
+    case 'active':
+      return 'active';
+    case 'on_hold':
+      return 'past_due';
+    case 'pending':
+    case 'failed':
+      return 'incomplete';
+    case 'cancelled':
+    case 'expired':
+      return 'canceled';
+    default:
+      return fallback;
+  }
+};
+
+const mapBillingPaymentStatusToInvoiceStatus = (
+  status: string | null,
+): InvoiceStatus => {
+  switch (status) {
+    case 'succeeded':
+      return 'paid';
+    case 'cancelled':
+      return 'void';
+    case 'failed':
+      return 'uncollectible';
+    case 'processing':
+    case 'requires_capture':
+    case 'requires_confirmation':
+    case 'requires_customer_action':
+    case 'requires_merchant_action':
+    case 'requires_payment_method':
+    case 'partially_captured':
+    case 'partially_captured_and_capturable':
+      return 'open';
+    default:
+      return 'draft';
+  }
+};
+
+const isPastDuePaymentStatus = (status: string | null): boolean =>
+  status === 'failed' || status === 'cancelled' || status === 'requires_payment_method';
 
 const addOneMonth = (start: Date): Date => {
   const end = new Date(start);
@@ -517,58 +617,29 @@ const addOneMonth = (start: Date): Date => {
   return end;
 };
 
-const mapStripeSubscriptionStatus = (
-  status: string | null | undefined,
-  fallback: 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete' | 'unpaid',
-): 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete' | 'unpaid' => {
-  switch (status) {
-    case 'active':
-      return 'active';
-    case 'trialing':
-      return 'trialing';
-    case 'past_due':
-      return 'past_due';
-    case 'canceled':
-      return 'canceled';
-    case 'incomplete':
-      return 'incomplete';
-    case 'unpaid':
-      return 'unpaid';
-    case 'incomplete_expired':
-      return 'incomplete';
-    case 'paused':
-      return 'past_due';
-    default:
-      return fallback;
+const formatMinorCurrencyAmount = (amount: number | null): string => {
+  if (typeof amount !== 'number' || Number.isNaN(amount)) {
+    return '0.00';
   }
+
+  return (amount / 100).toFixed(2);
 };
 
-const pickPreferredStripeSubscription = <T extends { status: string; created: number }>(
-  subscriptions: T[],
-): T | null => {
-  if (!subscriptions.length) {
+const getString = (value: unknown): string | null => {
+  if (typeof value !== 'string') {
     return null;
   }
 
-  const sorted = [...subscriptions].sort((a, b) => b.created - a.created);
-  const preferred = sorted.find((subscription) =>
-    ['active', 'trialing', 'past_due', 'incomplete', 'unpaid'].includes(subscription.status),
-  );
-
-  return preferred ?? sorted[0] ?? null;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
 };
 
-const mapInvoiceStatus = (status: string | null): 'draft' | 'open' | 'paid' | 'void' | 'uncollectible' => {
-  switch (status) {
-    case 'draft':
-      return 'draft';
-    case 'open':
-      return 'open';
-    case 'paid':
-      return 'paid';
-    case 'void':
-      return 'void';
-    default:
-      return 'uncollectible';
+const normalizeNullableString = (value: unknown): string | null => getString(value);
+
+const asRecord = (value: unknown): Record<string, unknown> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
   }
+
+  return value as Record<string, unknown>;
 };

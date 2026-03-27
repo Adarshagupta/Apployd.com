@@ -4,7 +4,7 @@
 
 - Ubuntu 22.04 host(s)
 - DNS zone managed in Cloudflare
-- Stripe account with recurring prices
+- Dodo Payments account with recurring products
 - Docker, Node 20, Nginx, certbot installed
 
 ## First-time setup
@@ -26,7 +26,7 @@
 - Control metrics: `GET /metrics`
 - Engine metrics: `GET :9102/metrics`
 - Grafana dashboard reachable on configured port
-- Stripe webhook endpoint receiving events
+- Billing webhook endpoint receiving events
 - Falco running: `sudo systemctl status falco --no-pager`
 - Falco alerts stream: `sudo journalctl -u falco -f`
 
@@ -62,5 +62,5 @@ Before a team launches its first application deployment from the dashboard, veri
 - Build failure: inspect deployment logs and image build command.
 - Certificate failure: validate DNS propagation and certbot rate limits.
 - Quota rejection: check subscription pool and project allocation caps.
-- Past due billing: verify card/payment method on Stripe customer.
+- Past due billing: verify the payment method on the Dodo Payments customer profile.
 - Suspicious network behavior: review Falco alerts and isolate offending deployment container.

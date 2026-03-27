@@ -41,6 +41,14 @@ interface CurrentSubscriptionResponse {
   } | null;
 }
 
+interface PlanListResponse {
+  plans?: Array<{
+    code?: string | null;
+    checkoutEnabled?: boolean;
+  }>;
+}
+
+const CHECKOUT_PLAN_CODES = ['dev', 'pro', 'max'] as const;
 const PAID_PLAN_CODES = new Set(['dev', 'pro', 'max', 'enterprise']);
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due']);
 
@@ -74,6 +82,9 @@ export default function StandaloneOnboardingPage() {
   const [subscriptionName, setSubscriptionName] = useState('Free');
   const [subscriptionCode, setSubscriptionCode] = useState('free');
   const [subscriptionStatus, setSubscriptionStatus] = useState('inactive');
+  const [availableCheckoutPlans, setAvailableCheckoutPlans] = useState<Array<(typeof CHECKOUT_PLAN_CODES)[number]>>(
+    [...CHECKOUT_PLAN_CODES],
+  );
 
   const teamSetupDone = teamMembersCount > 1 || pendingInviteCount > 0;
   const paidPlanActive =
@@ -112,11 +123,12 @@ export default function StandaloneOnboardingPage() {
       }
       setOrganization(primaryOrg);
 
-      const [onboarding, github, team, subscription] = await Promise.all([
+      const [onboarding, github, team, subscription, plans] = await Promise.all([
         apiClient.get('/onboarding/status') as Promise<OnboardingStatusResponse>,
         apiClient.get('/integrations/github/status') as Promise<GitHubStatusResponse>,
         apiClient.get(`/teams/${primaryOrg.id}/members`) as Promise<TeamMembersResponse>,
         apiClient.get(`/plans/current?organizationId=${primaryOrg.id}`) as Promise<CurrentSubscriptionResponse>,
+        apiClient.get('/plans') as Promise<PlanListResponse>,
       ]);
 
       if (onboarding.completed) {
@@ -151,6 +163,18 @@ export default function StandaloneOnboardingPage() {
       setSubscriptionCode(planCode);
       setSubscriptionStatus(planStatus);
       setSubscriptionName(planName);
+      setAvailableCheckoutPlans(
+        (plans.plans ?? [])
+          .map((plan) => {
+            const code = typeof plan.code === 'string' ? plan.code.trim().toLowerCase() : '';
+            if (!CHECKOUT_PLAN_CODES.includes(code as (typeof CHECKOUT_PLAN_CODES)[number])) {
+              return null;
+            }
+
+            return plan.checkoutEnabled === false ? null : (code as (typeof CHECKOUT_PLAN_CODES)[number]);
+          })
+          .filter((planCode): planCode is (typeof CHECKOUT_PLAN_CODES)[number] => Boolean(planCode)),
+      );
 
       const queryStep = parseStep(searchParams?.get('step') ?? null);
       const teamDoneNow = teamMembers > 1 || pendingInvites > 0;
@@ -222,7 +246,7 @@ export default function StandaloneOnboardingPage() {
     }
   };
 
-  const startCheckout = async (planCode: 'dev' | 'pro' | 'max' | 'enterprise') => {
+  const startCheckout = async (planCode: 'dev' | 'pro' | 'max') => {
     if (!organization) {
       setMessage('Organization not loaded.');
       return;
@@ -235,7 +259,7 @@ export default function StandaloneOnboardingPage() {
       const response = (await apiClient.post('/billing/checkout-session', {
         organizationId: organization.id,
         planCode,
-        successUrl: `${nextBase}/onboarding?step=billing&status=success`,
+        successUrl: `${nextBase}/onboarding?step=billing`,
         cancelUrl: `${nextBase}/onboarding?step=billing&status=cancelled`,
       })) as { checkoutUrl?: string };
 
@@ -285,16 +309,47 @@ export default function StandaloneOnboardingPage() {
   };
 
   const currentCheckoutStatus = searchParams?.get('status');
+  const organizationId = organization?.id ?? null;
+  const providerSubscriptionId = searchParams?.get('subscription_id') ?? undefined;
   useEffect(() => {
-    if (currentCheckoutStatus === 'success') {
-      setMessage('Payment successful. Subscription synced.');
-      loadState().catch(() => undefined);
+    if (!organizationId) {
+      return;
     }
+
+    if (currentCheckoutStatus === 'succeeded' || currentCheckoutStatus === 'processing') {
+      apiClient.post('/billing/sync-subscription', {
+        organizationId,
+        ...(providerSubscriptionId ? { providerSubscriptionId } : {}),
+      })
+        .then(() => loadState())
+        .then(() => {
+          setMessage(
+            currentCheckoutStatus === 'succeeded'
+              ? 'Payment successful. Subscription synced.'
+              : 'Payment is processing. Subscription state refreshed.',
+          );
+        })
+        .catch((error) => {
+          setMessage((error as Error).message);
+        });
+      return;
+    }
+
+    if (currentCheckoutStatus === 'failed') {
+      setMessage('Payment failed. Try again after updating your payment method.');
+      return;
+    }
+
     if (currentCheckoutStatus === 'cancelled') {
       setMessage('Checkout cancelled.');
+      return;
+    }
+
+    if (!currentCheckoutStatus) {
+      setMessage('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentCheckoutStatus]);
+  }, [currentCheckoutStatus, providerSubscriptionId, organizationId]);
 
   if (loading) {
     return (
@@ -439,7 +494,7 @@ export default function StandaloneOnboardingPage() {
               Current plan: {subscriptionName} ({subscriptionStatus})
             </div>
             <div className="grid gap-2 sm:grid-cols-3">
-              {(['dev', 'pro', 'max'] as const).map((planCode) => (
+              {availableCheckoutPlans.map((planCode) => (
                 <button
                   key={planCode}
                   type="button"
@@ -453,6 +508,11 @@ export default function StandaloneOnboardingPage() {
                 </button>
               ))}
             </div>
+            {!availableCheckoutPlans.length ? (
+              <p className="text-sm text-slate-600">
+                Paid checkout is not configured for this environment yet.
+              </p>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               <button type="button" className="btn-secondary" onClick={() => setStep('team')}>
                 Back

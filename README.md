@@ -8,7 +8,7 @@ Apployd is a SaaS backend hosting platform focused on affordability, container i
 - Deployment Engine worker (`Node + TypeScript`) that consumes deployment jobs and automates build/run/routing/SSL.
 - Email verification codes for email/password signup and login gating for unverified accounts.
 - Deployment lifecycle email notifications (success/failure) to organization owner/admin/developer members.
-- Deployment idempotency for create-deploy requests (`Idempotency-Key`) and Stripe webhook deduplication (`webhook_events`).
+- Deployment idempotency for create-deploy requests (`Idempotency-Key`) and billing webhook deduplication (`webhook_events`).
 - PostgreSQL schema (Prisma) covering users, organizations, projects, deployments, servers, containers, plans, subscriptions, usage, invoices, logs, metrics, and audit data.
 - Next.js + Tailwind dashboard with pages for login/signup/projects/deploy/usage/billing/logs/settings/team and live deployment event streaming.
 - Code Studio now includes a Codex-powered AI agent sidebar that can inspect repo files from the running dev container and propose applyable file edits.

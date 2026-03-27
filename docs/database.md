@@ -31,7 +31,7 @@ Source of truth: `apps/control-plane/prisma/schema.prisma`.
   - indexes: `(organization_id, status)`, `(current_period_end)`.
 - `usage_records`: time-series usage for overage billing.
   - indexes: `(organization_id, recorded_at)`, `(subscription_id, metric_type, recorded_at)`.
-- `invoices`: Stripe invoice synchronization.
+- `invoices`: billing payment and invoice synchronization.
   - indexes: `(subscription_id, created_at)`, `(status, due_at)`.
 
 ## Observability and security tables

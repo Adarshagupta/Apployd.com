@@ -515,6 +515,60 @@
   letter-spacing: 0.06em;
 }
 
+.overviewSection {
+  padding-top: 4.8rem;
+}
+
+.overviewBackdrop {
+  background:
+    radial-gradient(circle at 18% 30%, rgba(56, 121, 233, 0.12), transparent 30%),
+    radial-gradient(circle at 82% 68%, rgba(67, 180, 145, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(13, 22, 42, 0.08), transparent 74%);
+  transform: translate3d(0, calc(var(--section-progress) * -22px), 0) scale(1.08);
+}
+
+.overviewHeader {
+  display: grid;
+  gap: 0.45rem;
+  max-width: 920px;
+}
+
+.overviewIntro {
+  margin: 0;
+  max-width: 860px;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: rgba(202, 214, 243, 0.76);
+}
+
+.overviewGrid,
+.overviewFaqGrid {
+  margin-top: 1.35rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.overviewCard,
+.overviewFaqItem {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 1rem 0;
+}
+
+.overviewCardTitle,
+.overviewFaqQuestion {
+  margin: 0;
+  font-size: 1.16rem;
+  font-weight: 500;
+}
+
+.overviewCardCopy,
+.overviewFaqAnswer {
+  margin: 0.48rem 0 0;
+  line-height: 1.55;
+  color: rgba(197, 208, 236, 0.76);
+}
+
 .productSection {
   padding-top: 4.8rem;
 }
@@ -1297,6 +1351,9 @@
 :global(html[data-landing-theme='light']) .heroTerminal code,
 :global(html[data-landing-theme='light']) .heroStatCard p,
 :global(html[data-landing-theme='light']) .sectionLabel,
+:global(html[data-landing-theme='light']) .overviewIntro,
+:global(html[data-landing-theme='light']) .overviewCardCopy,
+:global(html[data-landing-theme='light']) .overviewFaqAnswer,
 :global(html[data-landing-theme='light']) .cardSubtitle,
 :global(html[data-landing-theme='light']) .cardMeta span,
 :global(html[data-landing-theme='light']) .featureCard p,
@@ -1310,6 +1367,8 @@
 :global(html[data-landing-theme='light']) .heroPanel,
 :global(html[data-landing-theme='light']) .heroPanel div,
 :global(html[data-landing-theme='light']) .heroTerminal,
+:global(html[data-landing-theme='light']) .overviewCard,
+:global(html[data-landing-theme='light']) .overviewFaqItem,
 :global(html[data-landing-theme='light']) .platformCard,
 :global(html[data-landing-theme='light']) .featureCard,
 :global(html[data-landing-theme='light']) .labCardTall,
@@ -1472,6 +1531,11 @@
   .productHeader {
     grid-template-columns: 1fr;
     gap: 0.8rem;
+  }
+
+  .overviewGrid,
+  .overviewFaqGrid {
+    grid-template-columns: 1fr;
   }
 
   .productLayout {
