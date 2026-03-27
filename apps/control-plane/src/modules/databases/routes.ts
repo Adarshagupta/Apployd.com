@@ -677,6 +677,7 @@ const createNeonProject = async (input: {
     },
     database: {
       name: input.databaseName,
+      ...(requestedRole ? { owner_name: requestedRole } : {}),
     },
     ...(requestedRole
       ? {
@@ -703,20 +704,29 @@ const createNeonProject = async (input: {
   } as const;
 
   let payload: unknown;
-  try {
-    payload = await neonRequest<unknown>({
-      path: '/projects',
-      method: 'POST',
-      apiKey: input.apiKey,
-      body: primaryBody as unknown as Record<string, unknown>,
-    });
-  } catch {
+  if (!requestedRole) {
     payload = await neonRequest<unknown>({
       path: '/projects',
       method: 'POST',
       apiKey: input.apiKey,
       body: fallbackBody as unknown as Record<string, unknown>,
     });
+  } else {
+    try {
+      payload = await neonRequest<unknown>({
+        path: '/projects',
+        method: 'POST',
+        apiKey: input.apiKey,
+        body: primaryBody as unknown as Record<string, unknown>,
+      });
+    } catch {
+      payload = await neonRequest<unknown>({
+        path: '/projects',
+        method: 'POST',
+        apiKey: input.apiKey,
+        body: fallbackBody as unknown as Record<string, unknown>,
+      });
+    }
   }
 
   const root = asRecord(payload);
