@@ -7,13 +7,17 @@ import { env } from '../../config/env.js';
 import { prisma } from '../../lib/prisma.js';
 import { AccessService } from '../../services/access-service.js';
 import {
+  agentPlanCheckoutConfigured,
+  agentPlanTierCheckoutEnabled,
   billingProvider,
   billingProviderConfigured,
   billingProviderLabel,
+  createAgentBillingCheckoutSession,
   createBillingCheckoutSession,
   createBillingCustomer,
   decodeBillingReference,
   encodeBillingReference,
+  getAgentPlanCodeForProductId,
   getBillingCheckoutKindForProductId,
   getPlanCodeForProductId,
   parseBillingWebhookEvent,
@@ -22,13 +26,24 @@ import {
   listBillingPaymentsForSubscription,
   listBillingSubscriptionsForCustomer,
   verifyBillingWebhookSignature,
+  type AgentPlanCode,
   type DatabaseAddonTierCode,
   type BillingPayment,
   type BillingSubscription,
   type BillingWebhookEvent,
 } from '../../services/billing-provider-service.js';
+import {
+  createOrRefreshPendingAgentSubscription,
+  findAgentSubscriptionByProviderSubscription,
+  findLatestAgentSubscriptionByProviderCustomer,
+  getLatestAgentSubscriptionForOrganization,
+  updateAgentSubscriptionById,
+  upsertAgentSubscriptionByProviderSubscription,
+  type AgentSubscriptionRecord,
+} from '../../services/agent-subscription-service.js';
 
 const databaseAddonTierCodes = ['starter', 'growth', 'scale'] as const;
+const agentPlanCodes = ['starter', 'growth', 'scale'] as const;
 
 const checkoutSchema = z.object({
   organizationId: z.string().cuid(),
@@ -39,6 +54,18 @@ const checkoutSchema = z.object({
 });
 
 const syncSubscriptionSchema = z.object({
+  organizationId: z.string().cuid(),
+  providerSubscriptionId: z.string().trim().min(1).optional(),
+});
+
+const agentCheckoutSchema = z.object({
+  organizationId: z.string().cuid(),
+  planCode: z.enum(agentPlanCodes),
+  successUrl: z.string().url(),
+  cancelUrl: z.string().url(),
+});
+
+const agentSyncSubscriptionSchema = z.object({
   organizationId: z.string().cuid(),
   providerSubscriptionId: z.string().trim().min(1).optional(),
 });
@@ -199,6 +226,136 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
     return { subscription: synced.subscription, synced: true };
   });
 
+  app.get('/billing/agent/subscription', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const user = request.user as { userId: string; email: string };
+    const query = z
+      .object({
+        organizationId: z.string().cuid(),
+      })
+      .parse(request.query);
+
+    try {
+      await access.requireOrganizationRole(user.userId, query.organizationId, 'viewer');
+    } catch (error) {
+      return reply.forbidden((error as Error).message);
+    }
+
+    const subscription = await getLatestAgentSubscriptionForOrganization(query.organizationId);
+    return {
+      subscription,
+      checkoutEnabled: agentPlanCheckoutConfigured,
+      tiers: {
+        starter: { checkoutEnabled: agentPlanTierCheckoutEnabled.starter },
+        growth: { checkoutEnabled: agentPlanTierCheckoutEnabled.growth },
+        scale: { checkoutEnabled: agentPlanTierCheckoutEnabled.scale },
+      },
+    };
+  });
+
+  app.post('/billing/agent/checkout-session', { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (!billingProviderConfigured || !agentPlanCheckoutConfigured) {
+      return reply.serviceUnavailable('Agentic coding subscription checkout is not configured.');
+    }
+
+    const user = request.user as { userId: string; email: string };
+    const body = agentCheckoutSchema.parse(request.body);
+
+    try {
+      await access.requireOrganizationRole(user.userId, body.organizationId, 'admin');
+    } catch (error) {
+      return reply.forbidden((error as Error).message);
+    }
+
+    const organization = await prisma.organization.findUnique({
+      where: { id: body.organizationId },
+      select: { name: true },
+    });
+    const customerName = organization?.name?.trim() || user.email;
+    const latestAgentSubscription = await getLatestAgentSubscriptionForOrganization(body.organizationId);
+    const mainSubscription = await prisma.subscription.findFirst({
+      where: { organizationId: body.organizationId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    let billingCustomerId =
+      decodeBillingReference(latestAgentSubscription?.stripeCustomerId)
+      ?? decodeBillingReference(mainSubscription?.stripeCustomerId);
+    if (!billingCustomerId) {
+      const customer = await createBillingCustomer({
+        email: user.email,
+        name: customerName,
+        metadata: {
+          organizationId: body.organizationId,
+        },
+      });
+      billingCustomerId = customer.customerId;
+
+      if (mainSubscription) {
+        await prisma.subscription.update({
+          where: { id: mainSubscription.id },
+          data: {
+            stripeCustomerId: encodeBillingReference(billingCustomerId),
+          },
+        });
+      }
+    }
+
+    const session = await createAgentBillingCheckoutSession({
+      planCode: body.planCode,
+      customerId: billingCustomerId,
+      returnUrl: body.successUrl,
+      cancelUrl: body.cancelUrl,
+      metadata: {
+        checkoutType: 'agent_plan',
+        organizationId: body.organizationId,
+        agentPlanCode: body.planCode,
+        ...(latestAgentSubscription ? { currentAgentSubscriptionId: latestAgentSubscription.id } : {}),
+      },
+    });
+    if (!session.checkoutUrl) {
+      return reply.badRequest('Checkout URL missing.');
+    }
+
+    const now = new Date();
+    await createOrRefreshPendingAgentSubscription({
+      organizationId: body.organizationId,
+      planCode: body.planCode,
+      stripeCustomerId: encodeBillingReference(billingCustomerId),
+      currentPeriodStart: now,
+      currentPeriodEnd: addOneMonth(now),
+    });
+
+    return { checkoutUrl: session.checkoutUrl };
+  });
+
+  app.post('/billing/agent/sync-subscription', { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (!billingProviderConfigured || !agentPlanCheckoutConfigured) {
+      return reply.serviceUnavailable('Agentic coding subscription sync is not configured.');
+    }
+
+    const user = request.user as { userId: string; email: string };
+    const body = agentSyncSubscriptionSchema.parse(request.body);
+
+    try {
+      await access.requireOrganizationRole(user.userId, body.organizationId, 'admin');
+    } catch (error) {
+      return reply.forbidden((error as Error).message);
+    }
+
+    const current = await getLatestAgentSubscriptionForOrganization(body.organizationId);
+    const synced = await syncLatestOrganizationAgentSubscription({
+      organizationId: body.organizationId,
+      currentSubscription: current,
+      providerSubscriptionId: body.providerSubscriptionId ?? null,
+    });
+
+    return {
+      subscription: synced.subscription,
+      synced: synced.subscription !== null,
+      reason: synced.reason,
+    };
+  });
+
   app.post('/billing/webhook', async (request, reply) => {
     if (!billingProviderConfigured || !env.DODO_PAYMENTS_WEBHOOK_SECRET) {
       return reply.serviceUnavailable('Billing not configured');
@@ -243,7 +400,8 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
 };
 
 const knownPlanCodes: PlanCode[] = ['free', 'dev', 'pro', 'max', 'enterprise'];
-const knownCheckoutKinds = ['plan', 'database_addon'] as const;
+const knownAgentPlanCodes: AgentPlanCode[] = ['starter', 'growth', 'scale'];
+const knownCheckoutKinds = ['plan', 'agent_plan', 'database_addon'] as const;
 
 const parsePlanCode = (value?: string | null): PlanCode | null => {
   if (!value) {
@@ -262,6 +420,17 @@ const parseCheckoutKind = (value?: string | null): (typeof knownCheckoutKinds)[n
   const normalized = value.trim().toLowerCase();
   return knownCheckoutKinds.includes(normalized as (typeof knownCheckoutKinds)[number])
     ? (normalized as (typeof knownCheckoutKinds)[number])
+    : null;
+};
+
+const parseAgentPlanCode = (value?: string | null): AgentPlanCode | null => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return knownAgentPlanCodes.includes(normalized as AgentPlanCode)
+    ? (normalized as AgentPlanCode)
     : null;
 };
 
@@ -331,6 +500,51 @@ const syncLatestOrganizationSubscription = async (input: {
   return { subscription: updated, reason: 'synced' };
 };
 
+const syncLatestOrganizationAgentSubscription = async (input: {
+  organizationId: string;
+  currentSubscription: AgentSubscriptionRecord | null;
+  providerSubscriptionId: string | null;
+}): Promise<{ subscription: AgentSubscriptionRecord | null; reason: string }> => {
+  const providerSubscriptionId =
+    normalizeNullableString(input.providerSubscriptionId)
+    ?? decodeBillingReference(input.currentSubscription?.stripeSubscriptionId);
+
+  let providerSubscription: BillingSubscription | null = null;
+  if (providerSubscriptionId) {
+    providerSubscription = await retrieveBillingSubscription(providerSubscriptionId).catch(() => null);
+  }
+
+  if (!providerSubscription) {
+    const providerCustomerId =
+      decodeBillingReference(input.currentSubscription?.stripeCustomerId)
+      ?? await resolveProviderCustomerIdForOrganization(input.organizationId);
+    if (!providerCustomerId) {
+      return { subscription: input.currentSubscription, reason: 'no_provider_customer' };
+    }
+
+    const subscriptions = await listBillingSubscriptionsForCustomer(providerCustomerId);
+    providerSubscription = pickPreferredBillingSubscription(
+      subscriptions.filter((subscription) => resolveCheckoutKindForSubscription(subscription) === 'agent_plan'),
+    );
+  }
+
+  if (!providerSubscription) {
+    return { subscription: input.currentSubscription, reason: 'no_provider_subscription' };
+  }
+
+  if (resolveCheckoutKindForSubscription(providerSubscription) !== 'agent_plan') {
+    return { subscription: input.currentSubscription, reason: 'non_agent_subscription' };
+  }
+
+  const updated = await syncAgentSubscriptionRecord({
+    organizationId: input.organizationId,
+    targetSubscription: input.currentSubscription,
+    providerSubscription,
+  });
+
+  return { subscription: updated, reason: 'synced' };
+};
+
 const handleBillingWebhookEvent = async (event: BillingWebhookEvent): Promise<void> => {
   if (event.type.startsWith('subscription.')) {
     await handleSubscriptionWebhookEvent(event);
@@ -349,7 +563,36 @@ const handleSubscriptionWebhookEvent = async (event: BillingWebhookEvent): Promi
   }
 
   const providerSubscription = await retrieveBillingSubscription(providerSubscriptionId);
-  if (resolveCheckoutKindForSubscription(providerSubscription) !== 'plan') {
+  const checkoutKind = resolveCheckoutKindForSubscription(providerSubscription);
+  if (checkoutKind === 'agent_plan') {
+    const targetAgentSubscription = await findTargetAgentSubscription({
+      organizationId: getOrganizationIdFromSources(
+        providerSubscription.metadata,
+        providerSubscription.customerMetadata,
+        event.data,
+      ),
+      providerSubscriptionId: providerSubscription.subscriptionId,
+      providerCustomerId: providerSubscription.customerId,
+    });
+    const fallbackOrganizationId =
+      getOrganizationIdFromSources(
+        providerSubscription.metadata,
+        providerSubscription.customerMetadata,
+        event.data,
+      );
+    if (!targetAgentSubscription && !fallbackOrganizationId) {
+      return;
+    }
+
+    await syncAgentSubscriptionRecord({
+      organizationId: targetAgentSubscription?.organizationId ?? fallbackOrganizationId ?? '',
+      targetSubscription: targetAgentSubscription,
+      providerSubscription,
+    });
+    return;
+  }
+
+  if (checkoutKind !== 'plan') {
     return;
   }
   const targetSubscription = await findTargetSubscription({
@@ -382,6 +625,46 @@ const handlePaymentWebhookEvent = async (event: BillingWebhookEvent): Promise<vo
   }
 
   const payment = await retrieveBillingPayment(paymentId);
+  const providerSubscription = payment.subscriptionId
+    ? await retrieveBillingSubscription(payment.subscriptionId).catch(() => null)
+    : null;
+  const checkoutKind = resolveCheckoutKindForPayment(payment, providerSubscription);
+  if (checkoutKind === 'agent_plan') {
+    const organizationId = getOrganizationIdFromSources(payment.metadata, payment.customerMetadata, event.data);
+    const targetAgentSubscription = await findTargetAgentSubscription({
+      organizationId,
+      providerSubscriptionId: payment.subscriptionId,
+      providerCustomerId: payment.customerId,
+    });
+
+    if (!targetAgentSubscription && !organizationId) {
+      return;
+    }
+
+    if (providerSubscription) {
+      await syncAgentSubscriptionRecord({
+        organizationId: targetAgentSubscription?.organizationId ?? organizationId ?? '',
+        targetSubscription: targetAgentSubscription,
+        providerSubscription,
+      });
+    } else if (targetAgentSubscription && isPastDuePaymentStatus(payment.status)) {
+      await updateAgentSubscriptionById(targetAgentSubscription.id, {
+        planCode: targetAgentSubscription.planCode,
+        stripeCustomerId: targetAgentSubscription.stripeCustomerId,
+        stripeSubscriptionId: targetAgentSubscription.stripeSubscriptionId,
+        status: 'past_due',
+        currentPeriodStart: targetAgentSubscription.currentPeriodStart,
+        currentPeriodEnd: targetAgentSubscription.currentPeriodEnd,
+        cancelAtPeriodEnd: targetAgentSubscription.cancelAtPeriodEnd,
+      });
+    }
+    return;
+  }
+
+  if (checkoutKind !== 'plan') {
+    return;
+  }
+
   let targetSubscription = await findTargetSubscription({
     organizationId: getOrganizationIdFromSources(payment.metadata, payment.customerMetadata, event.data),
     providerSubscriptionId: payment.subscriptionId,
@@ -391,23 +674,17 @@ const handlePaymentWebhookEvent = async (event: BillingWebhookEvent): Promise<vo
     return;
   }
 
-  if (payment.subscriptionId) {
-    const providerSubscription = await retrieveBillingSubscription(payment.subscriptionId).catch(() => null);
-    if (resolveCheckoutKindForPayment(payment, providerSubscription) !== 'plan') {
-      return;
-    }
-    if (providerSubscription) {
-      targetSubscription = await syncSubscriptionRecord({
-        targetSubscription,
-        providerSubscription,
-      });
-    } else if (isPastDuePaymentStatus(payment.status)) {
-      targetSubscription = await prisma.subscription.update({
-        where: { id: targetSubscription.id },
-        data: { status: 'past_due' },
-        include: { plan: true },
-      });
-    }
+  if (providerSubscription) {
+    targetSubscription = await syncSubscriptionRecord({
+      targetSubscription,
+      providerSubscription,
+    });
+  } else if (isPastDuePaymentStatus(payment.status)) {
+    targetSubscription = await prisma.subscription.update({
+      where: { id: targetSubscription.id },
+      data: { status: 'past_due' },
+      include: { plan: true },
+    });
   }
 
   await upsertInvoiceForSubscription(targetSubscription.id, payment);
@@ -462,6 +739,100 @@ const syncSubscriptionRecord = async (input: {
     },
     include: { plan: true },
   });
+};
+
+const syncAgentSubscriptionRecord = async (input: {
+  organizationId: string;
+  targetSubscription: AgentSubscriptionRecord | null;
+  providerSubscription: BillingSubscription;
+}): Promise<AgentSubscriptionRecord> => {
+  const resolvedPlanCode =
+    parseAgentPlanCode(input.providerSubscription.metadata.agentPlanCode)
+    ?? getAgentPlanCodeForProductId(input.providerSubscription.productId)
+    ?? parseAgentPlanCode(input.targetSubscription?.planCode)
+    ?? 'starter';
+  const periodStart =
+    input.providerSubscription.currentPeriodStart
+    ?? input.providerSubscription.createdAt
+    ?? input.targetSubscription?.currentPeriodStart
+    ?? new Date();
+  const periodEnd =
+    input.providerSubscription.currentPeriodEnd
+    ?? input.targetSubscription?.currentPeriodEnd
+    ?? addOneMonth(periodStart);
+  const resolvedCustomerId =
+    normalizeNullableString(input.providerSubscription.customerId)
+    ?? decodeBillingReference(input.targetSubscription?.stripeCustomerId);
+  if (!resolvedCustomerId) {
+    throw new Error('Provider customer is missing for agent subscription sync.');
+  }
+
+  if (input.targetSubscription) {
+    return updateAgentSubscriptionById(input.targetSubscription.id, {
+      planCode: resolvedPlanCode,
+      stripeCustomerId: encodeBillingReference(resolvedCustomerId),
+      stripeSubscriptionId: encodeBillingReference(input.providerSubscription.subscriptionId),
+      status: mapBillingSubscriptionStatus(
+        input.providerSubscription.status,
+        input.targetSubscription.status,
+      ),
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: periodEnd,
+      cancelAtPeriodEnd: input.providerSubscription.cancelAtPeriodEnd,
+    });
+  }
+
+  return upsertAgentSubscriptionByProviderSubscription({
+    organizationId: input.organizationId,
+    planCode: resolvedPlanCode,
+    stripeCustomerId: encodeBillingReference(resolvedCustomerId),
+    stripeSubscriptionId: encodeBillingReference(input.providerSubscription.subscriptionId),
+    status: mapBillingSubscriptionStatus(input.providerSubscription.status, 'incomplete'),
+    currentPeriodStart: periodStart,
+    currentPeriodEnd: periodEnd,
+    cancelAtPeriodEnd: input.providerSubscription.cancelAtPeriodEnd,
+  });
+};
+
+const resolveProviderCustomerIdForOrganization = async (
+  organizationId: string,
+): Promise<string | null> => {
+  const latestMainSubscription = await prisma.subscription.findFirst({
+    where: { organizationId },
+    orderBy: { createdAt: 'desc' },
+    select: { stripeCustomerId: true },
+  });
+  return decodeBillingReference(latestMainSubscription?.stripeCustomerId);
+};
+
+const findTargetAgentSubscription = async (input: {
+  organizationId: string | null;
+  providerSubscriptionId: string | null;
+  providerCustomerId: string | null;
+}): Promise<AgentSubscriptionRecord | null> => {
+  if (input.providerSubscriptionId) {
+    const bySubscriptionId = await findAgentSubscriptionByProviderSubscription(
+      encodeBillingReference(input.providerSubscriptionId),
+    );
+    if (bySubscriptionId) {
+      return bySubscriptionId;
+    }
+  }
+
+  if (input.providerCustomerId) {
+    const byCustomer = await findLatestAgentSubscriptionByProviderCustomer(
+      encodeBillingReference(input.providerCustomerId),
+    );
+    if (byCustomer) {
+      return byCustomer;
+    }
+  }
+
+  if (input.organizationId) {
+    return getLatestAgentSubscriptionForOrganization(input.organizationId);
+  }
+
+  return null;
 };
 
 const upsertInvoiceForSubscription = async (

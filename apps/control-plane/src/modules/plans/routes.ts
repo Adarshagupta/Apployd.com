@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { getPlanEntitlements } from '../../domain/plan-entitlements.js';
 import { AccessService } from '../../services/access-service.js';
 import {
+  agentPlanCheckoutConfigured,
+  agentPlanTierCheckoutEnabled,
   databaseAddonCheckoutConfigured,
   databaseAddonTierCheckoutEnabled,
   isCheckoutEnabledForPlan,
@@ -26,6 +28,20 @@ export const planRoutes: FastifyPluginAsync = async (app) => {
         entitlements: getPlanEntitlements(plan.code),
       })),
       addons: {
+        agenticCoding: {
+          checkoutEnabled: agentPlanCheckoutConfigured,
+          tiers: {
+            starter: {
+              checkoutEnabled: agentPlanTierCheckoutEnabled.starter,
+            },
+            growth: {
+              checkoutEnabled: agentPlanTierCheckoutEnabled.growth,
+            },
+            scale: {
+              checkoutEnabled: agentPlanTierCheckoutEnabled.scale,
+            },
+          },
+        },
         database: {
           checkoutEnabled: databaseAddonCheckoutConfigured,
           tiers: {

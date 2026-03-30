@@ -53,6 +53,7 @@ export default function AiAgentPanel({
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [requiresAgentSubscription, setRequiresAgentSubscription] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -77,6 +78,7 @@ export default function AiAgentPanel({
     setEntries(nextEntries);
     setPrompt('');
     setError(null);
+    setRequiresAgentSubscription(false);
     setLoading(true);
 
     try {
@@ -101,6 +103,9 @@ export default function AiAgentPanel({
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Codex request failed.';
       setError(message);
+      setRequiresAgentSubscription(
+        message.toLowerCase().includes('agentic coding requires an active agent subscription'),
+      );
       onNotify?.(message, 'err');
     } finally {
       setLoading(false);
@@ -317,6 +322,14 @@ export default function AiAgentPanel({
               <div className="mb-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">
                 {error}
               </div>
+            )}
+            {requiresAgentSubscription && (
+              <a
+                href="/billing"
+                className="mb-3 inline-flex rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs font-medium text-amber-100 transition hover:border-amber-300/60 hover:bg-amber-300/20"
+              >
+                Activate Agent subscription
+              </a>
             )}
 
             <textarea

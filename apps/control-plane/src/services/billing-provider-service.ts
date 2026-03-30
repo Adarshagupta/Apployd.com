@@ -12,6 +12,12 @@ const paidPlanProductIds = {
   max: env.DODO_PAYMENTS_PRODUCT_ID_MAX,
 } as const;
 
+const agentPlanProductIds = {
+  starter: env.DODO_PAYMENTS_PRODUCT_ID_AGENT_STARTER,
+  growth: env.DODO_PAYMENTS_PRODUCT_ID_AGENT_GROWTH,
+  scale: env.DODO_PAYMENTS_PRODUCT_ID_AGENT_SCALE,
+} as const;
+
 const databaseAddonIds = {
   starter: env.DODO_PAYMENTS_ADDON_ID_DATABASE_STARTER,
   growth: env.DODO_PAYMENTS_ADDON_ID_DATABASE_GROWTH,
@@ -20,8 +26,9 @@ const databaseAddonIds = {
 
 type CheckoutEnabledPlanCode = Exclude<PlanCode, 'free' | 'enterprise'>;
 type DodoCheckoutPlanCode = keyof typeof paidPlanProductIds;
+export type AgentPlanCode = keyof typeof agentPlanProductIds;
 export type DatabaseAddonTierCode = keyof typeof databaseAddonIds;
-export type BillingCheckoutKind = 'plan' | 'database_addon';
+export type BillingCheckoutKind = 'plan' | 'agent_plan' | 'database_addon';
 type BillingMetadata = Record<string, string>;
 type DodoEnvironment = 'test' | 'live';
 type DodoSubscriptionStatus = 'pending' | 'active' | 'on_hold' | 'cancelled' | 'failed' | 'expired';
@@ -156,15 +163,29 @@ interface CreateBillingCheckoutSessionInput {
   metadata: BillingMetadata;
 }
 
+interface CreateAgentBillingCheckoutSessionInput {
+  planCode: AgentPlanCode;
+  customerId: string;
+  returnUrl: string;
+  cancelUrl: string;
+  metadata: BillingMetadata;
+}
+
 export const billingProvider = 'dodo_payments';
 export const billingProviderLabel = 'Dodo Payments';
 export const billingProviderConfigured = Boolean(env.DODO_PAYMENTS_API_KEY);
 export const databaseAddonCheckoutConfigured = Object.values(databaseAddonIds).some(Boolean);
+export const agentPlanCheckoutConfigured = Object.values(agentPlanProductIds).some(Boolean);
 const defaultBillingCountry = env.DODO_PAYMENTS_DEFAULT_COUNTRY.trim().toUpperCase();
 export const databaseAddonTierCheckoutEnabled: Record<DatabaseAddonTierCode, boolean> = {
   starter: Boolean(databaseAddonIds.starter),
   growth: Boolean(databaseAddonIds.growth),
   scale: Boolean(databaseAddonIds.scale),
+};
+export const agentPlanTierCheckoutEnabled: Record<AgentPlanCode, boolean> = {
+  starter: Boolean(agentPlanProductIds.starter),
+  growth: Boolean(agentPlanProductIds.growth),
+  scale: Boolean(agentPlanProductIds.scale),
 };
 
 export const isCheckoutEnabledForPlan = (planCode: PlanCode): boolean => {
@@ -177,6 +198,9 @@ export const isCheckoutEnabledForPlan = (planCode: PlanCode): boolean => {
 
 export const getCheckoutProductId = (planCode: CheckoutEnabledPlanCode): string | null =>
   paidPlanProductIds[planCode as DodoCheckoutPlanCode] ?? null;
+
+export const getAgentCheckoutProductId = (planCode: AgentPlanCode): string | null =>
+  agentPlanProductIds[planCode] ?? null;
 
 export const getDatabaseAddonId = (tierCode: DatabaseAddonTierCode | null | undefined): string | null => {
   if (!tierCode) {
@@ -208,6 +232,17 @@ export const getPlanCodeForProductId = (productId: string | null | undefined): C
   return match?.[0] ?? null;
 };
 
+export const getAgentPlanCodeForProductId = (productId: string | null | undefined): AgentPlanCode | null => {
+  if (!productId) {
+    return null;
+  }
+
+  const match = (Object.entries(agentPlanProductIds) as Array<[AgentPlanCode, string | undefined]>)
+    .find(([, configuredProductId]) => configuredProductId === productId);
+
+  return match?.[0] ?? null;
+};
+
 export const getBillingCheckoutKindForProductId = (
   productId: string | null | undefined,
 ): BillingCheckoutKind | null => {
@@ -217,6 +252,10 @@ export const getBillingCheckoutKindForProductId = (
 
   if (getPlanCodeForProductId(productId)) {
     return 'plan';
+  }
+
+  if (getAgentPlanCodeForProductId(productId)) {
+    return 'agent_plan';
   }
 
   return null;
@@ -269,6 +308,51 @@ export const createBillingCheckoutSession = async (
                 ],
               }
             : {}),
+        },
+      ],
+      customer: {
+        customer_id: input.customerId,
+      },
+      billing_address: {
+        country: defaultBillingCountry,
+      },
+      billing_currency: 'USD',
+      minimal_address: true,
+      allow_customer_editing_country: true,
+      allow_customer_editing_zipcode: true,
+      show_saved_payment_methods: true,
+      feature_flags: {
+        always_create_new_customer: false,
+      },
+      return_url: input.returnUrl,
+      cancel_url: input.cancelUrl,
+      metadata: input.metadata,
+    },
+  });
+
+  return {
+    sessionId: session.session_id,
+    checkoutUrl: session.checkout_url,
+  };
+};
+
+export const createAgentBillingCheckoutSession = async (
+  input: CreateAgentBillingCheckoutSessionInput,
+): Promise<{ sessionId: string; checkoutUrl: string | null }> => {
+  const productId = getAgentCheckoutProductId(input.planCode);
+  if (!productId) {
+    throw new Error(
+      `Agent plan ${input.planCode} is not configured for ${billingProviderLabel} checkout.`,
+    );
+  }
+
+  const session = await billingApiRequest<DodoCheckoutSessionResponse>('/checkouts', {
+    method: 'POST',
+    body: {
+      product_cart: [
+        {
+          product_id: productId,
+          quantity: 1,
         },
       ],
       customer: {

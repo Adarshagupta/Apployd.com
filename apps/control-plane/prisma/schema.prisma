@@ -178,6 +178,7 @@ model Organization {
   invites           OrganizationInvite[]
   projects          Project[]
   subscriptions     Subscription[]
+  agentSubscriptions AgentSubscription[]
   usageRecords      UsageRecord[]
   auditLogs         AuditLog[]
   securityIncidents SecurityIncident[]
@@ -448,6 +449,25 @@ model Subscription {
   @@index([organizationId, status])
   @@index([currentPeriodEnd])
   @@map("subscriptions")
+}
+
+model AgentSubscription {
+  id                   String             @id
+  organizationId       String
+  planCode             String
+  stripeCustomerId     String
+  stripeSubscriptionId String?            @unique
+  status               SubscriptionStatus @default(incomplete)
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  organization         Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@map("agent_subscriptions")
 }
 
 model UsageRecord {

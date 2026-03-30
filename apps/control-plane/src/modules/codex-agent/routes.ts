@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 import { prisma } from '../../lib/prisma.js';
 import { AccessService } from '../../services/access-service.js';
+import { getActiveAgentSubscriptionForOrganization } from '../../services/agent-subscription-service.js';
 import { CodexAgentService, normalizeAgentPath } from '../../services/codex-agent-service.js';
 
 const exec = promisify(execCb);
@@ -167,6 +168,16 @@ export const codexAgentRoutes: FastifyPluginAsync = async (app) => {
       const context = await resolveContext(user.userId, projectId, reply, access);
       if (!context) {
         return;
+      }
+
+      const activeAgentSubscription = await getActiveAgentSubscriptionForOrganization(
+        context.project.organizationId,
+      );
+      if (!activeAgentSubscription) {
+        return reply.code(402).send({
+          code: 'agent_subscription_required',
+          message: 'Agentic coding requires an active Agent subscription. Activate it from Billing.',
+        });
       }
 
       const availableFiles = await listProjectFiles(context.container.dockerContainerId);

@@ -21,6 +21,7 @@ interface Plan {
 
 type DatabaseAddonTierCode = 'starter' | 'growth' | 'scale';
 type DatabaseAddonSelection = 'hobby' | DatabaseAddonTierCode;
+type AgentPlanCode = 'starter' | 'growth' | 'scale';
 
 interface PlanAddonTierAvailability {
   checkoutEnabled?: boolean;
@@ -29,6 +30,10 @@ interface PlanAddonTierAvailability {
 interface PlansResponse {
   plans?: Plan[];
   addons?: {
+    agenticCoding?: {
+      checkoutEnabled?: boolean;
+      tiers?: Partial<Record<AgentPlanCode, PlanAddonTierAvailability>>;
+    };
     database?: {
       checkoutEnabled?: boolean;
       tiers?: Partial<Record<DatabaseAddonTierCode, PlanAddonTierAvailability>>;
@@ -74,6 +79,32 @@ interface DatabaseAddonTierOption {
   storage: string;
   compute: string;
   ram: string;
+}
+
+interface AgentPlanOption {
+  code: AgentPlanCode;
+  name: string;
+  price: string;
+  monthlyActions: string;
+  maxContextWindow: string;
+  bestFor: string;
+}
+
+interface AgentSubscriptionSummary {
+  id: string;
+  organizationId: string;
+  planCode: string;
+  status: string;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  cancelAtPeriodEnd: boolean;
+  updatedAt: string;
+}
+
+interface AgentSubscriptionResponse {
+  subscription?: AgentSubscriptionSummary | null;
+  checkoutEnabled?: boolean;
+  tiers?: Partial<Record<AgentPlanCode, PlanAddonTierAvailability>>;
 }
 
 type PlanRecommendationCode = 'free' | 'dev' | 'pro' | 'max' | 'enterprise';
@@ -249,6 +280,32 @@ const hobbyDatabaseAddon = databaseAddonCatalog.find((tier) => tier.code === 'ho
 const starterDatabaseAddon = databaseAddonCatalog.find((tier) => tier.code === 'starter')!;
 const growthDatabaseAddon = databaseAddonCatalog.find((tier) => tier.code === 'growth')!;
 const scaleDatabaseAddon = databaseAddonCatalog.find((tier) => tier.code === 'scale')!;
+const agentPlanCatalog: AgentPlanOption[] = [
+  {
+    code: 'starter',
+    name: 'Agent Starter',
+    price: '$9 / month',
+    monthlyActions: '2,000 coding actions',
+    maxContextWindow: 'Medium repo context',
+    bestFor: 'Solo dev workflows and quick refactors',
+  },
+  {
+    code: 'growth',
+    name: 'Agent Growth',
+    price: '$29 / month',
+    monthlyActions: '10,000 coding actions',
+    maxContextWindow: 'Large multi-package context',
+    bestFor: 'Startup teams shipping features weekly',
+  },
+  {
+    code: 'scale',
+    name: 'Agent Scale',
+    price: '$79 / month',
+    monthlyActions: '40,000 coding actions',
+    maxContextWindow: 'Deep cross-repo workflows',
+    bestFor: 'Heavy CI-assisted coding and high-throughput teams',
+  },
+];
 const billingRecommendationPlans: BillingRecommendationPlan[] = [
   {
     code: 'free',
@@ -369,6 +426,13 @@ export default function BillingPage() {
   const { selectedOrganizationId, subscription, refreshSubscription } = useWorkspaceContext();
   const searchParams = useSearchParams();
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [agentSubscription, setAgentSubscription] = useState<AgentSubscriptionSummary | null>(null);
+  const [agentCheckoutEnabled, setAgentCheckoutEnabled] = useState(false);
+  const [agentPlanAvailability, setAgentPlanAvailability] = useState<Record<AgentPlanCode, boolean>>({
+    starter: false,
+    growth: false,
+    scale: false,
+  });
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
   const [calculatorState, setCalculatorState] = useState<BillingCalculatorState>(calculatorDefaults);
   const [databaseAddonAvailability, setDatabaseAddonAvailability] = useState<Record<DatabaseAddonTierCode, boolean>>({
@@ -384,6 +448,7 @@ export default function BillingPage() {
   const [message, setMessage] = useState('');
   const [redirectingToCheckout, setRedirectingToCheckout] = useState(false);
   const [redirectingPlanCode, setRedirectingPlanCode] = useState<string | null>(null);
+  const [redirectingAgentPlanCode, setRedirectingAgentPlanCode] = useState<AgentPlanCode | null>(null);
   useDashboardMessageToast(message);
 
   const availablePlansByCode = useMemo(() => {
@@ -423,6 +488,8 @@ export default function BillingPage() {
 
   const currentPlanCode = currentPlan?.code.toLowerCase() ?? null;
   const checkoutStatus = searchParams?.get('status');
+  const checkoutType = searchParams?.get('checkout_type');
+  const isAgentCheckoutFlow = checkoutType === 'agent';
   const providerSubscriptionId = searchParams?.get('subscription_id') ?? undefined;
   const checkoutSuccess = checkoutStatus === 'succeeded';
   const checkoutProcessing = checkoutStatus === 'processing';
@@ -466,6 +533,12 @@ export default function BillingPage() {
     try {
       const planData = (await apiClient.get('/plans')) as PlansResponse;
       setPlans(planData.plans ?? []);
+      setAgentCheckoutEnabled(Boolean(planData.addons?.agenticCoding?.checkoutEnabled));
+      setAgentPlanAvailability({
+        starter: Boolean(planData.addons?.agenticCoding?.tiers?.starter?.checkoutEnabled),
+        growth: Boolean(planData.addons?.agenticCoding?.tiers?.growth?.checkoutEnabled),
+        scale: Boolean(planData.addons?.agenticCoding?.tiers?.scale?.checkoutEnabled),
+      });
       setDatabaseAddonAvailability({
         starter: Boolean(planData.addons?.database?.tiers?.starter?.checkoutEnabled),
         growth: Boolean(planData.addons?.database?.tiers?.growth?.checkoutEnabled),
@@ -474,26 +547,50 @@ export default function BillingPage() {
 
       if (selectedOrganizationId) {
         if (checkoutStatus === 'succeeded' || checkoutStatus === 'processing') {
-          await apiClient.post('/billing/sync-subscription', {
-            organizationId: selectedOrganizationId,
-            ...(providerSubscriptionId ? { providerSubscriptionId } : {}),
-          });
-          await refreshSubscription();
+          if (isAgentCheckoutFlow) {
+            await apiClient.post('/billing/agent/sync-subscription', {
+              organizationId: selectedOrganizationId,
+              ...(providerSubscriptionId ? { providerSubscriptionId } : {}),
+            });
+          } else {
+            await apiClient.post('/billing/sync-subscription', {
+              organizationId: selectedOrganizationId,
+              ...(providerSubscriptionId ? { providerSubscriptionId } : {}),
+            });
+            await refreshSubscription();
+          }
         }
 
         const invoiceData = await apiClient.get(`/billing/invoices?organizationId=${selectedOrganizationId}`);
         setInvoices(invoiceData.invoices ?? []);
+        const agentSubscriptionData = (await apiClient.get(
+          `/billing/agent/subscription?organizationId=${selectedOrganizationId}`,
+        )) as AgentSubscriptionResponse;
+        setAgentSubscription(agentSubscriptionData.subscription ?? null);
       } else {
         setInvoices([]);
+        setAgentSubscription(null);
       }
       if (checkoutStatus === 'cancelled') {
-        setMessage('Checkout was cancelled.');
+        setMessage(isAgentCheckoutFlow ? 'Agentic coding checkout was cancelled.' : 'Checkout was cancelled.');
       } else if (checkoutStatus === 'failed') {
-        setMessage('Payment failed. Update your payment method and try again.');
+        setMessage(
+          isAgentCheckoutFlow
+            ? 'Agentic coding payment failed. Update payment method and try again.'
+            : 'Payment failed. Update your payment method and try again.',
+        );
       } else if (checkoutStatus === 'processing') {
-        setMessage('Payment is processing. Subscription state will refresh automatically.');
+        setMessage(
+          isAgentCheckoutFlow
+            ? 'Agentic coding payment is processing. Subscription will refresh automatically.'
+            : 'Payment is processing. Subscription state will refresh automatically.',
+        );
       } else if (checkoutStatus === 'succeeded') {
-        setMessage('Payment successful. Subscription synced.');
+        setMessage(
+          isAgentCheckoutFlow
+            ? 'Agentic coding subscription synced.'
+            : 'Payment successful. Subscription synced.',
+        );
       } else {
         setMessage('');
       }
@@ -507,7 +604,7 @@ export default function BillingPage() {
   useEffect(() => {
     load().catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedOrganizationId, checkoutStatus, providerSubscriptionId, refreshSubscription]);
+  }, [selectedOrganizationId, checkoutStatus, checkoutType, providerSubscriptionId, refreshSubscription]);
 
   const startUpgrade = async (planCode: string, databaseAddonTier: DatabaseAddonTierCode | null) => {
     if (!selectedOrganizationId) {
@@ -518,12 +615,13 @@ export default function BillingPage() {
     try {
       setMessage('');
       setRedirectingPlanCode(planCode);
+      setRedirectingAgentPlanCode(null);
       setRedirectingToCheckout(true);
       const response = await apiClient.post('/billing/checkout-session', {
         organizationId: selectedOrganizationId,
         planCode,
         ...(databaseAddonTier ? { databaseAddonTier } : {}),
-        successUrl: `${window.location.origin}/billing`,
+        successUrl: `${window.location.origin}/billing?checkout_type=platform`,
         cancelUrl: `${window.location.origin}/billing?status=cancelled`,
       });
 
@@ -535,9 +633,46 @@ export default function BillingPage() {
       setMessage('Checkout URL missing');
       setRedirectingToCheckout(false);
       setRedirectingPlanCode(null);
+      setRedirectingAgentPlanCode(null);
     } catch (error) {
       setMessage((error as Error).message);
       setRedirectingToCheckout(false);
+      setRedirectingPlanCode(null);
+      setRedirectingAgentPlanCode(null);
+    }
+  };
+
+  const startAgentSubscriptionUpgrade = async (planCode: AgentPlanCode) => {
+    if (!selectedOrganizationId) {
+      setMessage('Organization required');
+      return;
+    }
+
+    try {
+      setMessage('');
+      setRedirectingAgentPlanCode(planCode);
+      setRedirectingPlanCode(null);
+      setRedirectingToCheckout(true);
+      const response = await apiClient.post('/billing/agent/checkout-session', {
+        organizationId: selectedOrganizationId,
+        planCode,
+        successUrl: `${window.location.origin}/billing?checkout_type=agent`,
+        cancelUrl: `${window.location.origin}/billing?status=cancelled&checkout_type=agent`,
+      });
+
+      if (response.checkoutUrl) {
+        window.location.href = response.checkoutUrl;
+        return;
+      }
+
+      setMessage('Checkout URL missing');
+      setRedirectingToCheckout(false);
+      setRedirectingAgentPlanCode(null);
+      setRedirectingPlanCode(null);
+    } catch (error) {
+      setMessage((error as Error).message);
+      setRedirectingToCheckout(false);
+      setRedirectingAgentPlanCode(null);
       setRedirectingPlanCode(null);
     }
   };
@@ -572,7 +707,7 @@ export default function BillingPage() {
 
   return (
     <div className="space-y-4">
-      {checkoutSuccess ? (
+      {checkoutSuccess && !isAgentCheckoutFlow ? (
         <SectionCard title="Purchase Complete" subtitle="Your billing upgrade is active and synced.">
           <div className="billing-success-wrap">
             <div className="billing-success-confetti billing-success-confetti-left" />
@@ -631,12 +766,38 @@ export default function BillingPage() {
         </SectionCard>
       ) : null}
 
+      {checkoutSuccess && isAgentCheckoutFlow ? (
+        <SectionCard
+          title="Agent Subscription Updated"
+          subtitle="Your separate Agentic Coding subscription is active and synced."
+        >
+          <div className="panel-muted p-4">
+            <p className="text-sm font-semibold text-slate-900">
+              Agent plan: {agentSubscription?.planCode?.toUpperCase() ?? 'Updated'}
+            </p>
+            <p className="mt-1 text-xs text-slate-600">
+              {agentSubscription?.currentPeriodEnd
+                ? `Current period ends ${new Date(agentSubscription.currentPeriodEnd).toLocaleDateString()}`
+                : 'Billing period will update shortly after payment confirmation.'}
+            </p>
+          </div>
+        </SectionCard>
+      ) : null}
+
       {checkoutProcessing ? (
-        <SectionCard title="Payment Processing" subtitle="Dodo Payments is still confirming the transaction.">
+        <SectionCard
+          title="Payment Processing"
+          subtitle={
+            isAgentCheckoutFlow
+              ? 'Dodo Payments is confirming your Agentic Coding subscription.'
+              : 'Dodo Payments is still confirming the transaction.'
+          }
+        >
           <div className="panel-muted p-4">
             <p className="text-sm text-slate-700">
-              We received the checkout return and started syncing your subscription. Refresh this page in a moment if
-              the updated plan does not appear immediately.
+              {isAgentCheckoutFlow
+                ? 'We received the checkout return and started syncing your Agentic Coding subscription.'
+                : 'We received the checkout return and started syncing your subscription. Refresh this page in a moment if the updated plan does not appear immediately.'}
             </p>
           </div>
         </SectionCard>
@@ -677,6 +838,76 @@ export default function BillingPage() {
             </div>
           )}
         </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Agentic Coding Subscription"
+        subtitle="Separate billing track for Code Studio AI agent usage."
+      >
+        <div className="grid gap-3 xl:grid-cols-3">
+          {agentPlanCatalog.map((agentPlan) => {
+            const isCurrentAgentPlan =
+              agentSubscription
+              && ['active', 'trialing', 'past_due'].includes(agentSubscription.status)
+              && agentSubscription.planCode.toLowerCase() === agentPlan.code;
+            const canCheckoutAgentPlan = agentCheckoutEnabled && agentPlanAvailability[agentPlan.code];
+
+            return (
+              <article
+                key={agentPlan.code}
+                className={`rounded-xl border p-4 ${
+                  isCurrentAgentPlan ? 'border-slate-900 bg-slate-50' : 'border-slate-200'
+                }`}
+              >
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">{agentPlan.name}</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900">{agentPlan.price}</p>
+                <p className="mt-2 text-xs text-slate-600">Best for: {agentPlan.bestFor}</p>
+                <div className="mt-3 space-y-1 text-xs text-slate-700">
+                  <p>Included actions: {agentPlan.monthlyActions}</p>
+                  <p>Context depth: {agentPlan.maxContextWindow}</p>
+                  <p>Usage scope: Code Studio AI agent only</p>
+                </div>
+                {isCurrentAgentPlan ? (
+                  <p className="mt-3 inline-block rounded-lg border border-slate-900 px-2 py-1 text-xs font-semibold text-slate-900">
+                    Current agent plan
+                  </p>
+                ) : canCheckoutAgentPlan ? (
+                  <button
+                    className="btn-primary mt-4 w-full disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => startAgentSubscriptionUpgrade(agentPlan.code)}
+                    disabled={redirectingToCheckout}
+                  >
+                    {redirectingToCheckout && redirectingAgentPlanCode === agentPlan.code
+                      ? 'Redirecting...'
+                      : `Choose ${agentPlan.name}`}
+                  </button>
+                ) : (
+                  <p className="mt-3 text-xs text-slate-500">
+                    Agentic coding checkout is not configured for this tier.
+                  </p>
+                )}
+              </article>
+            );
+          })}
+        </div>
+        {agentSubscription ? (
+          <div className="panel-muted mt-3 p-3">
+            <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Current agent subscription</p>
+            <p className="mt-1 text-sm font-semibold text-slate-900">
+              {agentSubscription.planCode.toUpperCase()} ({agentSubscription.status.replace('_', ' ')})
+            </p>
+            <p className="text-xs text-slate-600">
+              Period: {new Date(agentSubscription.currentPeriodStart).toLocaleDateString()} -{' '}
+              {new Date(agentSubscription.currentPeriodEnd).toLocaleDateString()}
+            </p>
+          </div>
+        ) : (
+          <div className="panel-muted mt-3 p-3">
+            <p className="text-sm text-slate-600">
+              No active Agentic Coding subscription yet. Platform plan billing remains separate.
+            </p>
+          </div>
+        )}
       </SectionCard>
 
       <SectionCard title="Plan Catalog" subtitle="Official Apployd pricing tiers with transparent limits.">
@@ -1144,7 +1375,9 @@ export default function BillingPage() {
             <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
             <p className="text-sm font-semibold text-slate-900">Redirecting to Dodo Payments checkout</p>
             <p className="mt-1 text-xs text-slate-600">
-              {redirectingPlanCode
+              {redirectingAgentPlanCode
+                ? `Preparing ${redirectingAgentPlanCode.toUpperCase()} agent plan checkout...`
+                : redirectingPlanCode
                 ? `Preparing ${redirectingPlanCode.toUpperCase()} plan checkout...`
                 : 'Preparing secure checkout...'}
             </p>
