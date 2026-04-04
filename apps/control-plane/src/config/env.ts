@@ -78,6 +78,15 @@ const optionalCsvDomains = z.preprocess(
   z.array(z.string().regex(/^[a-z0-9.-]+\.[a-z]{2,}$/)).optional(),
 );
 
+const countryCode = z.preprocess((value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed.toUpperCase() : undefined;
+}, z.string().regex(/^[A-Z]{2}$/).default('US'));
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(4000),
@@ -88,7 +97,7 @@ const envSchema = z.object({
   DODO_PAYMENTS_API_KEY: z.string().optional(),
   DODO_PAYMENTS_WEBHOOK_SECRET: z.string().optional(),
   DODO_PAYMENTS_ENVIRONMENT: z.enum(['test', 'live']).default('test'),
-  DODO_PAYMENTS_DEFAULT_COUNTRY: z.string().trim().min(2).max(2).default('US'),
+  DODO_PAYMENTS_DEFAULT_COUNTRY: countryCode,
   DODO_PAYMENTS_PRODUCT_ID_DEV: optionalString,
   DODO_PAYMENTS_PRODUCT_ID_PRO: optionalString,
   DODO_PAYMENTS_PRODUCT_ID_MAX: optionalString,
