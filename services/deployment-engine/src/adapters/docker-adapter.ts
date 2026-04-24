@@ -261,6 +261,23 @@ function pythonSourceRootLines(): string[] {
   ];
 }
 
+function workspaceManifestCopyLines(): string[] {
+  return [
+    '# Restore workspace package manifests so repo-root installs can resolve app dependencies',
+    'RUN --mount=type=bind,from=source,source=/repo,target=/repo-source \\',
+    '    set -e; \\',
+    '    for pattern in "/repo-source/apps/*/package.json" "/repo-source/services/*/package.json" "/repo-source/packages/*/package.json"; do \\',
+    '      for file in $pattern; do \\',
+    '        [ -f "$file" ] || continue; \\',
+    '        rel="${file#/repo-source/}"; \\',
+    '        mkdir -p "/app/$(dirname "$rel")"; \\',
+    '        cp "$file" "/app/$rel"; \\',
+    '      done; \\',
+    '    done',
+    '',
+  ];
+}
+
 /**
  * Dockerfile for Python web service projects (Django, Flask, FastAPI, etc.).
  * Uses BuildKit cache mounts for fast pip install between builds.
@@ -425,6 +442,7 @@ function webServiceDockerfile(projectId: string): string {
     '      [ -f "/src/$f" ] && cp "/src/$f" ./ ; \\',
     '    done; true',
     '',
+    ...workspaceManifestCopyLines(),
     '# ── Install dependencies with persistent caches ──',
     '# --ignore-scripts: Skip preinstall/postinstall (Vercel behavior)',
     `# Cache key: project=${projectId}`,
@@ -597,6 +615,7 @@ function staticSiteDockerfile(projectId: string): string {
     '      [ -f "/src/$f" ] && cp "/src/$f" ./ ; \\',
     '    done; true',
     '',
+    ...workspaceManifestCopyLines(),
     '# ── Install dependencies with persistent caches ──',
     '# --ignore-scripts: Skip preinstall/postinstall (Vercel behavior)',
     'RUN --mount=type=cache,id=npm-' + projectId + ',target=/root/.npm \\',

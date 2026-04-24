@@ -21,6 +21,8 @@ describe('universalDockerfile root directory handling', () => {
 
     expect(dockerfile).toContain('Requested root directory ${requested} does not contain package.json');
     expect(dockerfile).toContain('Continuing with repository root.');
+    expect(dockerfile).toContain('Restore workspace package manifests so repo-root installs can resolve app dependencies');
+    expect(dockerfile).toContain('"/repo-source/apps/*/package.json"');
     expect(dockerfile).toContain('[ -f /src/package.json ] && cp /src/package.json ./package.json || true;');
     expect(dockerfile).toContain('COPY --from=source /apployd-target/ .');
     expect(dockerfile).not.toContain('COPY --from=source /apployd-target/package.json ./package.json');
@@ -31,6 +33,7 @@ describe('universalDockerfile root directory handling', () => {
     const dockerfile = universalDockerfile('static_site', 'project-123');
 
     expect(dockerfile).toContain('does not contain a static app root');
+    expect(dockerfile).toContain('Restore workspace package manifests so repo-root installs can resolve app dependencies');
     expect(dockerfile).toContain('[ -f /src/package.json ] && cp /src/package.json ./package.json || true;');
     expect(dockerfile).toContain('COPY --from=source /apployd-target/ .');
     expect(dockerfile).not.toContain('COPY --from=source /apployd-target/package.json ./package.json');
