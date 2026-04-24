@@ -74,6 +74,7 @@ const schema = z.object({
   ENGINE_METRICS_PORT: z.coerce.number().int().min(1).max(65535).default(9102),
   ENGINE_HEALTHCHECK_TIMEOUT_SECONDS: z.coerce.number().int().min(5).max(300).default(60),
   ENGINE_HEALTHCHECK_DELAY_MS: z.coerce.number().int().min(250).max(5000).default(1000),
+  ENGINE_BUILD_TIMEOUT_SECONDS: z.coerce.number().int().min(60).max(7200).default(1800),
   ENGINE_LOCAL_MODE: booleanFromEnv.optional(),
   ENGINE_CONTAINER_READ_ONLY: booleanFromEnv.optional(),
   ENGINE_SECURITY_MODE: z.enum(['off', 'monitor', 'strict', 'lockdown']).optional(),

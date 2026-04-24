@@ -105,6 +105,70 @@ export class ServerSchedulerService {
     );
   }
 
+  async scheduleBestEffort(request: CapacityRequest): Promise<Server> {
+    const healthyServers = await prisma.server.findMany({
+      where: {
+        status: ServerStatus.healthy,
+      },
+      orderBy: [{ region: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    const preferredRegionServers =
+      request.region === undefined
+        ? healthyServers
+        : healthyServers.filter((server) => server.region === request.region);
+
+    const diagnostics: SchedulerDiagnostics = {
+      requested: {
+        ramMb: request.ramMb,
+        cpuMillicores: request.cpuMillicores,
+        bandwidthGb: request.bandwidthGb,
+      },
+      preferredRegion: request.region,
+      healthyServerCount: healthyServers.length,
+      preferredRegionHealthyServerCount: preferredRegionServers.length,
+      largestAvailable: healthyServers.reduce(
+        (currentLargest, server) => {
+          const available = this.availableCapacity(server);
+          return {
+            ramMb: Math.max(currentLargest.ramMb, available.ramMb),
+            cpuMillicores: Math.max(currentLargest.cpuMillicores, available.cpuMillicores),
+            bandwidthGb: Math.max(currentLargest.bandwidthGb, available.bandwidthGb),
+          };
+        },
+        {
+          ramMb: 0,
+          cpuMillicores: 0,
+          bandwidthGb: 0,
+        },
+      ),
+    };
+
+    if (!healthyServers.length) {
+      throw new ServerSchedulingError(
+        'No healthy servers are registered. Add at least one healthy server to schedule deployments.',
+        'no_healthy_servers',
+        diagnostics,
+      );
+    }
+
+    const preferredCandidate = this.pickBestEffortCandidate(preferredRegionServers);
+    if (preferredCandidate) {
+      return preferredCandidate.server;
+    }
+
+    const crossRegionCandidate = this.pickBestEffortCandidate(healthyServers);
+    if (crossRegionCandidate) {
+      return crossRegionCandidate.server;
+    }
+
+    throw new ServerSchedulingError(
+      'No healthy servers are registered. Add at least one healthy server to schedule deployments.',
+      'no_healthy_servers',
+      diagnostics,
+    );
+  }
+
   private availableCapacity(server: Server): {
     ramMb: number;
     cpuMillicores: number;
@@ -133,6 +197,20 @@ export class ServerSchedulerService {
         };
       })
       .filter((item) => item.hasCapacity)
+      .sort((a, b) => b.score - a.score);
+
+    return ranked[0] ?? null;
+  }
+
+  private pickBestEffortCandidate(servers: Server[]): { server: Server; score: number } | null {
+    const ranked = servers
+      .map((server) => {
+        const available = this.availableCapacity(server);
+        return {
+          server,
+          score: available.ramMb * 1.1 + available.cpuMillicores * 0.9 + available.bandwidthGb * 0.2,
+        };
+      })
       .sort((a, b) => b.score - a.score);
 
     return ranked[0] ?? null;

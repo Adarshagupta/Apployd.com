@@ -340,49 +340,33 @@ export class DeploymentRequestService {
 
     let server: Server;
     let deployment: Deployment;
-    const reserveCapacity =
-      input.placement?.forceReserveCapacity === true ||
-      !reusableServer ||
-      !activeContainer ||
-      reusableServer.id !== activeContainer.serverId;
 
     try {
-      if (!reserveCapacity && reusableServer) {
+      if (reusableServer) {
         server = reusableServer;
-        deployment = await prisma.deployment.create({
-          data: this.buildDeploymentRecord({
-            projectId: project.id,
-            serverId: server.id,
-            environment: resolvedEnvironment,
-            gitUrl: resolvedGitUrl,
-            branch: resolvedBranch,
-            commitSha: resolvedCommitSha ?? null,
-            imageTag: input.imageTag ?? null,
-            domain: resolvedDomain,
-            capacityReserved: false,
-            isCanary: Boolean(input.canary),
-          }),
-        });
       } else {
-        const reserved = await this.createDeploymentWithAtomicCapacityReservation({
-          initialServer: reusableServer,
-          capacityRequest,
-          deployment: {
-            projectId: project.id,
-            environment: resolvedEnvironment,
-            gitUrl: resolvedGitUrl,
-            branch: resolvedBranch,
-            commitSha: resolvedCommitSha ?? null,
-            imageTag: input.imageTag ?? null,
-            domain: resolvedDomain,
-            capacityReserved: true,
-            isCanary: Boolean(input.canary),
-          },
-          allowReschedule: input.placement?.requireServerAffinity === true ? false : true,
+        server = await this.scheduler.scheduleBestEffort({
+          ...capacityRequest,
+          ...(input.placement?.requireServerAffinity && requestedServer
+            ? { region: requestedServer.region }
+            : {}),
         });
-        server = reserved.server;
-        deployment = reserved.deployment;
       }
+
+      deployment = await prisma.deployment.create({
+        data: this.buildDeploymentRecord({
+          projectId: project.id,
+          serverId: server.id,
+          environment: resolvedEnvironment,
+          gitUrl: resolvedGitUrl,
+          branch: resolvedBranch,
+          commitSha: resolvedCommitSha ?? null,
+          imageTag: input.imageTag ?? null,
+          domain: resolvedDomain,
+          capacityReserved: false,
+          isCanary: Boolean(input.canary),
+        }),
+      });
     } catch (error) {
       if (input.idempotencyKey && idempotencyReservationAcquired) {
         await redis.del(`apployd:idempotency:deploy:${project.id}:${input.idempotencyKey}`);
@@ -397,7 +381,7 @@ export class DeploymentRequestService {
         }
 
         throw new DeploymentRequestError(
-          `Insufficient server capacity in region ${env.DEFAULT_REGION}. Requested ${project.resourceRamMb}MB RAM, ${project.resourceCpuMillicore}m CPU, ${project.resourceBandwidthGb}GB bandwidth. Largest available right now: ${error.diagnostics.largestAvailable.ramMb}MB RAM, ${error.diagnostics.largestAvailable.cpuMillicores}m CPU, ${error.diagnostics.largestAvailable.bandwidthGb}GB bandwidth.`,
+          `No healthy servers available for deployments in region ${env.DEFAULT_REGION}. Register a healthy server or enable AUTO_PROVISION_DEV_SERVER in local development.`,
           503,
         );
       }
